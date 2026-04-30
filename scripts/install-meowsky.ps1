@@ -47,6 +47,36 @@ function Invoke-MeowskyStep {
   Write-Done $Message $startedAt
 }
 
+function Repair-PowerShellProfile {
+  param(
+    [Parameter(Mandatory)]
+    [string]$Path
+  )
+
+  if (-not (Test-Path -LiteralPath $Path)) {
+    return
+  }
+
+  $content = Get-Content -Raw -LiteralPath $Path
+  $updated = $content
+
+  $updated = [regex]::Replace(
+    $updated,
+    '(?m)^\s*Set-PSReadLineOption\s+-PredictionSource\s+\S+\s*\r?\n?',
+    ''
+  )
+  $updated = [regex]::Replace(
+    $updated,
+    '(?ms)^\s*Set-PSReadLineOption\s+-Colors\s+@\{.*?^\s*\}\s*\r?\n?',
+    ''
+  )
+
+  if ($updated -ne $content) {
+    Set-Content -Encoding UTF8 -LiteralPath $Path -Value $updated
+    Write-Host "Removed unsupported PSReadLine options from $Path"
+  }
+}
+
 function Test-WinGetPackageInstalled {
   param(
     [Parameter(Mandatory)]
@@ -203,6 +233,15 @@ Invoke-MeowskyStep 'Resolve Zig compiler' {
   Write-Host "Using Zig at $script:zigPath"
 }
 
+Invoke-MeowskyStep 'Check Codex CLI' {
+  if (Get-Command codex -ErrorAction SilentlyContinue) {
+    Write-Host "Found Codex CLI: $((Get-Command codex).Source)"
+  } else {
+    Write-Warning 'Codex CLI was not found. The Meowsky layout will open, but the Codex pane will show install instructions instead of starting Codex.'
+    Write-Host 'Install Codex CLI with: npm install -g @openai/codex'
+  }
+}
+
 Invoke-MeowskyStep 'Create Zig compiler wrappers' {
 $zigLiteral = $script:zigPath -replace "'", "''"
 @"
@@ -264,6 +303,7 @@ Invoke-MeowskyStep 'Update PowerShell profile' {
   $profilePath = $PROFILE
   $profileDir = Split-Path -Parent $profilePath
   New-Item -ItemType Directory -Force $profileDir | Out-Null
+  Repair-PowerShellProfile -Path $profilePath
 
   $importLine = ". `"$repoRoot\powershell\profile.ps1`""
   $profileContent = if (Test-Path -LiteralPath $profilePath) { Get-Content -Raw -LiteralPath $profilePath } else { '' }

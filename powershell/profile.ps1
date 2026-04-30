@@ -196,7 +196,17 @@ Start by giving me a scoped orientation of this codebase from the tree above. Ke
     $codexPrompt = Get-MeowskyCodexPrompt -Today $today -Root $root -Tree $promptTree
 
     $promptEncoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($codexPrompt))
-    $codexScript = ". `$PROFILE`r`n`$prompt = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('$promptEncoded'))`r`ncodex -C . `$prompt`r`n"
+    $codexScript = @"
+. `$PROFILE
+`$prompt = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('$promptEncoded'))
+if (Get-Command codex -ErrorAction SilentlyContinue) {
+  codex -C . `$prompt
+} else {
+  Write-Host 'Codex CLI was not found on PATH.' -ForegroundColor Yellow
+  Write-Host 'Install it with: npm install -g @openai/codex' -ForegroundColor Yellow
+  Write-Host ''
+}
+"@
     $treeScript = ". `$PROFILE`r`nptree`r`n"
     $meowskyScript = @(
       "Write-Host ''",
