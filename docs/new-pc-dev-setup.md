@@ -22,6 +22,7 @@ Run these in PowerShell:
 ```powershell
 winget install --id Neovim.Neovim --exact --accept-package-agreements --accept-source-agreements
 winget install --id Git.Git --exact --accept-package-agreements --accept-source-agreements
+winget install --id GitHub.cli --exact --accept-package-agreements --accept-source-agreements
 winget install --id OpenJS.NodeJS.LTS --exact --accept-package-agreements --accept-source-agreements
 winget install --id tree-sitter.tree-sitter-cli --exact --accept-package-agreements --accept-source-agreements
 winget install --id zig.zig --exact --accept-package-agreements --accept-source-agreements
@@ -29,7 +30,7 @@ winget install --id eza-community.eza --exact --accept-package-agreements --acce
 winget install --id JohnMacFarlane.Pandoc --exact --accept-package-agreements --accept-source-agreements
 ```
 
-Open a new terminal after installing so `nvim`, `git`, `node`, `npm`, `tree-sitter`, `zig`, `eza`, and `pandoc` are available on `PATH`.
+Open a new terminal after installing so `nvim`, `git`, `gh`, `node`, `npm`, `tree-sitter`, `zig`, `eza`, and `pandoc` are available on `PATH`.
 
 If `pandoc` is installed but not available on `PATH`, the `meowsky md` helper also checks the common Windows install locations:
 

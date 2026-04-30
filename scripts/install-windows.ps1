@@ -3,6 +3,7 @@ $ErrorActionPreference = 'Stop'
 $packages = @(
   'Neovim.Neovim',
   'Git.Git',
+  'GitHub.cli',
   'OpenJS.NodeJS.LTS',
   'tree-sitter.tree-sitter-cli',
   'zig.zig',

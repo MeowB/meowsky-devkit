@@ -1,23 +1,34 @@
-# Meowsky Devkit
+# Meowsky
 
-Personal Windows-first developer setup for web and scripting work.
+Personal Windows-first devkit for web work, scripting, and fast project starts.
 
-Meowsky is meant to be a starting point when opening a project to code, plus a portable machine setup for a new PC. It installs and documents a Neovim setup that feels friendlier to VS Code muscle memory, adds a workspace shortcut, and keeps the Codex project-orientation prompt separate from the repo docs.
+It is a small repo, but it does three concrete things:
 
-## What It Includes
+1. Sets up the machine with the tools this workflow expects.
+2. Gives Neovim a VS Code-friendlier editing surface for web development.
+3. Provides a `meowsky` terminal shortcut that opens a project-aware Codex layout.
 
-- Windows dev tool checklist using `winget`
-- Neovim config for web development and scripting
-- VS Code-style editing shortcuts in Neovim
-- Treesitter highlighting for common web formats
-- Mason-managed LSP setup for TypeScript, ESLint, HTML, CSS, JSON, Lua, and Prisma
-- `meowsky` PowerShell shortcut for jumping to the work root and opening a terminal layout
-- `ptree` helper for clean project trees
-- Markdown and PDF preview helpers
-- Linux/Ubuntu `meowsky` function using `tmux`
-- Codex orientation prompt for new coding sessions
+## What It Does
 
-## Repo Layout
+| Area | Behavior |
+| --- | --- |
+| Machine setup | Installs Neovim, Git, GitHub CLI, Node.js, tree-sitter, Zig, eza, and Pandoc on Windows |
+| Editor setup | Loads a personal Neovim config with web-focused plugins, LSPs, Treesitter, completion, and keymaps |
+| Workspace flow | Adds `meowsky` to PowerShell so you can jump to the work root or open the fullscreen project layout |
+| Prompting | Keeps the Codex orientation prompt in a separate file so it can be reused and edited independently |
+| Preview helpers | Uses Pandoc to preview Markdown and the default PDF viewer for PDFs |
+| Linux support | Includes a lighter Ubuntu version using `tmux` |
+
+## The Feel
+
+This setup is meant to feel like:
+
+- a personal dev machine template
+- a project starter for coding sessions
+- a Neovim workflow with familiar VS Code-style movement and selection shortcuts
+- a shareable repo that is easy to clone, inspect, and adapt later
+
+## Repo Map
 
 ```text
 .
@@ -37,28 +48,26 @@ Meowsky is meant to be a starting point when opening a project to code, plus a p
 
 ## Quick Start
 
-On Windows, install the required system tools:
+### Windows
+
+Run the installer:
 
 ```powershell
 .\scripts\install-windows.ps1
 ```
 
-That script also sets `MEOWSKY_DEVKIT_HOME` to this repo, so the PowerShell profile can find `prompts/codex-orientation.md`.
+It installs the core tools and sets `MEOWSKY_DEVKIT_HOME` so the profile can find the Codex prompt file.
 
-Then copy or merge the config files:
+Then wire the config into your user profile:
 
 ```powershell
 Copy-Item .\nvim\init.lua "$env:LOCALAPPDATA\nvim\init.lua" -Force
 notepad $PROFILE
 ```
 
-Paste or merge the contents of:
+Copy the contents of [powershell/profile.ps1](powershell/profile.ps1) into your PowerShell profile, or merge it if you already have one.
 
-```text
-powershell/profile.ps1
-```
-
-Open a new terminal, then bootstrap Neovim:
+Open a new terminal and bootstrap Neovim:
 
 ```powershell
 nvim --headless "+Lazy! sync" +qa
@@ -66,29 +75,69 @@ nvim --headless "+MasonInstall typescript-language-server eslint-lsp html-lsp cs
 nvim --headless "+lua require('nvim-treesitter').install({ 'lua', 'vim', 'vimdoc', 'javascript', 'typescript', 'tsx', 'json', 'html', 'css', 'markdown', 'prisma' }):wait(300000)" +qa
 ```
 
-## Daily Use
+### Linux
+
+Use the helper script as a starting point:
+
+```bash
+bash scripts/install-linux.sh
+```
+
+The full Linux workflow is documented in [docs/new-pc-dev-setup.md](docs/new-pc-dev-setup.md).
+
+## Daily Flow
 
 ```powershell
-meowsky          # go to the work root
-meowsky my-app   # go to a project inside the work root
-meowsky ./       # open the fullscreen Meowsky layout for the current project
+meowsky
+```
+
+Go to the work root, then open a project:
+
+```powershell
+meowsky my-app
+meowsky ./
+```
+
+Use the editor helpers:
+
+```powershell
 meowsky md .\README.md
 meowsky pdf .\docs\spec.pdf
 ```
 
-The layout launches Codex with the prompt from [prompts/codex-orientation.md](prompts/codex-orientation.md), shows a project tree, and opens shells at the project root.
+When `meowsky ./` runs inside a project, it opens a fullscreen Windows Terminal layout with:
 
-## Documentation
+- a Codex session started from [prompts/codex-orientation.md](prompts/codex-orientation.md)
+- a shell at the project root
+- a tree view pane
+- a compact status pane
 
-The full manual setup guide lives in [docs/new-pc-dev-setup.md](docs/new-pc-dev-setup.md).
+## Neovim Highlights
+
+The editor config in [nvim/init.lua](nvim/init.lua) is tuned for:
+
+- `tokyonight.nvim` styling
+- Treesitter parsing for Lua, Vim, JavaScript, TypeScript, TSX, JSON, HTML, CSS, Markdown, and Prisma
+- Mason-managed LSPs for TypeScript, ESLint, HTML, CSS, JSON, Lua, and Prisma
+- `Ctrl+Space` completion
+- `Ctrl+Backspace` and `Ctrl+H` word deletion in insert mode
+- auto-pairs for brackets and quotes
+- VS Code-style shift-arrow, ctrl-shift-arrow, home/end, and alt-arrow movement
+- visual-mode tab indentation and outdentation
 
 ## Sharing
 
-This repo is designed to be easy to share or clone:
+This is designed to stay personal but portable.
+
+If you want to move it to another machine, the repo is the source of truth:
 
 ```powershell
 git clone <your-repo-url>
 cd meowsky-devkit
 ```
 
-It does not need to be packaged yet. A GitHub repository is the right format for now because this is a small devkit made of docs, config files, prompts, and scripts.
+It does not need packaging yet. A GitHub repo is the right shape for this because it is a mix of docs, prompt text, shell setup, and editor config.
+
+## Details
+
+The longer manual setup guide lives in [docs/new-pc-dev-setup.md](docs/new-pc-dev-setup.md).
