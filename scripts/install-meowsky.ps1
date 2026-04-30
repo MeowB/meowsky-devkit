@@ -150,7 +150,6 @@ $packages = @(
   'Git.Git',
   'OpenJS.NodeJS.LTS',
   'tree-sitter.tree-sitter-cli',
-  'zig.zig',
   'eza-community.eza',
   'JohnMacFarlane.Pandoc'
 )
@@ -160,17 +159,15 @@ Invoke-MeowskyStep 'Install or verify Windows packages' {
   foreach ($package in $packages) {
     $packageIndex++
     Write-Host "[$packageIndex/$($packages.Count)] $package"
-    if ($package -eq 'zig.zig') {
-      Install-WinGetPackage -Id $package -AllowFailure | Out-Null
-    } else {
-      Install-WinGetPackage -Id $package | Out-Null
-    }
+    Install-WinGetPackage -Id $package | Out-Null
   }
 }
 
 Invoke-MeowskyStep 'Resolve Zig compiler' {
   $script:zigPath = Get-ZigPath
   if (-not $script:zigPath) {
+    Write-Host 'Zig was not found on PATH or in known install folders.'
+    Write-Host 'Skipping winget for Zig because its portable installer can hang or fail on some Windows setups.'
     $script:zigPath = Install-ZigFromZip
   }
   Write-Host "Using Zig at $script:zigPath"
