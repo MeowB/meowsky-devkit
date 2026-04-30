@@ -789,6 +789,12 @@ Preview notes:
 
 ## Linux Or Ubuntu Meowsky Shortcut
 
+If you want the one-command Linux bootstrap, run:
+
+```bash
+bash ./scripts/install-meowsky.sh
+```
+
 The same workflow can work on Ubuntu with a shell function and `tmux`.
 
 To force a specific work root on Linux, add this to `~/.bashrc` or `~/.zshrc`:

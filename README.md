@@ -12,7 +12,8 @@ It is a small repo, but it does three concrete things:
 
 | Area | Behavior |
 | --- | --- |
-| Machine setup | Installs Neovim, Git, GitHub CLI, Node.js, tree-sitter, Zig, eza, and Pandoc on Windows |
+| Machine setup | Installs the core Windows tools this workflow expects: Neovim, Git, Node.js, tree-sitter, Zig, eza, and Pandoc |
+| GitHub CLI | Optional, only if you want terminal-first GitHub repo workflows |
 | Editor setup | Loads a personal Neovim config with web-focused plugins, LSPs, Treesitter, completion, and keymaps |
 | Workspace flow | Adds `meowsky` to PowerShell so you can jump to the work root or open the fullscreen project layout |
 | Prompting | Keeps the Codex orientation prompt in a separate file so it can be reused and edited independently |
@@ -42,45 +43,32 @@ This setup is meant to feel like:
 |-- prompts/
 |   `-- codex-orientation.md
 `-- scripts/
-    |-- install-linux.sh
-    `-- install-windows.ps1
+    |-- install-meowsky.ps1
+    |-- install-meowsky.sh
+    |-- meowsky.ps1
+    `-- meowsky.sh
 ```
 
 ## Quick Start
 
 ### Windows
 
-Run the installer:
+Run the one-command bootstrap:
 
 ```powershell
-.\scripts\install-windows.ps1
+.\scripts\install-meowsky.ps1
 ```
 
-It installs the core tools and sets `MEOWSKY_DEVKIT_HOME` so the profile can find the Codex prompt file.
+It installs the core tools, copies the Neovim config, wires your PowerShell profile, and sets `MEOWSKY_DEVKIT_HOME` so the profile can find the Codex prompt file.
 
-Then wire the config into your user profile:
-
-```powershell
-Copy-Item .\nvim\init.lua "$env:LOCALAPPDATA\nvim\init.lua" -Force
-notepad $PROFILE
-```
-
-Copy the contents of [powershell/profile.ps1](powershell/profile.ps1) into your PowerShell profile, or merge it if you already have one.
-
-Open a new terminal and bootstrap Neovim:
-
-```powershell
-nvim --headless "+Lazy! sync" +qa
-nvim --headless "+MasonInstall typescript-language-server eslint-lsp html-lsp css-lsp json-lsp lua-language-server prisma-language-server" +qa
-nvim --headless "+lua require('nvim-treesitter').install({ 'lua', 'vim', 'vimdoc', 'javascript', 'typescript', 'tsx', 'json', 'html', 'css', 'markdown', 'prisma' }):wait(300000)" +qa
-```
+The longer manual setup is still documented in [docs/new-pc-dev-setup.md](docs/new-pc-dev-setup.md) if you want to see each piece separately.
 
 ### Linux
 
 Use the helper script as a starting point:
 
 ```bash
-bash scripts/install-linux.sh
+bash ./scripts/install-meowsky.sh
 ```
 
 The full Linux workflow is documented in [docs/new-pc-dev-setup.md](docs/new-pc-dev-setup.md).
