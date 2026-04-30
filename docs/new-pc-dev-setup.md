@@ -551,6 +551,40 @@ function meowsky {
     Start-Process $htmlPath
   }
 
+  function Get-MeowskyPromptTree {
+    param(
+      [Parameter(Mandatory = $true)]
+      [string]$Root
+    )
+
+    $ignoredNames = @(
+      'node_modules',
+      '.git',
+      'dist',
+      'build',
+      'coverage',
+      '.next',
+      '.nuxt',
+      '.turbo',
+      '.vite',
+      '.cache'
+    )
+
+    $items = Get-ChildItem -LiteralPath $Root -Force -ErrorAction SilentlyContinue |
+      Where-Object { $ignoredNames -notcontains $_.Name } |
+      Sort-Object @{ Expression = { -not $_.PSIsContainer } }, Name
+
+    $lines = New-Object System.Collections.Generic.List[string]
+    $lines.Add('.')
+
+    for ($i = 0; $i -lt $items.Count; $i++) {
+      $prefix = if ($i -eq $items.Count - 1) { '`-- ' } else { '|-- ' }
+      $lines.Add("$prefix$($items[$i].Name)")
+    }
+
+    return $lines -join "`r`n"
+  }
+
   $workRoot = Get-WorkRoot
 
   if ($Action) {
@@ -598,18 +632,13 @@ function meowsky {
     }
 
     $today = Get-Date -Format 'yyyy-MM-dd'
-    $tree = if (Get-Command ptree -ErrorAction SilentlyContinue) {
-      (ptree 1 | Out-String).Trim()
-    } else {
-      (Get-ChildItem -Force | Select-Object Mode,Length,Name | Format-Table -AutoSize | Out-String).Trim()
-    }
-
+    $promptTree = Get-MeowskyPromptTree -Root $root
     $codexPrompt = @"
 Session context ($today):
 Workspace root: $root
 
 Top-level project tree:
-$tree
+$promptTree
 
 Start by giving me a scoped orientation of this codebase from the tree above. Keep it concise: identify the likely main parts, what you would inspect first, and any setup files that look important. Do not make code changes unless I ask.
 "@
@@ -640,7 +669,10 @@ Start by giving me a scoped orientation of this codebase from the tree above. Ke
       'split-pane', '-H', '--size', '0.22', '-d', $root, 'powershell.exe', '-NoLogo', '-NoExit', '-EncodedCommand', $meowskyEncoded, ';',
       'move-focus', 'up', ';',
       'split-pane', '-V', '--size', '0.60', '-d', $root, 'powershell.exe', '-NoLogo', '-NoExit', '-EncodedCommand', $treeEncoded, ';',
-      'split-pane', '-V', '--size', '0.45', '-d', $root
+      'split-pane', '-V', '--size', '0.45', '-d', $root, ';',
+      'move-focus', 'left', ';',
+      'move-focus', 'left', ';',
+      'move-focus', 'left'
     )
 
     & $wt @wtArgs
