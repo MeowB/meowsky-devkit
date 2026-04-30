@@ -202,8 +202,6 @@ Start by giving me a scoped orientation of this codebase from the tree above. Ke
 if (Get-Command codex -ErrorAction SilentlyContinue) {
   codex -C . `$prompt
 } else {
-  Write-Host 'Codex CLI was not found on PATH.' -ForegroundColor Yellow
-  Write-Host 'Install it with: npm install -g @openai/codex' -ForegroundColor Yellow
   Write-Host ''
 }
 "@

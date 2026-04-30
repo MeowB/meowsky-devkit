@@ -67,6 +67,11 @@ function Repair-PowerShellProfile {
   )
   $updated = [regex]::Replace(
     $updated,
+    '(?m)^\s*Set-PSReadLineOption\s+-PredictionViewStyle\s+\S+\s*\r?\n?',
+    ''
+  )
+  $updated = [regex]::Replace(
+    $updated,
     '(?ms)^\s*Set-PSReadLineOption\s+-Colors\s+@\{.*?^\s*\}\s*\r?\n?',
     ''
   )
@@ -248,8 +253,7 @@ Invoke-MeowskyStep 'Check Codex CLI' {
   if (Get-Command codex -ErrorAction SilentlyContinue) {
     Write-Host "Found Codex CLI: $((Get-Command codex).Source)"
   } else {
-    Write-Warning 'Codex CLI was not found. The Meowsky layout will open, but the Codex pane will show install instructions instead of starting Codex.'
-    Write-Host 'Install Codex CLI with: npm install -g @openai/codex'
+    Write-Host 'Codex CLI is not installed; the Codex pane will open as a regular shell.'
   }
 }
 
