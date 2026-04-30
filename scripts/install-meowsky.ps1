@@ -3,6 +3,84 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 [Environment]::SetEnvironmentVariable('MEOWSKY_DEVKIT_HOME', $repoRoot, 'User')
 
+$tools = Join-Path $env:LOCALAPPDATA 'nvim-tools'
+New-Item -ItemType Directory -Force $tools | Out-Null
+
+$zigVersion = '0.16.0'
+
+function Install-WinGetPackage {
+  param(
+    [Parameter(Mandatory)]
+    [string]$Id,
+    [switch]$AllowFailure
+  )
+
+  winget install --id $Id --exact --accept-package-agreements --accept-source-agreements
+  if ($LASTEXITCODE -ne 0) {
+    if ($AllowFailure) {
+      Write-Warning "winget install failed for $Id; trying a fallback if one is available."
+      return $false
+    }
+
+    throw "winget install failed for $Id with exit code $LASTEXITCODE."
+  }
+
+  return $true
+}
+
+function Get-ZigPath {
+  $path = (Get-Command zig.exe -ErrorAction SilentlyContinue).Source
+  if ($path) {
+    return $path
+  }
+
+  $path = Get-ChildItem -Path "$env:LOCALAPPDATA\Microsoft\WinGet\Packages" -Recurse -Filter zig.exe -ErrorAction SilentlyContinue |
+    Select-Object -First 1 -ExpandProperty FullName
+  if ($path) {
+    return $path
+  }
+
+  $path = Get-ChildItem -Path $tools -Recurse -Filter zig.exe -ErrorAction SilentlyContinue |
+    Select-Object -First 1 -ExpandProperty FullName
+  if ($path) {
+    return $path
+  }
+
+  return $null
+}
+
+function Install-ZigFromZip {
+  $zigDir = Join-Path $tools "zig-x86_64-windows-$zigVersion"
+  $zigExe = Join-Path $zigDir 'zig.exe'
+  if (Test-Path -LiteralPath $zigExe) {
+    return $zigExe
+  }
+
+  $url = "https://ziglang.org/download/$zigVersion/zig-x86_64-windows-$zigVersion.zip"
+  $zipPath = Join-Path $env:TEMP "zig-x86_64-windows-$zigVersion.zip"
+  $extractRoot = Join-Path $tools "zig-extract-$zigVersion"
+
+  Write-Host "Downloading Zig $zigVersion from $url"
+  Invoke-WebRequest -Uri $url -OutFile $zipPath
+
+  if (Test-Path -LiteralPath $extractRoot) {
+    Remove-Item -LiteralPath $extractRoot -Recurse -Force
+  }
+  New-Item -ItemType Directory -Force $extractRoot | Out-Null
+  Expand-Archive -LiteralPath $zipPath -DestinationPath $extractRoot -Force
+
+  $extractedZig = Get-ChildItem -Path $extractRoot -Recurse -Filter zig.exe -ErrorAction Stop |
+    Select-Object -First 1 -ExpandProperty FullName
+  $extractedDir = Split-Path -Parent $extractedZig
+
+  if (Test-Path -LiteralPath $zigDir) {
+    Remove-Item -LiteralPath $zigDir -Recurse -Force
+  }
+  Move-Item -LiteralPath $extractedDir -Destination $zigDir
+
+  return $zigExe
+}
+
 $packages = @(
   'Neovim.Neovim',
   'Git.Git',
@@ -14,19 +92,16 @@ $packages = @(
 )
 
 foreach ($package in $packages) {
-  winget install --id $package --exact --accept-package-agreements --accept-source-agreements
+  if ($package -eq 'zig.zig') {
+    Install-WinGetPackage -Id $package -AllowFailure | Out-Null
+  } else {
+    Install-WinGetPackage -Id $package | Out-Null
+  }
 }
 
-$tools = Join-Path $env:LOCALAPPDATA 'nvim-tools'
-New-Item -ItemType Directory -Force $tools | Out-Null
-
-$zigPath = (Get-Command zig.exe -ErrorAction SilentlyContinue).Source
+$zigPath = Get-ZigPath
 if (-not $zigPath) {
-  $zigPath = Get-ChildItem -Path "$env:LOCALAPPDATA\Microsoft\WinGet\Packages" -Recurse -Filter zig.exe -ErrorAction SilentlyContinue |
-    Select-Object -First 1 -ExpandProperty FullName
-}
-if (-not $zigPath) {
-  throw 'zig.exe was not found. Install Zig and open a new terminal.'
+  $zigPath = Install-ZigFromZip
 }
 
 @"
