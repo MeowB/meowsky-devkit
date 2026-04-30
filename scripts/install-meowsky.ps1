@@ -110,6 +110,34 @@ function Get-ZigPath {
   return $null
 }
 
+function Save-UrlToFile {
+  param(
+    [Parameter(Mandatory)]
+    [string]$Url,
+    [Parameter(Mandatory)]
+    [string]$OutFile
+  )
+
+  $curl = (Get-Command curl.exe -ErrorAction SilentlyContinue).Source
+  if ($curl) {
+    Write-Host 'Downloading with curl.exe...'
+    & $curl -L --fail --progress-bar --output $OutFile $Url
+    if ($LASTEXITCODE -ne 0) {
+      throw "curl.exe failed with exit code $LASTEXITCODE."
+    }
+    return
+  }
+
+  Write-Host 'Downloading with Invoke-WebRequest...'
+  $oldProgressPreference = $ProgressPreference
+  try {
+    $ProgressPreference = 'SilentlyContinue'
+    Invoke-WebRequest -Uri $Url -OutFile $OutFile
+  } finally {
+    $ProgressPreference = $oldProgressPreference
+  }
+}
+
 function Install-ZigFromZip {
   $zigDir = Join-Path $tools "zig-x86_64-windows-$zigVersion"
   $zigExe = Join-Path $zigDir 'zig.exe'
@@ -123,7 +151,9 @@ function Install-ZigFromZip {
   $extractRoot = Join-Path $tools "zig-extract-$zigVersion"
 
   Write-Host "Downloading Zig $zigVersion from $url"
-  Invoke-WebRequest -Uri $url -OutFile $zipPath
+  Save-UrlToFile -Url $url -OutFile $zipPath
+  $downloadedBytes = (Get-Item -LiteralPath $zipPath).Length
+  Write-Host "Downloaded $([math]::Round($downloadedBytes / 1MB, 1)) MiB to $zipPath"
 
   Write-Host "Extracting Zig $zigVersion..."
   if (Test-Path -LiteralPath $extractRoot) {
