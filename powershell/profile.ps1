@@ -196,8 +196,10 @@ Start by giving me a scoped orientation of this codebase from the tree above. Ke
     $codexPrompt = Get-MeowskyCodexPrompt -Today $today -Root $root -Tree $promptTree
 
     $promptEncoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($codexPrompt))
+    $profilePrelude = "`$WarningPreference = 'SilentlyContinue'`r`n. `$PROFILE`r`n`$WarningPreference = 'Continue'"
+    $idleScript = $profilePrelude
     $codexScript = @"
-. `$PROFILE
+$profilePrelude
 `$prompt = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('$promptEncoded'))
 if (Get-Command codex -ErrorAction SilentlyContinue) {
   codex -C . `$prompt
@@ -205,8 +207,9 @@ if (Get-Command codex -ErrorAction SilentlyContinue) {
   Write-Host ''
 }
 "@
-    $treeScript = ". `$PROFILE`r`nptree`r`n"
+    $treeScript = "$profilePrelude`r`nptree`r`n"
     $meowskyScript = @(
+      $profilePrelude,
       "Write-Host ''",
       "Write-Host ' /\_/\\   Meowsky' -ForegroundColor Green",
       "Write-Host '( o.o )  work mode' -ForegroundColor Green",
@@ -215,6 +218,7 @@ if (Get-Command codex -ErrorAction SilentlyContinue) {
     ) -join "`r`n"
 
     $codexEncoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($codexScript))
+    $idleEncoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($idleScript))
     $treeEncoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($treeScript))
     $meowskyEncoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($meowskyScript))
 
@@ -225,11 +229,11 @@ if (Get-Command codex -ErrorAction SilentlyContinue) {
       '--fullscreen',
       '-w', '-1',
       'new-tab', '-d', $root, 'powershell.exe', '-NoLogo', '-NoExit', '-EncodedCommand', $codexEncoded, ';',
-      'split-pane', '-V', '--size', '0.70', '-d', $root, ';',
+      'split-pane', '-V', '--size', '0.70', '-d', $root, 'powershell.exe', '-NoLogo', '-NoExit', '-EncodedCommand', $idleEncoded, ';',
       'split-pane', '-H', '--size', '0.22', '-d', $root, 'powershell.exe', '-NoLogo', '-NoExit', '-EncodedCommand', $meowskyEncoded, ';',
       'move-focus', 'up', ';',
       'split-pane', '-V', '--size', '0.60', '-d', $root, 'powershell.exe', '-NoLogo', '-NoExit', '-EncodedCommand', $treeEncoded, ';',
-      'split-pane', '-V', '--size', '0.45', '-d', $root, ';',
+      'split-pane', '-V', '--size', '0.45', '-d', $root, 'powershell.exe', '-NoLogo', '-NoExit', '-EncodedCommand', $idleEncoded, ';',
       'move-focus', 'left', ';',
       'move-focus', 'left', ';',
       'move-focus', 'left'

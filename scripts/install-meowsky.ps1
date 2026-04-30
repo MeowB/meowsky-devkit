@@ -252,8 +252,6 @@ Invoke-MeowskyStep 'Resolve Zig compiler' {
 Invoke-MeowskyStep 'Check Codex CLI' {
   if (Get-Command codex -ErrorAction SilentlyContinue) {
     Write-Host "Found Codex CLI: $((Get-Command codex).Source)"
-  } else {
-    Write-Host 'Codex CLI is not installed; the Codex pane will open as a regular shell.'
   }
 }
 
