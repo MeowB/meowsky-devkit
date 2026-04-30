@@ -8,6 +8,16 @@ New-Item -ItemType Directory -Force $tools | Out-Null
 
 $zigVersion = '0.16.0'
 
+function Test-WinGetPackageInstalled {
+  param(
+    [Parameter(Mandatory)]
+    [string]$Id
+  )
+
+  winget list --id $Id --exact --accept-source-agreements | Out-Null
+  return $LASTEXITCODE -eq 0
+}
+
 function Install-WinGetPackage {
   param(
     [Parameter(Mandatory)]
@@ -15,8 +25,18 @@ function Install-WinGetPackage {
     [switch]$AllowFailure
   )
 
+  if (Test-WinGetPackageInstalled -Id $Id) {
+    Write-Host "$Id is already installed."
+    return $true
+  }
+
   winget install --id $Id --exact --accept-package-agreements --accept-source-agreements
   if ($LASTEXITCODE -ne 0) {
+    if (Test-WinGetPackageInstalled -Id $Id) {
+      Write-Warning "winget returned exit code $LASTEXITCODE for $Id, but the package is installed."
+      return $true
+    }
+
     if ($AllowFailure) {
       Write-Warning "winget install failed for $Id; trying a fallback if one is available."
       return $false
