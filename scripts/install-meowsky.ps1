@@ -77,43 +77,54 @@ function Repair-PowerShellProfile {
   }
 }
 
-function Test-WinGetPackageInstalled {
+function Get-FirstExistingCommand {
   param(
     [Parameter(Mandatory)]
-    [string]$Id
+    [string[]]$Names
   )
 
-  winget list --id $Id --exact --accept-source-agreements | Out-Null
-  return $LASTEXITCODE -eq 0
+  foreach ($name in $Names) {
+    $command = Get-Command $name -ErrorAction SilentlyContinue
+    if ($command) {
+      return $command.Source
+    }
+  }
+
+  return $null
 }
 
 function Install-WinGetPackage {
   param(
     [Parameter(Mandatory)]
     [string]$Id,
-    [switch]$AllowFailure
+    [Parameter(Mandatory)]
+    [string[]]$Commands
   )
 
   Write-Host "Checking $Id..."
-  if (Test-WinGetPackageInstalled -Id $Id) {
-    Write-Host "$Id is already installed."
+  $existingCommand = Get-FirstExistingCommand -Names $Commands
+  if ($existingCommand) {
+    Write-Host "$Id is already available at $existingCommand"
     return $true
   }
 
   Write-Host "Installing $Id with winget..."
   winget install --id $Id --exact --accept-package-agreements --accept-source-agreements
   if ($LASTEXITCODE -ne 0) {
-    if (Test-WinGetPackageInstalled -Id $Id) {
-      Write-Warning "winget returned exit code $LASTEXITCODE for $Id, but the package is installed."
+    $existingCommand = Get-FirstExistingCommand -Names $Commands
+    if ($existingCommand) {
+      Write-Warning "winget returned exit code $LASTEXITCODE for $Id, but $($Commands[0]) is available at $existingCommand."
       return $true
     }
 
-    if ($AllowFailure) {
-      Write-Warning "winget install failed for $Id; trying a fallback if one is available."
-      return $false
-    }
-
     throw "winget install failed for $Id with exit code $LASTEXITCODE."
+  }
+
+  $existingCommand = Get-FirstExistingCommand -Names $Commands
+  if ($existingCommand) {
+    Write-Host "$Id installed and available at $existingCommand"
+  } else {
+    Write-Warning "$Id install finished, but $($Commands -join ', ') was not found in the current PATH. A new terminal may be required."
   }
 
   return $true
@@ -206,20 +217,20 @@ function Install-ZigFromZip {
 }
 
 $packages = @(
-  'Neovim.Neovim',
-  'Git.Git',
-  'OpenJS.NodeJS.LTS',
-  'tree-sitter.tree-sitter-cli',
-  'eza-community.eza',
-  'JohnMacFarlane.Pandoc'
+  @{ Id = 'Neovim.Neovim'; Commands = @('nvim.exe', 'nvim') },
+  @{ Id = 'Git.Git'; Commands = @('git.exe', 'git') },
+  @{ Id = 'OpenJS.NodeJS.LTS'; Commands = @('node.exe', 'node') },
+  @{ Id = 'tree-sitter.tree-sitter-cli'; Commands = @('tree-sitter.exe', 'tree-sitter') },
+  @{ Id = 'eza-community.eza'; Commands = @('eza.exe', 'eza') },
+  @{ Id = 'JohnMacFarlane.Pandoc'; Commands = @('pandoc.exe', 'pandoc') }
 )
 
 Invoke-MeowskyStep 'Install or verify Windows packages' {
   $packageIndex = 0
   foreach ($package in $packages) {
     $packageIndex++
-    Write-Host "[$packageIndex/$($packages.Count)] $package"
-    Install-WinGetPackage -Id $package | Out-Null
+    Write-Host "[$packageIndex/$($packages.Count)] $($package.Id)"
+    Install-WinGetPackage -Id $package.Id -Commands $package.Commands | Out-Null
   }
 }
 
