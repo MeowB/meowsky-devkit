@@ -98,6 +98,48 @@ function Get-FirstExistingCommand {
   return $null
 }
 
+function Test-WinGetPackageInstalled {
+  param(
+    [Parameter(Mandatory)]
+    [string]$Id
+  )
+
+  if (-not (Get-Command winget.exe -ErrorAction SilentlyContinue)) {
+    return $false
+  }
+
+  $output = & winget list --id $Id --exact --accept-source-agreements 2>$null
+  return $LASTEXITCODE -eq 0 -and ($output -match [regex]::Escape($Id))
+}
+
+function Update-WinGetPackage {
+  param(
+    [Parameter(Mandatory)]
+    [string]$Id
+  )
+
+  Write-Host "Checking updates for $Id..."
+  $output = & winget upgrade --id $Id --exact --accept-package-agreements --accept-source-agreements 2>&1
+  $exitCode = $LASTEXITCODE
+
+  if ($output) {
+    $output | ForEach-Object { Write-Host $_ }
+  }
+
+  if ($exitCode -eq 0) {
+    return
+  }
+
+  $combinedOutput = $output -join "`n"
+  if ($combinedOutput -match 'No installed package found matching input criteria' -or
+      $combinedOutput -match 'No available upgrade found' -or
+      $combinedOutput -match 'No newer package versions are available') {
+    return
+  }
+
+  Write-Warning "winget upgrade returned exit code $exitCode for $Id. Continuing because the package is already installed."
+}
+
 function Install-WinGetPackage {
   param(
     [Parameter(Mandatory)]
@@ -110,6 +152,13 @@ function Install-WinGetPackage {
   $existingCommand = Get-FirstExistingCommand -Names $Commands
   if ($existingCommand) {
     Write-Host "$Id is already available at $existingCommand"
+    Update-WinGetPackage -Id $Id
+    return $true
+  }
+
+  if (Test-WinGetPackageInstalled -Id $Id) {
+    Write-Host "$Id is already installed according to winget."
+    Update-WinGetPackage -Id $Id
     return $true
   }
 

@@ -4,4 +4,10 @@ Workspace root: $root
 Top-level project tree:
 $tree
 
+Git status at startup:
+$gitStatus
+
+Answering rules:
+- Always mention the file or files we are working on in your answer.
+
 Start by giving me a scoped orientation of this codebase from the tree above. Keep it concise: identify the likely main parts, what you would inspect first, and any setup files that look important. Do not make code changes unless I ask.

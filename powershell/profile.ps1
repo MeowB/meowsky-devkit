@@ -82,7 +82,10 @@
       [string]$Root,
 
       [Parameter(Mandatory = $true)]
-      [string]$Tree
+      [string]$Tree,
+
+      [Parameter(Mandatory = $true)]
+      [string]$GitStatus
     )
 
     $template = $null
@@ -101,6 +104,12 @@ Workspace root: $root
 Top-level project tree:
 $tree
 
+Git status at startup:
+$gitStatus
+
+Answering rules:
+- Always mention the file or files we are working on in your answer.
+
 Start by giving me a scoped orientation of this codebase from the tree above. Keep it concise: identify the likely main parts, what you would inspect first, and any setup files that look important. Do not make code changes unless I ask.
 '@
     }
@@ -108,7 +117,62 @@ Start by giving me a scoped orientation of this codebase from the tree above. Ke
     return $template.
       Replace('$today', $Today).
       Replace('$root', $Root).
-      Replace('$tree', $Tree)
+      Replace('$tree', $Tree).
+      Replace('$gitStatus', $GitStatus)
+  }
+
+  function Get-MeowskyGitSummary {
+    param(
+      [Parameter(Mandatory = $true)]
+      [string]$Root
+    )
+
+    if (-not (Get-Command git.exe -ErrorAction SilentlyContinue) -and -not (Get-Command git -ErrorAction SilentlyContinue)) {
+      return 'Git: command not found'
+    }
+
+    Push-Location $Root
+    try {
+      & git rev-parse --is-inside-work-tree *> $null
+      if ($LASTEXITCODE -ne 0) {
+        return 'Git: not a repository'
+      }
+
+      $branch = (& git branch --show-current 2>$null).Trim()
+      if (-not $branch) {
+        $commit = (& git rev-parse --short HEAD 2>$null).Trim()
+        $branch = if ($commit) { "detached at $commit" } else { 'unknown' }
+      }
+
+      $origin = (& git remote get-url origin 2>$null).Trim()
+      if (-not $origin) {
+        $origin = 'none'
+      }
+
+      $upstream = (& git rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>$null).Trim()
+      $sync = 'no upstream'
+      if ($upstream) {
+        $counts = (& git rev-list --left-right --count 'HEAD...@{u}' 2>$null).Trim() -split '\s+'
+        if ($counts.Count -ge 2) {
+          $sync = "ahead $($counts[0]), behind $($counts[1]) vs $upstream"
+        } else {
+          $sync = "tracking $upstream"
+        }
+      }
+
+      $changes = (& git status --short 2>$null)
+      $changeCount = if ($changes) { @($changes).Count } else { 0 }
+      $workingTree = if ($changeCount -eq 0) { 'clean' } else { "$changeCount changed file(s)" }
+
+      return @(
+        "Branch: $branch",
+        "Origin: $origin",
+        "Sync: $sync",
+        "Working tree: $workingTree"
+      ) -join "`r`n"
+    } finally {
+      Pop-Location
+    }
   }
 
   function Get-MeowskyPromptTree {
@@ -193,9 +257,11 @@ Start by giving me a scoped orientation of this codebase from the tree above. Ke
 
     $today = Get-Date -Format 'yyyy-MM-dd'
     $promptTree = Get-MeowskyPromptTree -Root $root
-    $codexPrompt = Get-MeowskyCodexPrompt -Today $today -Root $root -Tree $promptTree
+    $gitStatus = Get-MeowskyGitSummary -Root $root
+    $codexPrompt = Get-MeowskyCodexPrompt -Today $today -Root $root -Tree $promptTree -GitStatus $gitStatus
 
     $promptEncoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($codexPrompt))
+    $gitStatusEncoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($gitStatus))
     $profilePrelude = "`$WarningPreference = 'SilentlyContinue'`r`n. `$PROFILE`r`n`$WarningPreference = 'Continue'"
     $idleScript = $profilePrelude
     $codexScript = @"
@@ -210,11 +276,14 @@ if (Get-Command codex -ErrorAction SilentlyContinue) {
     $treeScript = "$profilePrelude`r`nptree`r`n"
     $meowskyScript = @(
       $profilePrelude,
+      "`$gitStatus = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('$gitStatusEncoded'))",
       "Write-Host ''",
       "Write-Host ' /\_/\\   Meowsky' -ForegroundColor Green",
       "Write-Host '( o.o )  work mode' -ForegroundColor Green",
       "Write-Host ' > ^ <' -ForegroundColor Green",
-      "Write-Host (Get-Location).Path -ForegroundColor Cyan"
+      "Write-Host (Get-Location).Path -ForegroundColor Cyan",
+      "Write-Host ''",
+      "Write-Host `$gitStatus"
     ) -join "`r`n"
 
     $codexEncoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($codexScript))

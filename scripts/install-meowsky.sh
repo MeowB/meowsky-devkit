@@ -106,6 +106,56 @@ meowsky_pdf() {
   fi
 }
 
+meowsky_git_summary() {
+  local root="$1"
+
+  if ! command -v git >/dev/null 2>&1; then
+    printf '%s\n' "Git: command not found"
+    return
+  fi
+
+  (
+    cd "$root" || exit 1
+
+    if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+      printf '%s\n' "Git: not a repository"
+      return
+    fi
+
+    local branch origin upstream sync changes change_count
+    branch="$(git branch --show-current 2>/dev/null || true)"
+    if [ -z "$branch" ]; then
+      branch="detached at $(git rev-parse --short HEAD 2>/dev/null || printf '%s' unknown)"
+    fi
+
+    origin="$(git remote get-url origin 2>/dev/null || true)"
+    if [ -z "$origin" ]; then
+      origin="none"
+    fi
+
+    upstream="$(git rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null || true)"
+    sync="no upstream"
+    if [ -n "$upstream" ]; then
+      set -- $(git rev-list --left-right --count 'HEAD...@{u}' 2>/dev/null || printf '0 0')
+      sync="ahead $1, behind $2 vs $upstream"
+    fi
+
+    changes="$(git status --short 2>/dev/null || true)"
+    if [ -z "$changes" ]; then
+      change_count=0
+      changes="clean"
+    else
+      change_count="$(printf '%s\n' "$changes" | wc -l | tr -d ' ')"
+      changes="$change_count changed file(s)"
+    fi
+
+    printf 'Branch: %s\n' "$branch"
+    printf 'Origin: %s\n' "$origin"
+    printf 'Sync: %s\n' "$sync"
+    printf 'Working tree: %s\n' "$changes"
+  )
+}
+
 meowsky() {
   local action="${1:-}"
   local target="${2:-}"
@@ -133,7 +183,7 @@ meowsky() {
   fi
 
   if [ "$action" = "./" ] || [ "$action" = "." ]; then
-    local current root today tree session name codex_prompt
+    local current root today tree git_status session name codex_prompt
     current="$(pwd -P)"
 
     case "$current/" in
@@ -168,11 +218,19 @@ meowsky() {
       tree="$(find . -maxdepth 1 -mindepth 1 -printf '%f\n' | sort)"
     fi
 
+    git_status="$(meowsky_git_summary "$root")"
+
     codex_prompt="Session context ($today):
 Workspace root: $root
 
 Top-level project tree:
 $tree
+
+Git status at startup:
+$git_status
+
+Answering rules:
+- Always mention the file or files we are working on in your answer.
 
 Start by giving me a scoped orientation of this codebase from the tree above. Keep it concise: identify the likely main parts, what you would inspect first, and any setup files that look important. Do not make code changes unless I ask."
 
