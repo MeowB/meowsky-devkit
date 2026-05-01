@@ -98,6 +98,13 @@ require('lazy').setup({
       require('nvim-autopairs').setup({})
     end,
   },
+  {
+    'windwp/nvim-ts-autotag',
+    event = 'InsertEnter',
+    config = function()
+      require('nvim-ts-autotag').setup({})
+    end,
+  },
 }, {
   checker = { enabled = true },
 })
@@ -247,67 +254,126 @@ vim.diagnostic.config({
   update_in_insert = false,
 })
 
-vim.keymap.set('n', 'gd', vim.lsp.buf.definition, { desc = 'Go to definition' })
-vim.keymap.set('n', 'K', vim.lsp.buf.hover, { desc = 'Hover docs' })
-vim.keymap.set('n', '<leader>rn', vim.lsp.buf.rename, { desc = 'Rename symbol' })
-vim.keymap.set('n', '<leader>ca', vim.lsp.buf.code_action, { desc = 'Code action' })
-vim.keymap.set('n', '<leader>f', function()
-  vim.lsp.buf.format({ async = true })
-end, { desc = 'Format file' })
--- VS Code-style Shift+Arrow selection.
-vim.keymap.set('n', '<S-Left>', 'vh', { noremap = true, desc = 'Select left' })
-vim.keymap.set('n', '<S-Right>', 'vl', { noremap = true, desc = 'Select right' })
-vim.keymap.set('n', '<S-Up>', 'Vk', { noremap = true, desc = 'Select line up' })
-vim.keymap.set('n', '<S-Down>', 'Vj', { noremap = true, desc = 'Select line down' })
+local function copy_current_line_diagnostic()
+  local bufnr = vim.api.nvim_get_current_buf()
+  local lnum = vim.api.nvim_win_get_cursor(0)[1] - 1
+  local diagnostics = vim.diagnostic.get(bufnr, { lnum = lnum })
 
-vim.keymap.set('i', '<S-Left>', '<Esc>vhi', { noremap = true, desc = 'Select left' })
-vim.keymap.set('i', '<S-Right>', '<Esc>vli', { noremap = true, desc = 'Select right' })
-vim.keymap.set('i', '<S-Up>', '<Esc>Vki', { noremap = true, desc = 'Select line up' })
-vim.keymap.set('i', '<S-Down>', '<Esc>Vji', { noremap = true, desc = 'Select line down' })
+  if vim.tbl_isempty(diagnostics) then
+    vim.notify('No diagnostic on current line', vim.log.levels.INFO)
+    return
+  end
+
+  table.sort(diagnostics, function(a, b)
+    return (a.severity or vim.diagnostic.severity.HINT) < (b.severity or vim.diagnostic.severity.HINT)
+  end)
+
+  local lines = {}
+  for _, diagnostic in ipairs(diagnostics) do
+    local severity = vim.diagnostic.severity[diagnostic.severity] or 'UNKNOWN'
+    local source = diagnostic.source and (' [' .. diagnostic.source .. ']') or ''
+    local code = diagnostic.code and (' (' .. diagnostic.code .. ')') or ''
+    local message = diagnostic.message:gsub('%s+', ' ')
+    table.insert(lines, severity .. source .. code .. ': ' .. message)
+  end
+
+  local text = table.concat(lines, '\n')
+  vim.fn.setreg('+', text)
+  vim.fn.setreg('"', text)
+  vim.notify('Copied diagnostic for current line', vim.log.levels.INFO)
+end
+
+local function lsp_supports_formatting()
+  return not vim.tbl_isempty(vim.lsp.get_clients({
+    bufnr = 0,
+    method = 'textDocument/formatting',
+  }))
+end
+
+local function indent_whole_file()
+  local view = vim.fn.winsaveview()
+  vim.cmd('keepjumps normal! gg=G')
+  vim.fn.winrestview(view)
+end
+
+local function format_or_indent_file()
+  if lsp_supports_formatting() then
+    vim.lsp.buf.format({ async = false, timeout_ms = 2000 })
+  else
+    indent_whole_file()
+  end
+end
+
+local function indent_selection()
+  vim.cmd('normal! gv=gv')
+end
+
+local function duplicate_current_line_insert()
+  local row, col = unpack(vim.api.nvim_win_get_cursor(0))
+  local line = vim.api.nvim_get_current_line()
+  vim.api.nvim_buf_set_lines(0, row, row, false, { line })
+  vim.api.nvim_win_set_cursor(0, { row + 1, col })
+end
+
+vim.keymap.set('n', '<leader>e', copy_current_line_diagnostic, { desc = 'Copy diagnostic on current line' })
+vim.keymap.set('n', '<leader>F', format_or_indent_file, { desc = 'Format or indent file' })
+vim.keymap.set('x', '<leader>F', indent_selection, { desc = 'Indent selection' })
+vim.keymap.set('i', '<C-S-D>', duplicate_current_line_insert, { desc = 'Duplicate current line' })
+vim.keymap.set('i', '<C-y><C-p>', duplicate_current_line_insert, { desc = 'Duplicate current line' })
+-- VS Code-style Shift+Arrow selection.
+vim.keymap.set('n', '<S-Left>', 'vh<C-g>', { noremap = true, desc = 'Select left' })
+vim.keymap.set('n', '<S-Right>', 'vl<C-g>', { noremap = true, desc = 'Select right' })
+vim.keymap.set('n', '<S-Up>', 'Vk<C-g>', { noremap = true, desc = 'Select line up' })
+vim.keymap.set('n', '<S-Down>', 'Vj<C-g>', { noremap = true, desc = 'Select line down' })
+
+vim.keymap.set('i', '<S-Left>', '<Esc>vh<C-g>', { noremap = true, desc = 'Select left' })
+vim.keymap.set('i', '<S-Right>', '<Esc>vl<C-g>', { noremap = true, desc = 'Select right' })
+vim.keymap.set('i', '<S-Up>', '<Esc>Vk<C-g>', { noremap = true, desc = 'Select line up' })
+vim.keymap.set('i', '<S-Down>', '<Esc>Vj<C-g>', { noremap = true, desc = 'Select line down' })
 
 vim.keymap.set('v', '<S-Left>', 'h', { noremap = true, desc = 'Extend selection left' })
 vim.keymap.set('v', '<S-Right>', 'l', { noremap = true, desc = 'Extend selection right' })
 vim.keymap.set('v', '<S-Up>', 'k', { noremap = true, desc = 'Extend selection up' })
 vim.keymap.set('v', '<S-Down>', 'j', { noremap = true, desc = 'Extend selection down' })
--- VS Code-style Ctrl+Shift+Arrow selection.
-vim.keymap.set('n', '<C-S-Left>', 'vb', { noremap = true, desc = 'Select word left' })
-vim.keymap.set('n', '<C-S-Right>', 've', { noremap = true, desc = 'Select word right' })
-vim.keymap.set('n', '<C-S-Up>', 'V{', { noremap = true, desc = 'Select block up' })
-vim.keymap.set('n', '<C-S-Down>', 'V}', { noremap = true, desc = 'Select block down' })
+vim.keymap.set('s', '<S-Left>', '<Left>', { noremap = true, desc = 'Extend selection left' })
+vim.keymap.set('s', '<S-Right>', '<Right>', { noremap = true, desc = 'Extend selection right' })
+vim.keymap.set('s', '<S-Up>', '<Up>', { noremap = true, desc = 'Extend selection up' })
+vim.keymap.set('s', '<S-Down>', '<Down>', { noremap = true, desc = 'Extend selection down' })
+-- VS Code-style Ctrl+Shift+Left/Right word selection.
+vim.keymap.set('n', '<C-S-Left>', 'vb<C-g>', { noremap = true, desc = 'Select word left' })
+vim.keymap.set('n', '<C-S-Right>', 've<C-g>', { noremap = true, desc = 'Select word right' })
 
-vim.keymap.set('i', '<C-S-Left>', '<Esc>vb', { noremap = true, desc = 'Select word left' })
-vim.keymap.set('i', '<C-S-Right>', '<Esc>ve', { noremap = true, desc = 'Select word right' })
-vim.keymap.set('i', '<C-S-Up>', '<Esc>V{', { noremap = true, desc = 'Select block up' })
-vim.keymap.set('i', '<C-S-Down>', '<Esc>V}', { noremap = true, desc = 'Select block down' })
+vim.keymap.set('i', '<C-S-Left>', '<Esc>vb<C-g>', { noremap = true, desc = 'Select word left' })
+vim.keymap.set('i', '<C-S-Right>', '<Esc>ve<C-g>', { noremap = true, desc = 'Select word right' })
 
 vim.keymap.set('v', '<C-S-Left>', 'b', { noremap = true, desc = 'Extend selection word left' })
 vim.keymap.set('v', '<C-S-Right>', 'e', { noremap = true, desc = 'Extend selection word right' })
-vim.keymap.set('v', '<C-S-Up>', '{', { noremap = true, desc = 'Extend selection block up' })
-vim.keymap.set('v', '<C-S-Down>', '}', { noremap = true, desc = 'Extend selection block down' })
+vim.keymap.set('s', '<C-S-Left>', '<C-Left>', { noremap = true, desc = 'Extend selection word left' })
+vim.keymap.set('s', '<C-S-Right>', '<C-Right>', { noremap = true, desc = 'Extend selection word right' })
 
 -- VS Code-style selected-block indentation.
 vim.keymap.set('v', '<Tab>', '>gv', { noremap = true, silent = true, desc = 'Indent selection' })
 vim.keymap.set('v', '<S-Tab>', '<gv', { noremap = true, silent = true, desc = 'Outdent selection' })
--- VS Code-style Alt+Arrow line movement.
-vim.keymap.set('n', '<A-Up>', ':move .-2<CR>==', { silent = true, desc = 'Move line up' })
-vim.keymap.set('n', '<A-Down>', ':move .+1<CR>==', { silent = true, desc = 'Move line down' })
-vim.keymap.set('i', '<A-Up>', '<Esc>:move .-2<CR>==gi', { silent = true, desc = 'Move line up' })
-vim.keymap.set('i', '<A-Down>', '<Esc>:move .+1<CR>==gi', { silent = true, desc = 'Move line down' })
-vim.keymap.set('v', '<A-Up>', ":move '<-2<CR>gv=gv", { silent = true, desc = 'Move selection up' })
-vim.keymap.set('v', '<A-Down>', ":move '>+1<CR>gv=gv", { silent = true, desc = 'Move selection down' })
+-- Terminal-safe line movement.
+vim.keymap.set('n', '<leader>k', ':move .-2<CR>==', { silent = true, desc = 'Move line up' })
+vim.keymap.set('n', '<leader>j', ':move .+1<CR>==', { silent = true, desc = 'Move line down' })
+vim.keymap.set('n', '<C-k>', ':move .-2<CR>==', { silent = true, desc = 'Move line up' })
+vim.keymap.set('n', '<C-j>', ':move .+1<CR>==', { silent = true, desc = 'Move line down' })
+vim.keymap.set('i', '<C-k>', '<Esc>:move .-2<CR>==gi', { silent = true, desc = 'Move line up' })
+vim.keymap.set('i', '<C-j>', '<Esc>:move .+1<CR>==gi', { silent = true, desc = 'Move line down' })
+vim.keymap.set('v', '<leader>k', ":move '<-2<CR>gv=gv", { silent = true, desc = 'Move selection up' })
+vim.keymap.set('v', '<leader>j', ":move '>+1<CR>gv=gv", { silent = true, desc = 'Move selection down' })
+vim.keymap.set('v', '<C-k>', ":move '<-2<CR>gv=gv", { silent = true, desc = 'Move selection up' })
+vim.keymap.set('v', '<C-j>', ":move '>+1<CR>gv=gv", { silent = true, desc = 'Move selection down' })
 -- VS Code-style Shift+Home/End selection.
-vim.keymap.set('n', '<S-Home>', 'v^', { noremap = true, desc = 'Select to first nonblank' })
-vim.keymap.set('n', '<S-End>', 'v$', { noremap = true, desc = 'Select to end of line' })
-vim.keymap.set('n', '<C-S-Home>', 'vgg', { noremap = true, desc = 'Select to top of file' })
-vim.keymap.set('n', '<C-S-End>', 'vG', { noremap = true, desc = 'Select to bottom of file' })
+vim.keymap.set('n', '<S-Home>', 'v^<C-g>', { noremap = true, desc = 'Select to first nonblank' })
+vim.keymap.set('n', '<S-End>', 'v$<C-g>', { noremap = true, desc = 'Select to end of line' })
 
-vim.keymap.set('i', '<S-Home>', '<Esc>v^', { noremap = true, desc = 'Select to first nonblank' })
-vim.keymap.set('i', '<S-End>', '<Esc>v$', { noremap = true, desc = 'Select to end of line' })
-vim.keymap.set('i', '<C-S-Home>', '<Esc>vgg', { noremap = true, desc = 'Select to top of file' })
-vim.keymap.set('i', '<C-S-End>', '<Esc>vG', { noremap = true, desc = 'Select to bottom of file' })
+vim.keymap.set('i', '<S-Home>', '<Esc>v^<C-g>', { noremap = true, desc = 'Select to first nonblank' })
+vim.keymap.set('i', '<S-End>', '<Esc>v$<C-g>', { noremap = true, desc = 'Select to end of line' })
 
 vim.keymap.set('v', '<S-Home>', '^', { noremap = true, desc = 'Extend selection to first nonblank' })
 vim.keymap.set('v', '<S-End>', '$', { noremap = true, desc = 'Extend selection to end of line' })
-vim.keymap.set('v', '<C-S-Home>', 'gg', { noremap = true, desc = 'Extend selection to top of file' })
-vim.keymap.set('v', '<C-S-End>', 'G', { noremap = true, desc = 'Extend selection to bottom of file' })
+vim.keymap.set('s', '<S-Home>', '<Home>', { noremap = true, desc = 'Extend selection to first nonblank' })
+vim.keymap.set('s', '<S-End>', '<End>', { noremap = true, desc = 'Extend selection to end of line' })
 

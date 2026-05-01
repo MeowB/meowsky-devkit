@@ -110,7 +110,13 @@ The editor config in [nvim/init.lua](nvim/init.lua) is tuned for:
 - `Ctrl+Space` completion
 - `Ctrl+Backspace` and `Ctrl+H` word deletion in insert mode
 - auto-pairs for brackets and quotes
-- VS Code-style shift-arrow, ctrl-shift-arrow, home/end, and alt-arrow movement
+- automatic HTML/React closing tags
+- `Space e` copies diagnostics on the current line
+- `Space F` formats with LSP when available, otherwise fixes indentation
+- `Ctrl+Shift+D` or `Ctrl+Y Ctrl+P` duplicates the current line from insert mode
+- VS Code-style Shift+Arrow, Ctrl+Shift+Left/Right, and Shift+Home/End selection
+- `Ctrl+J` / `Ctrl+K` move lines or selected blocks down/up in normal, insert, and visual mode
+- `Space j` / `Space k` are fallback movement shortcuts in normal and visual mode
 - visual-mode tab indentation and outdentation
 
 ## Sharing

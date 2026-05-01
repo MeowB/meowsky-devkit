@@ -10,9 +10,13 @@ The main focus is a general-purpose Neovim config for web and scripting work. It
 - `Ctrl+Space` completion
 - `Ctrl+Backspace` / `Ctrl+H` delete previous word in insert mode
 - Auto-close brackets, parentheses, braces, and quotes
+- Auto-close HTML/React tags
+- `Space e` copies diagnostics on the current line
+- `Space F` formats with LSP when available, otherwise fixes indentation
+- `Ctrl+Shift+D` / `Ctrl+Y Ctrl+P` duplicate the current line from insert mode
 - VS Code-style Shift+Arrow and Shift+Home/End selection mappings
-- Ctrl+Shift+Arrow word/block selection mappings
-- VS Code-style Alt+Arrow line/block movement
+- Ctrl+Shift+Left/Right word selection mappings
+- `Ctrl+J` / `Ctrl+K` line/block movement, with `Space j` / `Space k` as normal/visual fallbacks
 - Visual-mode `Tab` / `Shift+Tab` selected-block indentation
 
 ## Install System Tools
@@ -127,41 +131,19 @@ vim.opt.termguicolors = true
 vim.cmd('syntax enable')
 vim.cmd('filetype plugin indent on')
 
--- Tool paths. Prefer regular PATH entries, with WinGet package folders as a fallback.
-local function first_existing_dir(candidates)
-  for _, dir in ipairs(candidates) do
-    if dir and dir ~= '' and vim.fn.isdirectory(dir) == 1 then
-      return dir
-    end
-  end
-end
-
-local function exe_dir(name)
-  local path = vim.fn.exepath(name)
-  if path ~= '' then
-    return vim.fn.fnamemodify(path, ':h')
-  end
-end
-
-local localappdata = vim.env.LOCALAPPDATA or vim.fn.expand('~/AppData/Local')
-local nvim_tools_dir = localappdata .. '/nvim-tools'
-local winget_packages = localappdata .. '/Microsoft/WinGet/Packages'
-local tree_sitter_dir = first_existing_dir({
-  exe_dir('tree-sitter'),
-  vim.fn.glob(winget_packages .. '/tree-sitter.tree-sitter-cli_*', false, true)[1],
-})
-local zig_dir = first_existing_dir({
-  exe_dir('zig'),
-  vim.fn.fnamemodify(vim.fn.glob(winget_packages .. '/zig.zig_*/**/zig.exe', false, true)[1] or '', ':h'),
-})
-
-local path_parts = { nvim_tools_dir, tree_sitter_dir, zig_dir, vim.env.PATH }
-vim.env.PATH = table.concat(vim.tbl_filter(function(part)
-  return part and part ~= ''
-end, path_parts), ';')
+-- Tool paths installed by winget. These make headless/plugin installs work even when Windows aliases are flaky.
+local nvim_tools_dir = vim.fn.expand('~/AppData/Local/nvim-tools')
+local tree_sitter_dir = vim.fn.expand('~/AppData/Local/Microsoft/WinGet/Packages/tree-sitter.tree-sitter-cli_Microsoft.Winget.Source_8wekyb3d8bbwe')
+local zig_dir = vim.fn.expand('~/AppData/Local/Microsoft/WinGet/Packages/zig.zig_Microsoft.Winget.Source_8wekyb3d8bbwe/zig-x86_64-windows-0.16.0')
+vim.env.PATH = nvim_tools_dir .. ';' .. tree_sitter_dir .. ';' .. zig_dir .. ';' .. vim.env.PATH
 vim.env.CC = nvim_tools_dir .. '/cc.cmd'
 vim.env.CXX = nvim_tools_dir .. '/c++.cmd'
 
+vim.filetype.add({
+  extension = {
+    prisma = 'prisma',
+  },
+})
 vim.opt.signcolumn = 'yes'
 vim.opt.clipboard = 'unnamedplus'
 vim.opt.expandtab = true
@@ -209,11 +191,11 @@ require('lazy').setup({
       })
 
       if vim.fn.executable('tree-sitter') == 1 then
-        treesitter.install({ 'lua', 'vim', 'vimdoc', 'javascript', 'typescript', 'tsx', 'json', 'html', 'css', 'markdown' })
+        treesitter.install({ 'lua', 'vim', 'vimdoc', 'javascript', 'typescript', 'tsx', 'json', 'html', 'css', 'prisma' })
       end
 
       vim.api.nvim_create_autocmd('FileType', {
-        pattern = { 'lua', 'vim', 'javascript', 'typescript', 'typescriptreact', 'json', 'html', 'css', 'markdown' },
+        pattern = { 'lua', 'vim', 'javascript', 'typescript', 'typescriptreact', 'json', 'html', 'css', 'prisma' },
         callback = function()
           pcall(vim.treesitter.start)
           if vim.treesitter.highlighter.active[vim.api.nvim_get_current_buf()] then
@@ -241,6 +223,13 @@ require('lazy').setup({
       require('nvim-autopairs').setup({})
     end,
   },
+  {
+    'windwp/nvim-ts-autotag',
+    event = 'InsertEnter',
+    config = function()
+      require('nvim-ts-autotag').setup({})
+    end,
+  },
 }, {
   checker = { enabled = true },
 })
@@ -248,6 +237,94 @@ require('lazy').setup({
 local cmp = require('cmp')
 local luasnip = require('luasnip')
 
+local function find_frontend_src()
+  local current = vim.fn.expand('%:p:h')
+  if current == '' then
+    current = vim.loop.cwd()
+  end
+
+  local dir = current
+  while dir and dir ~= '' do
+    if vim.fn.isdirectory(dir .. '/src') == 1 and vim.fn.filereadable(dir .. '/vite.config.ts') == 1 then
+      return vim.fn.fnamemodify(dir .. '/src', ':p')
+    end
+
+    local parent = vim.fn.fnamemodify(dir, ':h')
+    if parent == dir then
+      break
+    end
+    dir = parent
+  end
+
+  local cwd = vim.loop.cwd()
+  local candidates = {
+    cwd .. '/src',
+    cwd .. '/front-end/src',
+  }
+
+  for _, candidate in ipairs(candidates) do
+    if vim.fn.isdirectory(candidate) == 1 then
+      return vim.fn.fnamemodify(candidate, ':p')
+    end
+  end
+end
+
+local alias_path_source = {}
+
+function alias_path_source:is_available()
+  return find_frontend_src() ~= nil
+end
+
+function alias_path_source:get_trigger_characters()
+  return { '@', '/' }
+end
+
+function alias_path_source:complete(params, callback)
+  local line = params.context.cursor_before_line
+  local alias = line:match('@/[%w%._%-%/]*$')
+  if not alias then
+    callback({ items = {}, isIncomplete = false })
+    return
+  end
+
+  local src = find_frontend_src()
+  if not src then
+    callback({ items = {}, isIncomplete = false })
+    return
+  end
+
+  local partial = alias:sub(3)
+  local dir_part = partial:match('^(.*/)[^/]*$') or ''
+  local typed_name = partial:match('([^/]*)$') or ''
+  local scan_dir = src .. dir_part
+  local entries = vim.fn.readdir(scan_dir)
+  local items = {}
+
+  for _, entry in ipairs(entries) do
+    if entry:sub(1, #typed_name) == typed_name then
+      local full = scan_dir .. entry
+      local is_dir = vim.fn.isdirectory(full) == 1
+      local insert = '@/' .. dir_part .. entry
+
+      if is_dir then
+        insert = insert .. '/'
+      else
+        insert = insert:gsub('%.tsx$', ''):gsub('%.ts$', ''):gsub('%.jsx$', ''):gsub('%.js$', '')
+      end
+
+      table.insert(items, {
+        label = insert,
+        insertText = insert,
+        filterText = insert,
+        kind = is_dir and cmp.lsp.CompletionItemKind.Folder or cmp.lsp.CompletionItemKind.File,
+      })
+    end
+  end
+
+  callback({ items = items, isIncomplete = false })
+end
+
+cmp.register_source('alias_path', alias_path_source)
 cmp.setup({
   snippet = {
     expand = function(args)
@@ -256,13 +333,13 @@ cmp.setup({
   },
   mapping = cmp.mapping.preset.insert({
     ['<C-Space>'] = cmp.mapping.complete(),
-    ['<C-BS>'] = cmp.mapping(function()
+    ['<C-BS>'] = cmp.mapping(function(fallback)
       if cmp.visible() then
         cmp.close()
       end
       vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes('<C-w>', true, false, true), 'n', false)
     end, { 'i' }),
-    ['<C-H>'] = cmp.mapping(function()
+    ['<C-H>'] = cmp.mapping(function(fallback)
       if cmp.visible() then
         cmp.close()
       end
@@ -274,6 +351,7 @@ cmp.setup({
   }),
   sources = cmp.config.sources({
     { name = 'nvim_lsp' },
+    { name = 'alias_path' },
     { name = 'luasnip' },
     { name = 'path' },
     { name = 'buffer' },
@@ -289,9 +367,10 @@ vim.lsp.config('*', {
 })
 
 require('mason-lspconfig').setup({
-  ensure_installed = { 'ts_ls', 'eslint', 'html', 'cssls', 'jsonls', 'lua_ls' },
+  ensure_installed = { 'ts_ls', 'eslint', 'html', 'cssls', 'jsonls', 'lua_ls', 'prismals' },
   automatic_enable = true,
 })
+
 
 vim.diagnostic.config({
   virtual_text = true,
@@ -300,73 +379,129 @@ vim.diagnostic.config({
   update_in_insert = false,
 })
 
-vim.keymap.set('n', 'gd', vim.lsp.buf.definition, { desc = 'Go to definition' })
-vim.keymap.set('n', 'K', vim.lsp.buf.hover, { desc = 'Hover docs' })
-vim.keymap.set('n', '<leader>rn', vim.lsp.buf.rename, { desc = 'Rename symbol' })
-vim.keymap.set('n', '<leader>ca', vim.lsp.buf.code_action, { desc = 'Code action' })
-vim.keymap.set('n', '<leader>f', function()
-  vim.lsp.buf.format({ async = true })
-end, { desc = 'Format file' })
+local function copy_current_line_diagnostic()
+  local bufnr = vim.api.nvim_get_current_buf()
+  local lnum = vim.api.nvim_win_get_cursor(0)[1] - 1
+  local diagnostics = vim.diagnostic.get(bufnr, { lnum = lnum })
 
+  if vim.tbl_isempty(diagnostics) then
+    vim.notify('No diagnostic on current line', vim.log.levels.INFO)
+    return
+  end
+
+  table.sort(diagnostics, function(a, b)
+    return (a.severity or vim.diagnostic.severity.HINT) < (b.severity or vim.diagnostic.severity.HINT)
+  end)
+
+  local lines = {}
+  for _, diagnostic in ipairs(diagnostics) do
+    local severity = vim.diagnostic.severity[diagnostic.severity] or 'UNKNOWN'
+    local source = diagnostic.source and (' [' .. diagnostic.source .. ']') or ''
+    local code = diagnostic.code and (' (' .. diagnostic.code .. ')') or ''
+    local message = diagnostic.message:gsub('%s+', ' ')
+    table.insert(lines, severity .. source .. code .. ': ' .. message)
+  end
+
+  local text = table.concat(lines, '\n')
+  vim.fn.setreg('+', text)
+  vim.fn.setreg('"', text)
+  vim.notify('Copied diagnostic for current line', vim.log.levels.INFO)
+end
+
+local function lsp_supports_formatting()
+  return not vim.tbl_isempty(vim.lsp.get_clients({
+    bufnr = 0,
+    method = 'textDocument/formatting',
+  }))
+end
+
+local function indent_whole_file()
+  local view = vim.fn.winsaveview()
+  vim.cmd('keepjumps normal! gg=G')
+  vim.fn.winrestview(view)
+end
+
+local function format_or_indent_file()
+  if lsp_supports_formatting() then
+    vim.lsp.buf.format({ async = false, timeout_ms = 2000 })
+  else
+    indent_whole_file()
+  end
+end
+
+local function indent_selection()
+  vim.cmd('normal! gv=gv')
+end
+
+local function duplicate_current_line_insert()
+  local row, col = unpack(vim.api.nvim_win_get_cursor(0))
+  local line = vim.api.nvim_get_current_line()
+  vim.api.nvim_buf_set_lines(0, row, row, false, { line })
+  vim.api.nvim_win_set_cursor(0, { row + 1, col })
+end
+
+vim.keymap.set('n', '<leader>e', copy_current_line_diagnostic, { desc = 'Copy diagnostic on current line' })
+vim.keymap.set('n', '<leader>F', format_or_indent_file, { desc = 'Format or indent file' })
+vim.keymap.set('x', '<leader>F', indent_selection, { desc = 'Indent selection' })
+vim.keymap.set('i', '<C-S-D>', duplicate_current_line_insert, { desc = 'Duplicate current line' })
+vim.keymap.set('i', '<C-y><C-p>', duplicate_current_line_insert, { desc = 'Duplicate current line' })
 -- VS Code-style Shift+Arrow selection.
-vim.keymap.set('n', '<S-Left>', 'vh', { noremap = true, desc = 'Select left' })
-vim.keymap.set('n', '<S-Right>', 'vl', { noremap = true, desc = 'Select right' })
-vim.keymap.set('n', '<S-Up>', 'Vk', { noremap = true, desc = 'Select line up' })
-vim.keymap.set('n', '<S-Down>', 'Vj', { noremap = true, desc = 'Select line down' })
+vim.keymap.set('n', '<S-Left>', 'vh<C-g>', { noremap = true, desc = 'Select left' })
+vim.keymap.set('n', '<S-Right>', 'vl<C-g>', { noremap = true, desc = 'Select right' })
+vim.keymap.set('n', '<S-Up>', 'Vk<C-g>', { noremap = true, desc = 'Select line up' })
+vim.keymap.set('n', '<S-Down>', 'Vj<C-g>', { noremap = true, desc = 'Select line down' })
 
-vim.keymap.set('i', '<S-Left>', '<Esc>vhi', { noremap = true, desc = 'Select left' })
-vim.keymap.set('i', '<S-Right>', '<Esc>vli', { noremap = true, desc = 'Select right' })
-vim.keymap.set('i', '<S-Up>', '<Esc>Vki', { noremap = true, desc = 'Select line up' })
-vim.keymap.set('i', '<S-Down>', '<Esc>Vji', { noremap = true, desc = 'Select line down' })
+vim.keymap.set('i', '<S-Left>', '<Esc>vh<C-g>', { noremap = true, desc = 'Select left' })
+vim.keymap.set('i', '<S-Right>', '<Esc>vl<C-g>', { noremap = true, desc = 'Select right' })
+vim.keymap.set('i', '<S-Up>', '<Esc>Vk<C-g>', { noremap = true, desc = 'Select line up' })
+vim.keymap.set('i', '<S-Down>', '<Esc>Vj<C-g>', { noremap = true, desc = 'Select line down' })
 
 vim.keymap.set('v', '<S-Left>', 'h', { noremap = true, desc = 'Extend selection left' })
 vim.keymap.set('v', '<S-Right>', 'l', { noremap = true, desc = 'Extend selection right' })
 vim.keymap.set('v', '<S-Up>', 'k', { noremap = true, desc = 'Extend selection up' })
 vim.keymap.set('v', '<S-Down>', 'j', { noremap = true, desc = 'Extend selection down' })
+vim.keymap.set('s', '<S-Left>', '<Left>', { noremap = true, desc = 'Extend selection left' })
+vim.keymap.set('s', '<S-Right>', '<Right>', { noremap = true, desc = 'Extend selection right' })
+vim.keymap.set('s', '<S-Up>', '<Up>', { noremap = true, desc = 'Extend selection up' })
+vim.keymap.set('s', '<S-Down>', '<Down>', { noremap = true, desc = 'Extend selection down' })
+-- VS Code-style Ctrl+Shift+Left/Right word selection.
+vim.keymap.set('n', '<C-S-Left>', 'vb<C-g>', { noremap = true, desc = 'Select word left' })
+vim.keymap.set('n', '<C-S-Right>', 've<C-g>', { noremap = true, desc = 'Select word right' })
 
--- VS Code-style Ctrl+Shift+Arrow selection.
-vim.keymap.set('n', '<C-S-Left>', 'vb', { noremap = true, desc = 'Select word left' })
-vim.keymap.set('n', '<C-S-Right>', 've', { noremap = true, desc = 'Select word right' })
-vim.keymap.set('n', '<C-S-Up>', 'V{', { noremap = true, desc = 'Select block up' })
-vim.keymap.set('n', '<C-S-Down>', 'V}', { noremap = true, desc = 'Select block down' })
-
-vim.keymap.set('i', '<C-S-Left>', '<Esc>vb', { noremap = true, desc = 'Select word left' })
-vim.keymap.set('i', '<C-S-Right>', '<Esc>ve', { noremap = true, desc = 'Select word right' })
-vim.keymap.set('i', '<C-S-Up>', '<Esc>V{', { noremap = true, desc = 'Select block up' })
-vim.keymap.set('i', '<C-S-Down>', '<Esc>V}', { noremap = true, desc = 'Select block down' })
+vim.keymap.set('i', '<C-S-Left>', '<Esc>vb<C-g>', { noremap = true, desc = 'Select word left' })
+vim.keymap.set('i', '<C-S-Right>', '<Esc>ve<C-g>', { noremap = true, desc = 'Select word right' })
 
 vim.keymap.set('v', '<C-S-Left>', 'b', { noremap = true, desc = 'Extend selection word left' })
 vim.keymap.set('v', '<C-S-Right>', 'e', { noremap = true, desc = 'Extend selection word right' })
-vim.keymap.set('v', '<C-S-Up>', '{', { noremap = true, desc = 'Extend selection block up' })
-vim.keymap.set('v', '<C-S-Down>', '}', { noremap = true, desc = 'Extend selection block down' })
+vim.keymap.set('s', '<C-S-Left>', '<C-Left>', { noremap = true, desc = 'Extend selection word left' })
+vim.keymap.set('s', '<C-S-Right>', '<C-Right>', { noremap = true, desc = 'Extend selection word right' })
 
 -- VS Code-style selected-block indentation.
 vim.keymap.set('v', '<Tab>', '>gv', { noremap = true, silent = true, desc = 'Indent selection' })
 vim.keymap.set('v', '<S-Tab>', '<gv', { noremap = true, silent = true, desc = 'Outdent selection' })
-
--- VS Code-style Alt+Arrow line movement.
-vim.keymap.set('n', '<A-Up>', ':move .-2<CR>==', { silent = true, desc = 'Move line up' })
-vim.keymap.set('n', '<A-Down>', ':move .+1<CR>==', { silent = true, desc = 'Move line down' })
-vim.keymap.set('i', '<A-Up>', '<Esc>:move .-2<CR>==gi', { silent = true, desc = 'Move line up' })
-vim.keymap.set('i', '<A-Down>', '<Esc>:move .+1<CR>==gi', { silent = true, desc = 'Move line down' })
-vim.keymap.set('v', '<A-Up>', ":move '<-2<CR>gv=gv", { silent = true, desc = 'Move selection up' })
-vim.keymap.set('v', '<A-Down>', ":move '>+1<CR>gv=gv", { silent = true, desc = 'Move selection down' })
-
+-- Terminal-safe line movement.
+vim.keymap.set('n', '<leader>k', ':move .-2<CR>==', { silent = true, desc = 'Move line up' })
+vim.keymap.set('n', '<leader>j', ':move .+1<CR>==', { silent = true, desc = 'Move line down' })
+vim.keymap.set('n', '<C-k>', ':move .-2<CR>==', { silent = true, desc = 'Move line up' })
+vim.keymap.set('n', '<C-j>', ':move .+1<CR>==', { silent = true, desc = 'Move line down' })
+vim.keymap.set('i', '<C-k>', '<Esc>:move .-2<CR>==gi', { silent = true, desc = 'Move line up' })
+vim.keymap.set('i', '<C-j>', '<Esc>:move .+1<CR>==gi', { silent = true, desc = 'Move line down' })
+vim.keymap.set('v', '<leader>k', ":move '<-2<CR>gv=gv", { silent = true, desc = 'Move selection up' })
+vim.keymap.set('v', '<leader>j', ":move '>+1<CR>gv=gv", { silent = true, desc = 'Move selection down' })
+vim.keymap.set('v', '<C-k>', ":move '<-2<CR>gv=gv", { silent = true, desc = 'Move selection up' })
+vim.keymap.set('v', '<C-j>', ":move '>+1<CR>gv=gv", { silent = true, desc = 'Move selection down' })
 -- VS Code-style Shift+Home/End selection.
-vim.keymap.set('n', '<S-Home>', 'v^', { noremap = true, desc = 'Select to first nonblank' })
-vim.keymap.set('n', '<S-End>', 'v$', { noremap = true, desc = 'Select to end of line' })
-vim.keymap.set('n', '<C-S-Home>', 'vgg', { noremap = true, desc = 'Select to top of file' })
-vim.keymap.set('n', '<C-S-End>', 'vG', { noremap = true, desc = 'Select to bottom of file' })
+vim.keymap.set('n', '<S-Home>', 'v^<C-g>', { noremap = true, desc = 'Select to first nonblank' })
+vim.keymap.set('n', '<S-End>', 'v$<C-g>', { noremap = true, desc = 'Select to end of line' })
 
-vim.keymap.set('i', '<S-Home>', '<Esc>v^', { noremap = true, desc = 'Select to first nonblank' })
-vim.keymap.set('i', '<S-End>', '<Esc>v$', { noremap = true, desc = 'Select to end of line' })
-vim.keymap.set('i', '<C-S-Home>', '<Esc>vgg', { noremap = true, desc = 'Select to top of file' })
-vim.keymap.set('i', '<C-S-End>', '<Esc>vG', { noremap = true, desc = 'Select to bottom of file' })
+vim.keymap.set('i', '<S-Home>', '<Esc>v^<C-g>', { noremap = true, desc = 'Select to first nonblank' })
+vim.keymap.set('i', '<S-End>', '<Esc>v$<C-g>', { noremap = true, desc = 'Select to end of line' })
 
 vim.keymap.set('v', '<S-Home>', '^', { noremap = true, desc = 'Extend selection to first nonblank' })
 vim.keymap.set('v', '<S-End>', '$', { noremap = true, desc = 'Extend selection to end of line' })
-vim.keymap.set('v', '<C-S-Home>', 'gg', { noremap = true, desc = 'Extend selection to top of file' })
-vim.keymap.set('v', '<C-S-End>', 'G', { noremap = true, desc = 'Extend selection to bottom of file' })
+vim.keymap.set('s', '<S-Home>', '<Home>', { noremap = true, desc = 'Extend selection to first nonblank' })
+vim.keymap.set('s', '<S-End>', '<End>', { noremap = true, desc = 'Extend selection to end of line' })
+
 ```
 
 ## Bootstrap Plugins, LSPs, And Parsers
@@ -394,7 +529,7 @@ Useful checks:
 
 ```powershell
 nvim --headless "+checkhealth" "+qa"
-nvim --headless "+lua print(vim.fn.maparg('<A-Up>', 'v'))" "+qa"
+nvim --headless "+lua print(vim.fn.maparg('<C-k>', 'v'))" "+qa"
 nvim --headless "+lua print(vim.fn.maparg('<Tab>', 'v'))" "+qa"
 ```
 
@@ -402,7 +537,7 @@ Expected:
 
 - `:Lazy` shows plugins installed
 - `:Mason` shows the language servers installed
-- `Alt+Up` in visual mode maps to moving the selection up
+- `Ctrl+K` in visual mode maps to moving the selection up
 - `Tab` in visual mode maps to indenting the selection
 
 ## Clean Project Tree
@@ -1056,10 +1191,10 @@ For project-specific import alias completion such as `@/...`, prefer configuring
 ## Notes
 
 - `Ctrl+Backspace` is terminal-dependent. If it does not work, try `Ctrl+H`.
-- Shift+Arrow, Ctrl+Shift+Arrow, Shift+Home/End, and Alt+Arrow are terminal-dependent. If Windows Terminal does not pass those keycodes correctly, the terminal profile may need keybinding changes.
-- `Ctrl+Shift+Left` / `Ctrl+Shift+Right` selects by word. `Ctrl+Shift+Up` / `Ctrl+Shift+Down` selects by block/paragraph.
+- Shift+Arrow, Ctrl+Shift+Left/Right, Shift+Home/End, and Ctrl+J/K are terminal-dependent. If Windows Terminal does not pass those keycodes correctly, the terminal profile may need keybinding changes.
+- `Ctrl+Shift+Left` / `Ctrl+Shift+Right` selects by word. `Ctrl+Shift+Up` / `Ctrl+Shift+Down` are intentionally left unmapped because they commonly conflict with terminal or window scrolling.
 - In visual mode, `Tab` indents the selected block and `Shift+Tab` outdents it while preserving the selection.
-- `Alt+Up` / `Alt+Down` moves the current line in normal/insert mode and moves the selected block in visual mode.
+- `Ctrl+K` / `Ctrl+J` moves the current line in normal/insert mode and moves the selected block in visual mode.
 
 
 
