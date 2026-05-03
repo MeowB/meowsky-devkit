@@ -1,3 +1,7 @@
+param(
+  [switch]$Upgrade
+)
+
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
@@ -5,6 +9,9 @@ $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 
 $tools = Join-Path $env:LOCALAPPDATA 'nvim-tools'
 New-Item -ItemType Directory -Force $tools | Out-Null
+
+$logRoot = Join-Path $env:LOCALAPPDATA 'meowsky-devkit\logs'
+New-Item -ItemType Directory -Force $logRoot | Out-Null
 
 $zigVersion = '0.16.0'
 $stepNumber = 0
@@ -45,6 +52,55 @@ function Invoke-MeowskyStep {
   $startedAt = Get-Date
   & $Script
   Write-Done $Message $startedAt
+}
+
+function New-MeowskyLogPath {
+  param(
+    [Parameter(Mandatory)]
+    [string]$Name
+  )
+
+  $safeName = $Name -replace '[^a-zA-Z0-9._-]', '-'
+  $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+  return Join-Path $logRoot "$stamp-$safeName.log"
+}
+
+function Invoke-QuietNativeCommand {
+  param(
+    [Parameter(Mandatory)]
+    [string]$Label,
+    [Parameter(Mandatory)]
+    [string]$FilePath,
+    [Parameter(Mandatory)]
+    [string[]]$Arguments,
+    [int[]]$SuccessExitCodes = @(0)
+  )
+
+  $logPath = New-MeowskyLogPath -Name $Label
+  Write-Host "  - $Label..." -NoNewline
+
+  $output = & $FilePath @Arguments *>&1
+  $commandSucceeded = $?
+  $exitCode = $LASTEXITCODE
+  if ($null -eq $exitCode) {
+    $exitCode = if ($commandSucceeded) { 0 } else { 1 }
+  }
+  $output | Set-Content -Encoding UTF8 -LiteralPath $logPath
+
+  if ($SuccessExitCodes -contains $exitCode) {
+    Write-Host ' ok' -ForegroundColor Green
+    return @{
+      ExitCode = $exitCode
+      Output = $output
+      LogPath = $logPath
+    }
+  }
+
+  Write-Host ' failed' -ForegroundColor Red
+  if ($output) {
+    $output | Select-Object -Last 20 | ForEach-Object { Write-Host "    $_" }
+  }
+  throw "$Label failed with exit code $exitCode. Full log: $logPath"
 }
 
 function Repair-PowerShellProfile {
@@ -108,7 +164,7 @@ function Test-WinGetPackageInstalled {
     return $false
   }
 
-  $output = & winget list --id $Id --exact --accept-source-agreements 2>$null
+  $output = & winget list --id $Id --exact --accept-source-agreements --disable-interactivity 2>$null
   return $LASTEXITCODE -eq 0 -and ($output -match [regex]::Escape($Id))
 }
 
@@ -119,12 +175,13 @@ function Update-WinGetPackage {
   )
 
   Write-Host "Checking updates for $Id..."
-  $output = & winget upgrade --id $Id --exact --accept-package-agreements --accept-source-agreements 2>&1
-  $exitCode = $LASTEXITCODE
-
-  if ($output) {
-    $output | ForEach-Object { Write-Host $_ }
-  }
+  $result = Invoke-QuietNativeCommand `
+    -Label "winget-upgrade-$Id" `
+    -FilePath 'winget.exe' `
+    -Arguments @('upgrade', '--id', $Id, '--exact', '--accept-package-agreements', '--accept-source-agreements', '--disable-interactivity') `
+    -SuccessExitCodes @(0, -1978335189)
+  $output = $result.Output
+  $exitCode = $result.ExitCode
 
   if ($exitCode -eq 0) {
     return
@@ -148,30 +205,36 @@ function Install-WinGetPackage {
     [string[]]$Commands
   )
 
-  Write-Host "Checking $Id..."
   $existingCommand = Get-FirstExistingCommand -Names $Commands
   if ($existingCommand) {
-    Write-Host "$Id is already available at $existingCommand"
-    Update-WinGetPackage -Id $Id
+    Write-Host "  - ${Id}: found $existingCommand" -ForegroundColor Green
+    if ($Upgrade) {
+      Update-WinGetPackage -Id $Id
+    }
     return $true
   }
 
   if (Test-WinGetPackageInstalled -Id $Id) {
-    Write-Host "$Id is already installed according to winget."
-    Update-WinGetPackage -Id $Id
+    Write-Host "  - ${Id}: already installed" -ForegroundColor Green
+    if ($Upgrade) {
+      Update-WinGetPackage -Id $Id
+    }
     return $true
   }
 
-  Write-Host "Installing $Id with winget..."
-  winget install --id $Id --exact --accept-package-agreements --accept-source-agreements
-  if ($LASTEXITCODE -ne 0) {
+  $result = Invoke-QuietNativeCommand `
+    -Label "winget-install-$Id" `
+    -FilePath 'winget.exe' `
+    -Arguments @('install', '--id', $Id, '--exact', '--accept-package-agreements', '--accept-source-agreements', '--disable-interactivity')
+
+  if ($result.ExitCode -ne 0) {
     $existingCommand = Get-FirstExistingCommand -Names $Commands
     if ($existingCommand) {
-      Write-Warning "winget returned exit code $LASTEXITCODE for $Id, but $($Commands[0]) is available at $existingCommand."
+      Write-Warning "winget returned exit code $($result.ExitCode) for $Id, but $($Commands[0]) is available at $existingCommand."
       return $true
     }
 
-    throw "winget install failed for $Id with exit code $LASTEXITCODE."
+    throw "winget install failed for $Id with exit code $($result.ExitCode)."
   }
 
   $existingCommand = Get-FirstExistingCommand -Names $Commands
@@ -216,7 +279,7 @@ function Save-UrlToFile {
   $curl = (Get-Command curl.exe -ErrorAction SilentlyContinue).Source
   if ($curl) {
     Write-Host 'Downloading with curl.exe...'
-    & $curl -L --fail --progress-bar --output $OutFile $Url
+    & $curl -L --fail --silent --show-error --output $OutFile $Url
     if ($LASTEXITCODE -ne 0) {
       throw "curl.exe failed with exit code $LASTEXITCODE."
     }
@@ -279,7 +342,60 @@ $packages = @(
   @{ Id = 'JohnMacFarlane.Pandoc'; Commands = @('pandoc.exe', 'pandoc') }
 )
 
+$masonPackages = @(
+  'typescript-language-server',
+  'eslint-lsp',
+  'html-lsp',
+  'css-lsp',
+  'json-lsp',
+  'lua-language-server',
+  'prisma-language-server'
+)
+
+$treesitterParsers = @(
+  'lua',
+  'vim',
+  'vimdoc',
+  'javascript',
+  'typescript',
+  'tsx',
+  'json',
+  'html',
+  'css',
+  'markdown',
+  'prisma'
+)
+
+function Test-MasonPackageInstalled {
+  param(
+    [Parameter(Mandatory)]
+    [string]$Name
+  )
+
+  $packageDir = Join-Path $env:LOCALAPPDATA "nvim-data\mason\packages\$Name"
+  return Test-Path -LiteralPath $packageDir
+}
+
+function Test-TreesitterParserInstalled {
+  param(
+    [Parameter(Mandatory)]
+    [string]$Name
+  )
+
+  $parserDir = Join-Path $env:LOCALAPPDATA 'nvim-data\site\parser'
+  return (
+    (Test-Path -LiteralPath (Join-Path $parserDir "$Name.dll")) -or
+    (Test-Path -LiteralPath (Join-Path $parserDir "$Name.so"))
+  )
+}
+
 Invoke-MeowskyStep 'Install or verify Windows packages' {
+  if ($Upgrade) {
+    Write-Host 'Upgrade checks are enabled.'
+  } else {
+    Write-Host 'Existing tools are reused. Run with -Upgrade to check for package updates.'
+  }
+
   $packageIndex = 0
   foreach ($package in $packages) {
     $packageIndex++
@@ -379,26 +495,39 @@ Invoke-MeowskyStep 'Update PowerShell profile' {
 
 Invoke-MeowskyStep 'Sync Neovim plugins with lazy.nvim' {
   Write-Host 'This can take a few minutes on a fresh install.'
-  nvim --headless "+Lazy! sync" +qa
-  if ($LASTEXITCODE -ne 0) {
-    throw "Neovim plugin sync failed with exit code $LASTEXITCODE."
-  }
+  Invoke-QuietNativeCommand `
+    -Label 'nvim-lazy-sync' `
+    -FilePath 'nvim' `
+    -Arguments @('--headless', '+Lazy! sync', '+qa') | Out-Null
 }
 
 Invoke-MeowskyStep 'Install Mason language servers' {
-  Write-Host 'Installing: typescript, eslint, html, css, json, lua, prisma'
-  nvim --headless "+MasonInstall typescript-language-server eslint-lsp html-lsp css-lsp json-lsp lua-language-server prisma-language-server" +qa
-  if ($LASTEXITCODE -ne 0) {
-    throw "Mason language server install failed with exit code $LASTEXITCODE."
+  $missing = @($masonPackages | Where-Object { -not (Test-MasonPackageInstalled -Name $_) })
+  if ($missing.Count -eq 0) {
+    Write-Host 'All Mason language servers are already installed.' -ForegroundColor Green
+    return
   }
+
+  Write-Host "Installing: $($missing -join ', ')"
+  Invoke-QuietNativeCommand `
+    -Label 'nvim-mason-install' `
+    -FilePath 'nvim' `
+    -Arguments @('--headless', "+MasonInstall $($missing -join ' ')", '+qa') | Out-Null
 }
 
 Invoke-MeowskyStep 'Install Treesitter parsers' {
-  Write-Host 'Installing parsers: lua, vim, vimdoc, javascript, typescript, tsx, json, html, css, markdown, prisma'
-  nvim --headless "+lua require('nvim-treesitter').install({ 'lua', 'vim', 'vimdoc', 'javascript', 'typescript', 'tsx', 'json', 'html', 'css', 'markdown', 'prisma' }):wait(300000)" +qa
-  if ($LASTEXITCODE -ne 0) {
-    throw "Treesitter parser install failed with exit code $LASTEXITCODE."
+  $missing = @($treesitterParsers | Where-Object { -not (Test-TreesitterParserInstalled -Name $_) })
+  if ($missing.Count -eq 0) {
+    Write-Host 'All Treesitter parsers are already installed.' -ForegroundColor Green
+    return
   }
+
+  $quotedParsers = ($missing | ForEach-Object { "'$_'" }) -join ', '
+  Write-Host "Installing parsers: $($missing -join ', ')"
+  Invoke-QuietNativeCommand `
+    -Label 'nvim-treesitter-install' `
+    -FilePath 'nvim' `
+    -Arguments @('--headless', "+lua require('nvim-treesitter').install({ $quotedParsers }):wait(300000)", '+qa') | Out-Null
 }
 
 Write-Host ''

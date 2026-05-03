@@ -15,7 +15,7 @@ It is a small repo, but it does three concrete things:
 | Machine setup | Installs the core Windows tools this workflow expects: Neovim, Git, Node.js, tree-sitter, Zig, eza, and Pandoc |
 | GitHub CLI | Optional, only if you want terminal-first GitHub repo workflows |
 | Editor setup | Loads a personal Neovim config with web-focused plugins, LSPs, Treesitter, completion, and keymaps |
-| Workspace flow | Adds `meowsky` to PowerShell so you can jump to the work root or open the fullscreen project layout |
+| Workspace flow | Adds `meowsky` to PowerShell so you can jump to the work root, open the fullscreen project layout, or start Codex directly |
 | Prompting | Keeps the Codex orientation prompt in a separate file so it can be reused and edited independently |
 | Preview helpers | Uses Pandoc to preview Markdown and the default PDF viewer for PDFs |
 | Linux support | Includes a lighter Ubuntu version using `tmux` |
@@ -61,6 +61,12 @@ Run the one-command bootstrap:
 
 It installs the core tools, copies the Neovim config, wires your PowerShell profile, and sets `MEOWSKY_DEVKIT_HOME` so the profile can find the Codex prompt file.
 
+The installer reuses tools that are already present. To explicitly check package upgrades too, run:
+
+```powershell
+.\scripts\install-meowsky.ps1 -Upgrade
+```
+
 The longer manual setup is still documented in [docs/new-pc-dev-setup.md](docs/new-pc-dev-setup.md) if you want to see each piece separately.
 
 ### Linux
@@ -84,6 +90,14 @@ Go to the work root, then open a project:
 ```powershell
 meowsky my-app
 meowsky ./
+```
+
+Start Codex directly with the custom orientation prompt:
+
+```powershell
+meowsky codex
+meowsky codex my-app
+meowsky codex ./
 ```
 
 Use the editor helpers:

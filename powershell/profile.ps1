@@ -108,9 +108,10 @@ Git status at startup:
 $gitStatus
 
 Answering rules:
-- Always mention the file or files we are working on in your answer.
+- Always tell me what folder and file or files we are actually working on.
+- Never make code edits without confirming the specific intended edit with me beforehand.
 
-Start by giving me a scoped orientation of this codebase from the tree above. Keep it concise: identify the likely main parts, what you would inspect first, and any setup files that look important. Do not make code changes unless I ask.
+Start by giving me a scoped orientation of this codebase from the tree above. Keep it concise: identify the likely main parts, what you would inspect first, and any setup files that look important.
 '@
     }
 
@@ -221,6 +222,23 @@ Start by giving me a scoped orientation of this codebase from the tree above. Ke
 
       $targetPath = Resolve-MeowskyPath -Target $Target -Root $workRoot
       Open-MeowskyMarkdownPreview -Target $targetPath
+      return
+    }
+
+    if ($normalizedAction -eq 'codex') {
+      $codex = (Get-Command codex -ErrorAction SilentlyContinue).Source
+      if (-not $codex) {
+        throw 'codex was not found. Install the Codex CLI before using meowsky codex.'
+      }
+
+      $codexTarget = if ($Target) { $Target } else { '.' }
+      $root = Resolve-MeowskyPath -Target $codexTarget -Root $workRoot
+      $today = Get-Date -Format 'yyyy-MM-dd'
+      $promptTree = Get-MeowskyPromptTree -Root $root
+      $gitStatus = Get-MeowskyGitSummary -Root $root
+      $codexPrompt = Get-MeowskyCodexPrompt -Today $today -Root $root -Tree $promptTree -GitStatus $gitStatus
+
+      & $codex -C $root $codexPrompt
       return
     }
 
@@ -369,7 +387,7 @@ $meowskyCompleter = {
     }
   }
 
-  $builtIns = @('.', './', 'md', 'markdown', 'pdf')
+  $builtIns = @('.', './', 'codex', 'md', 'markdown', 'pdf')
   foreach ($item in $builtIns) {
     if ($item -like "$wordToComplete*") {
       [System.Management.Automation.CompletionResult]::new($item, $item, 'ParameterValue', $item)
