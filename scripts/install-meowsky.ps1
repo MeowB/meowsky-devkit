@@ -79,11 +79,17 @@ function Invoke-QuietNativeCommand {
   $logPath = New-MeowskyLogPath -Name $Label
   Write-Host "  - $Label..." -NoNewline
 
-  $output = & $FilePath @Arguments *>&1
-  $commandSucceeded = $?
-  $exitCode = $LASTEXITCODE
-  if ($null -eq $exitCode) {
-    $exitCode = if ($commandSucceeded) { 0 } else { 1 }
+  $previousErrorActionPreference = $ErrorActionPreference
+  try {
+    $ErrorActionPreference = 'Continue'
+    $output = & $FilePath @Arguments *>&1
+    $commandSucceeded = $?
+    $exitCode = $LASTEXITCODE
+    if ($null -eq $exitCode) {
+      $exitCode = if ($commandSucceeded) { 0 } else { 1 }
+    }
+  } finally {
+    $ErrorActionPreference = $previousErrorActionPreference
   }
   $output | Set-Content -Encoding UTF8 -LiteralPath $logPath
 
@@ -101,6 +107,47 @@ function Invoke-QuietNativeCommand {
     $output | Select-Object -Last 20 | ForEach-Object { Write-Host "    $_" }
   }
   throw "$Label failed with exit code $exitCode. Full log: $logPath"
+}
+
+function Repair-NeovimRuntimeEnvironment {
+  $names = @('VIM', 'VIMRUNTIME')
+  $changed = $false
+
+  foreach ($name in $names) {
+    $processValue = [Environment]::GetEnvironmentVariable($name, 'Process')
+    $userValue = [Environment]::GetEnvironmentVariable($name, 'User')
+    $machineValue = [Environment]::GetEnvironmentVariable($name, 'Machine')
+
+    foreach ($scopeValue in @(
+      @{ Scope = 'Process'; Value = $processValue },
+      @{ Scope = 'User'; Value = $userValue }
+    )) {
+      $value = $scopeValue.Value
+      if (-not $value) {
+        continue
+      }
+
+      $pointsAtFile = Test-Path -LiteralPath $value -PathType Leaf
+      $looksLikeExecutable = $value -match '\\vim(\.exe)?$'
+      if ($pointsAtFile -or $looksLikeExecutable) {
+        [Environment]::SetEnvironmentVariable($name, $null, $scopeValue.Scope)
+        Write-Host "Cleared invalid $($scopeValue.Scope) ${name}: $value"
+        $changed = $true
+      }
+    }
+
+    if ($machineValue) {
+      $machinePointsAtFile = Test-Path -LiteralPath $machineValue -PathType Leaf
+      $machineLooksLikeExecutable = $machineValue -match '\\vim(\.exe)?$'
+      if ($machinePointsAtFile -or $machineLooksLikeExecutable) {
+        Write-Warning "Machine-level ${name} points at an executable and may affect new terminals: $machineValue"
+      }
+    }
+  }
+
+  if (-not $changed) {
+    Write-Host 'Neovim runtime environment variables look ok.'
+  }
 }
 
 function Repair-PowerShellProfile {
@@ -404,6 +451,10 @@ Invoke-MeowskyStep 'Install or verify Windows packages' {
   }
 }
 
+Invoke-MeowskyStep 'Repair Neovim runtime environment' {
+  Repair-NeovimRuntimeEnvironment
+}
+
 Invoke-MeowskyStep 'Resolve Zig compiler' {
   $script:zigPath = Get-ZigPath
   if (-not $script:zigPath) {
@@ -509,10 +560,12 @@ Invoke-MeowskyStep 'Install Mason language servers' {
   }
 
   Write-Host "Installing: $($missing -join ', ')"
-  Invoke-QuietNativeCommand `
-    -Label 'nvim-mason-install' `
-    -FilePath 'nvim' `
-    -Arguments @('--headless', "+MasonInstall $($missing -join ' ')", '+qa') | Out-Null
+  foreach ($package in $missing) {
+    Invoke-QuietNativeCommand `
+      -Label "nvim-mason-install-$package" `
+      -FilePath 'nvim' `
+      -Arguments @('--headless', "+MasonInstall --force $package", '+qa') | Out-Null
+  }
 }
 
 Invoke-MeowskyStep 'Install Treesitter parsers' {
