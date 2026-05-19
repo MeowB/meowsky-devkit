@@ -942,9 +942,8 @@ The split layout automatically starts `codex ./` in the selected root. That is u
 `meowsky ./` pane roles:
 
 - left full-height pane: runs `codex ./` in the new fullscreen window
-- middle-left pane: shell at the project root, ready for `nvim`
-- middle-right pane: runs `ptree`
-- right pane: shell at the project root
+- middle pane: shell at the project root, ready for `nvim`
+- right pane: runs `ptree`
 - bottom pane: project-root shell with a compact `Meowsky` banner
 
 Preview notes:

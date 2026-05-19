@@ -319,9 +319,7 @@ if (Get-Command codex -ErrorAction SilentlyContinue) {
       'split-pane', '-V', '--size', '0.70', '-d', $root, 'powershell.exe', '-NoLogo', '-NoExit', '-EncodedCommand', $idleEncoded, ';',
       'split-pane', '-H', '--size', '0.22', '-d', $root, 'powershell.exe', '-NoLogo', '-NoExit', '-EncodedCommand', $meowskyEncoded, ';',
       'move-focus', 'up', ';',
-      'split-pane', '-V', '--size', '0.60', '-d', $root, 'powershell.exe', '-NoLogo', '-NoExit', '-EncodedCommand', $treeEncoded, ';',
-      'split-pane', '-V', '--size', '0.45', '-d', $root, 'powershell.exe', '-NoLogo', '-NoExit', '-EncodedCommand', $idleEncoded, ';',
-      'move-focus', 'left', ';',
+      'split-pane', '-V', '--size', '0.33', '-d', $root, 'powershell.exe', '-NoLogo', '-NoExit', '-EncodedCommand', $treeEncoded, ';',
       'move-focus', 'left', ';',
       'move-focus', 'left'
     )
