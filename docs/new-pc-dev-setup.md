@@ -958,7 +958,7 @@ Preview notes:
 If you want the one-command Linux bootstrap, run:
 
 ```bash
-bash ./scripts/install-meowsky.sh
+bash ./scripts/install-linux.sh
 ```
 
 The same workflow can work on Ubuntu with a shell function and `tmux`.

@@ -107,10 +107,22 @@ $tree
 Git status at startup:
 $gitStatus
 
+Personality:
+- Act like a trusted senior developer working alongside the user.
+- Be pragmatic, direct, and collaborative.
+- Explain the why behind important decisions.
+- Challenge weak assumptions and unnecessary complexity.
+- Prefer shipping working software over endless discussion.
+- Treat bugs as puzzles, not disasters.
+- Keep the mood calm even when things break.
+- Use occasional dry humor, light sarcasm, or friendly banter when appropriate.
+- Celebrate progress through completed work rather than motivational speeches.
+- Assume competence and help the user level up through practice.
+
 Answering rules:
 - Always tell me what folder and file or files we are actually working on.
 - Never make code edits without confirming the specific intended edit with me beforehand.
-- Always tell me when the current work has learning value. If it does, walk me through the edits and explain what we are doing and why; use terse execution only for repetition or mechanical edits.
+- Always tell me when the current work has learning value. If it does, offer to walk me through the edits so I can do them myself before making code changes; wait for me to either accept doing them myself or ask you to do them instead. Use terse execution only for repetition or mechanical edits.
 
 Start by giving me a scoped orientation of this codebase from the tree above. Keep it concise: identify the likely main parts, what you would inspect first, and any setup files that look important.
 '@
@@ -211,10 +223,110 @@ Start by giving me a scoped orientation of this codebase from the tree above. Ke
     return $lines -join "`r`n"
   }
 
+  function Start-MeowskyMatrix {
+    $random = [Random]::new()
+    $glyphs = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz@#$%&*+-=<>[]{}'
+    $previousForeground = $Host.UI.RawUI.ForegroundColor
+    $previousCursorVisible = $true
+
+    try {
+      $previousCursorVisible = [Console]::CursorVisible
+      [Console]::CursorVisible = $false
+    } catch {
+      $previousCursorVisible = $true
+    }
+
+    try {
+      Clear-Host
+
+      while ($true) {
+        $width = [Math]::Max(1, [Console]::WindowWidth)
+        $height = [Math]::Max(1, [Console]::WindowHeight)
+        $columns = @()
+
+        for ($i = 0; $i -lt $width; $i++) {
+          $isActive = $random.NextDouble() -lt 0.35
+          $columns += [pscustomobject]@{
+            Y = if ($isActive) { $random.Next(-$height, 0) } else { -1 }
+            Length = $random.Next(5, [Math]::Max(7, [Math]::Min(16, $height)))
+            Delay = if ($isActive) { 0 } else { $random.Next(10, 90) }
+            Tick = 0
+            Speed = $random.Next(1, 4)
+          }
+        }
+
+        while ($true) {
+          $currentWidth = [Math]::Max(1, [Console]::WindowWidth)
+          $currentHeight = [Math]::Max(1, [Console]::WindowHeight)
+          if ($currentWidth -ne $width -or $currentHeight -ne $height) {
+            Clear-Host
+            break
+          }
+
+          for ($x = 0; $x -lt $width; $x++) {
+            $column = $columns[$x]
+
+            if ($column.Delay -gt 0) {
+              $column.Delay--
+              continue
+            }
+
+            $column.Tick++
+            if ($column.Tick -lt $column.Speed) {
+              continue
+            }
+            $column.Tick = 0
+
+            $y = $column.Y
+            if ($y -ge 0 -and $y -lt $height) {
+              [Console]::SetCursorPosition($x, $y)
+              $Host.UI.RawUI.ForegroundColor = 'Green'
+              Write-Host $glyphs[$random.Next(0, $glyphs.Length)] -NoNewline
+            }
+
+            $tail = $y - $column.Length
+            if ($tail -ge 0 -and $tail -lt $height) {
+              [Console]::SetCursorPosition($x, $tail)
+              Write-Host ' ' -NoNewline
+            }
+
+            $column.Y++
+            if ($column.Y -gt ($height + $column.Length)) {
+              if ($random.NextDouble() -lt 0.55) {
+                $column.Y = $random.Next(-$height, 0)
+                $column.Length = $random.Next(5, [Math]::Max(7, [Math]::Min(16, $height)))
+                $column.Delay = 0
+                $column.Speed = $random.Next(1, 4)
+              } else {
+                $column.Y = -1
+                $column.Delay = $random.Next(25, 120)
+              }
+            }
+          }
+
+          Start-Sleep -Milliseconds 35
+        }
+      }
+    } finally {
+      try {
+        $Host.UI.RawUI.ForegroundColor = $previousForeground
+        [Console]::CursorVisible = $previousCursorVisible
+        Clear-Host
+      } catch {
+        Write-Host ''
+      }
+    }
+  }
+
   $workRoot = Get-WorkRoot
 
   if ($Action) {
     $normalizedAction = $Action.ToLowerInvariant()
+
+    if ($normalizedAction -eq 'matrix') {
+      Start-MeowskyMatrix
+      return
+    }
 
     if ($normalizedAction -in @('md', 'markdown')) {
       if (-not $Target) {
@@ -282,7 +394,7 @@ Start by giving me a scoped orientation of this codebase from the tree above. Ke
     $promptEncoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($codexPrompt))
     $gitStatusEncoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($gitStatus))
     $profilePrelude = "`$WarningPreference = 'SilentlyContinue'`r`n. `$PROFILE`r`n`$WarningPreference = 'Continue'"
-    $idleScript = $profilePrelude
+    $idleScript = "$profilePrelude`r`nmeowsky matrix`r`n"
     $codexScript = @"
 $profilePrelude
 `$prompt = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('$promptEncoded'))
@@ -386,7 +498,7 @@ $meowskyCompleter = {
     }
   }
 
-  $builtIns = @('.', './', 'codex', 'md', 'markdown', 'pdf')
+  $builtIns = @('.', './', 'codex', 'matrix', 'md', 'markdown', 'pdf')
   foreach ($item in $builtIns) {
     if ($item -like "$wordToComplete*") {
       [System.Management.Automation.CompletionResult]::new($item, $item, 'ParameterValue', $item)

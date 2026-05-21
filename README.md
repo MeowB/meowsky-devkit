@@ -43,10 +43,8 @@ This setup is meant to feel like:
 |-- prompts/
 |   `-- codex-orientation.md
 `-- scripts/
-    |-- install-meowsky.ps1
-    |-- install-meowsky.sh
-    |-- meowsky.ps1
-    `-- meowsky.sh
+    |-- install-windows.ps1
+    `-- install-linux.sh
 ```
 
 ## Quick Start
@@ -56,7 +54,7 @@ This setup is meant to feel like:
 Run the one-command bootstrap:
 
 ```powershell
-.\scripts\install-meowsky.ps1
+.\scripts\install-windows.ps1
 ```
 
 It installs the core tools, copies the Neovim config, wires your PowerShell profile, and sets `MEOWSKY_DEVKIT_HOME` so the profile can find the Codex prompt file.
@@ -64,7 +62,7 @@ It installs the core tools, copies the Neovim config, wires your PowerShell prof
 The installer reuses tools that are already present. To explicitly check package upgrades too, run:
 
 ```powershell
-.\scripts\install-meowsky.ps1 -Upgrade
+.\scripts\install-windows.ps1 -Upgrade
 ```
 
 The longer manual setup is still documented in [docs/new-pc-dev-setup.md](docs/new-pc-dev-setup.md) if you want to see each piece separately.
@@ -74,7 +72,7 @@ The longer manual setup is still documented in [docs/new-pc-dev-setup.md](docs/n
 Use the helper script as a starting point:
 
 ```bash
-bash ./scripts/install-meowsky.sh
+bash ./scripts/install-linux.sh
 ```
 
 The full Linux workflow is documented in [docs/new-pc-dev-setup.md](docs/new-pc-dev-setup.md).
