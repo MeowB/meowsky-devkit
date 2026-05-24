@@ -185,11 +185,7 @@ meowsky() {
   if [ "$action" = "./" ] || [ "$action" = "." ]; then
     local current root today tree git_status session name codex_prompt
     current="$(pwd -P)"
-
-    case "$current/" in
-      "$work_root"/*) root="$current" ;;
-      *) root="$work_root" ;;
-    esac
+    root="$current"
 
     if ! command -v tmux >/dev/null 2>&1; then
       echo "tmux was not found. Install it with: sudo apt install -y tmux" >&2
@@ -232,7 +228,7 @@ $git_status
 Answering rules:
 - Always mention the file or files we are working on in your answer.
 
-Start by giving me a scoped orientation of this codebase from the tree above. Keep it concise: identify the likely main parts, what you would inspect first, and any setup files that look important. Do not make code changes unless I ask."
+At launch, inspect README.md and any docs you find before giving the orientation, so you understand what the codebase is about. Then give me a scoped orientation from the tree above. Keep it concise: identify the likely main parts, what you inspected first, and any setup files that look important. Do not make code changes unless I ask."
 
     tmux new-session -d -s "$session" -c "$root" codex -C . "$codex_prompt"
     tmux split-window -h -t "$session:0" -c "$root"
