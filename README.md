@@ -83,7 +83,7 @@ The full Linux workflow is documented in [docs/new-pc-dev-setup.md](docs/new-pc-
 meowsky
 ```
 
-Go to the work root, then open a project:
+Go to the work root, open a project, then start the project layout:
 
 ```powershell
 meowsky my-app
@@ -105,7 +105,7 @@ meowsky md .\README.md
 meowsky pdf .\docs\spec.pdf
 ```
 
-When `meowsky ./` runs inside a project, it opens a fullscreen Windows Terminal layout with:
+When `meowsky ./` runs in any folder, it opens a fullscreen Windows Terminal layout with:
 
 - a Codex session started from [prompts/codex-orientation.md](prompts/codex-orientation.md)
 - a shell at the project root
@@ -120,12 +120,13 @@ The editor config in [nvim/init.lua](nvim/init.lua) is tuned for:
 - Treesitter parsing for Lua, Vim, JavaScript, TypeScript, TSX, JSON, HTML, CSS, Markdown, and Prisma
 - Mason-managed LSPs for TypeScript, ESLint, HTML, CSS, JSON, Lua, and Prisma
 - `Ctrl+Space` completion
+- VS Code bridge mappings for save, undo, redo, select all, find, clipboard paste, word movement, line duplication, and line movement
 - `Ctrl+Backspace` and `Ctrl+H` word deletion in insert mode
 - auto-pairs for brackets and quotes
 - automatic HTML/React closing tags
 - `Space e` copies diagnostics on the current line
 - `Space F` formats with LSP when available, otherwise fixes indentation
-- `Ctrl+Shift+D` or `Ctrl+Y Ctrl+P` duplicates the current line from insert mode
+- `Ctrl+D` or `Ctrl+Shift+D` duplicates the current line from insert mode
 - VS Code-style Shift+Arrow, Ctrl+Shift+Left/Right, and Shift+Home/End selection
 - `Ctrl+J` / `Ctrl+K` move lines or selected blocks down/up in normal, insert, and visual mode
 - `Space j` / `Space k` are fallback movement shortcuts in normal and visual mode

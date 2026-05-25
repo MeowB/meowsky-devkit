@@ -8,12 +8,13 @@ The main focus is a general-purpose Neovim config for web and scripting work. It
 - Treesitter highlighting for Lua, Vim, JavaScript, TypeScript, TSX, JSON, HTML, CSS, and Markdown
 - LSP autocomplete through Mason
 - `Ctrl+Space` completion
+- VS Code bridge mappings for save, undo, redo, select all, find, clipboard paste, word movement, line duplication, and line movement
 - `Ctrl+Backspace` / `Ctrl+H` delete previous word in insert mode
 - Auto-close brackets, parentheses, braces, and quotes
 - Auto-close HTML/React tags
 - `Space e` copies diagnostics on the current line
 - `Space F` formats with LSP when available, otherwise fixes indentation
-- `Ctrl+Shift+D` / `Ctrl+Y Ctrl+P` duplicate the current line from insert mode
+- `Ctrl+D` / `Ctrl+Shift+D` duplicate the current line from insert mode
 - VS Code-style Shift+Arrow and Shift+Home/End selection mappings
 - Ctrl+Shift+Left/Right word selection mappings
 - `Ctrl+J` / `Ctrl+K` line/block movement, with `Space j` / `Space k` as normal/visual fallbacks
@@ -440,11 +441,38 @@ local function duplicate_current_line_insert()
   vim.api.nvim_win_set_cursor(0, { row + 1, col })
 end
 
+local function save_current_file()
+  vim.cmd('write')
+end
+
 vim.keymap.set('n', '<leader>e', copy_current_line_diagnostic, { desc = 'Copy diagnostic on current line' })
 vim.keymap.set('n', '<leader>F', format_or_indent_file, { desc = 'Format or indent file' })
 vim.keymap.set('x', '<leader>F', indent_selection, { desc = 'Indent selection' })
+-- VS Code bridge mappings. These are intentionally easy to remove as Vim motions become familiar.
+vim.keymap.set({ 'n', 'i', 'v' }, '<C-s>', save_current_file, { silent = true, desc = 'Save file' })
+vim.keymap.set('i', '<C-z>', '<C-o>u', { noremap = true, desc = 'Undo' })
+vim.keymap.set('i', '<C-y>', '<C-o><C-r>', { noremap = true, desc = 'Redo' })
+vim.keymap.set('n', '<C-y>', '<C-r>', { noremap = true, desc = 'Redo' })
+vim.keymap.set('i', '<C-a>', '<Esc>ggVG', { noremap = true, desc = 'Select all' })
+vim.keymap.set('n', '<C-a>', 'ggVG', { noremap = true, desc = 'Select all' })
+vim.keymap.set('v', '<C-a>', '<Esc>ggVG', { noremap = true, desc = 'Select all' })
+vim.keymap.set('i', '<C-f>', '<Esc>/', { noremap = true, desc = 'Find' })
+vim.keymap.set('n', '<C-f>', '/', { noremap = true, desc = 'Find' })
+vim.keymap.set('v', '<C-c>', '"+y', { noremap = true, desc = 'Copy selection' })
+vim.keymap.set('v', '<C-x>', '"+x', { noremap = true, desc = 'Cut selection' })
+vim.keymap.set('i', '<C-v>', '<C-r>+', { noremap = true, desc = 'Paste' })
+vim.keymap.set('n', '<C-v>', '"+p', { noremap = true, desc = 'Paste' })
+vim.keymap.set('v', '<C-v>', '"+p', { noremap = true, desc = 'Paste over selection' })
+vim.keymap.set('i', '<C-Left>', '<C-o>b', { noremap = true, desc = 'Move word left' })
+vim.keymap.set('i', '<C-Right>', '<C-o>w', { noremap = true, desc = 'Move word right' })
+vim.keymap.set('n', '<C-Left>', 'b', { noremap = true, desc = 'Move word left' })
+vim.keymap.set('n', '<C-Right>', 'w', { noremap = true, desc = 'Move word right' })
+vim.keymap.set('i', '<C-Up>', '<C-o>{', { noremap = true, desc = 'Move block up' })
+vim.keymap.set('i', '<C-Down>', '<C-o>}', { noremap = true, desc = 'Move block down' })
+vim.keymap.set('n', '<C-Up>', '{', { noremap = true, desc = 'Move block up' })
+vim.keymap.set('n', '<C-Down>', '}', { noremap = true, desc = 'Move block down' })
+vim.keymap.set('i', '<C-d>', duplicate_current_line_insert, { desc = 'Duplicate current line' })
 vim.keymap.set('i', '<C-S-D>', duplicate_current_line_insert, { desc = 'Duplicate current line' })
-vim.keymap.set('i', '<C-y><C-p>', duplicate_current_line_insert, { desc = 'Duplicate current line' })
 -- VS Code-style Shift+Arrow selection.
 vim.keymap.set('n', '<S-Left>', 'vh<C-g>', { noremap = true, desc = 'Select left' })
 vim.keymap.set('n', '<S-Right>', 'vl<C-g>', { noremap = true, desc = 'Select right' })
@@ -486,10 +514,16 @@ vim.keymap.set('n', '<C-k>', ':move .-2<CR>==', { silent = true, desc = 'Move li
 vim.keymap.set('n', '<C-j>', ':move .+1<CR>==', { silent = true, desc = 'Move line down' })
 vim.keymap.set('i', '<C-k>', '<Esc>:move .-2<CR>==gi', { silent = true, desc = 'Move line up' })
 vim.keymap.set('i', '<C-j>', '<Esc>:move .+1<CR>==gi', { silent = true, desc = 'Move line down' })
+vim.keymap.set('i', '<A-Up>', '<Esc>:move .-2<CR>==gi', { silent = true, desc = 'Move line up' })
+vim.keymap.set('i', '<A-Down>', '<Esc>:move .+1<CR>==gi', { silent = true, desc = 'Move line down' })
+vim.keymap.set('n', '<A-Up>', ':move .-2<CR>==', { silent = true, desc = 'Move line up' })
+vim.keymap.set('n', '<A-Down>', ':move .+1<CR>==', { silent = true, desc = 'Move line down' })
 vim.keymap.set('v', '<leader>k', ":move '<-2<CR>gv=gv", { silent = true, desc = 'Move selection up' })
 vim.keymap.set('v', '<leader>j', ":move '>+1<CR>gv=gv", { silent = true, desc = 'Move selection down' })
 vim.keymap.set('v', '<C-k>', ":move '<-2<CR>gv=gv", { silent = true, desc = 'Move selection up' })
 vim.keymap.set('v', '<C-j>', ":move '>+1<CR>gv=gv", { silent = true, desc = 'Move selection down' })
+vim.keymap.set('v', '<A-Up>', ":move '<-2<CR>gv=gv", { silent = true, desc = 'Move selection up' })
+vim.keymap.set('v', '<A-Down>', ":move '>+1<CR>gv=gv", { silent = true, desc = 'Move selection down' })
 -- VS Code-style Shift+Home/End selection.
 vim.keymap.set('n', '<S-Home>', 'v^<C-g>', { noremap = true, desc = 'Select to first nonblank' })
 vim.keymap.set('n', '<S-End>', 'v$<C-g>', { noremap = true, desc = 'Select to end of line' })
@@ -588,8 +622,7 @@ The `meowsky` command is a folder-level workflow shortcut, not a project-specifi
 Expected behavior:
 
 - `meowsky` jumps to the main workspace folder.
-- `meowsky ./` opens the fullscreen split terminal layout for the current project folder, but only when the current folder is inside the main workspace folder.
-- If `meowsky ./` is run from somewhere unrelated, it opens the layout at the main workspace folder instead of accidentally starting Codex in the wrong place.
+- `meowsky ./` opens the fullscreen split terminal layout for the current folder, even outside the main workspace folder.
 - `meowsky some-folder` first tries `some-folder` as typed, then tries `some-folder` inside the main workspace folder.
 
 The main workspace folder is called the work root. The function resolves it in this order:
@@ -747,18 +780,7 @@ function meowsky {
   }
 
   if ($Action -eq './' -or $Action -eq '.') {
-    $current = (Get-Location).Path
-    $workRootWithSlash = $workRoot.TrimEnd('\') + '\'
-    $currentWithSlash = $current.TrimEnd('\') + '\'
-
-    $root = if (
-      $current.Equals($workRoot, [StringComparison]::OrdinalIgnoreCase) -or
-      $currentWithSlash.StartsWith($workRootWithSlash, [StringComparison]::OrdinalIgnoreCase)
-    ) {
-      $current
-    } else {
-      $workRoot
-    }
+    $root = (Get-Location).Path
 
     $wt = (Get-Command wt.exe -ErrorAction SilentlyContinue).Source
 
@@ -775,7 +797,7 @@ Workspace root: $root
 Top-level project tree:
 $promptTree
 
-Start by giving me a scoped orientation of this codebase from the tree above. Keep it concise: identify the likely main parts, what you would inspect first, and any setup files that look important. Do not make code changes unless I ask.
+At launch, inspect README.md and any docs you find before giving the orientation, so you understand what the codebase is about. Then give me a scoped orientation from the tree above. Keep it concise: identify the likely main parts, what you inspected first, and any setup files that look important. Do not make code changes unless I ask.
 "@
 
     $promptEncoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($codexPrompt))
@@ -922,7 +944,7 @@ meowsky ./
 
 # From C:\Users\<you>\Downloads:
 meowsky ./
-# opens the layout at the work root, not Downloads
+# opens the layout at C:\Users\<you>\Downloads
 
 # From anywhere:
 meowsky user-management-CRM
@@ -935,9 +957,9 @@ meowsky md .\README.md
 meowsky pdf .\docs\spec.pdf
 ```
 
-Why `meowsky ./` checks the folder:
+Why `meowsky ./` uses the current folder:
 
-The split layout automatically starts `codex ./` in the selected root. That is useful inside a project, but risky from random folders such as Downloads, Desktop, or a temporary extraction directory. The boundary check keeps the layout anchored to the work root unless the current directory is already inside it.
+The split layout automatically starts `codex ./` in the selected root. `meowsky ./` treats the current directory as the selected root so the same layout works for repos, throwaway folders, and projects outside the main work root.
 
 `meowsky ./` pane roles:
 
@@ -1068,10 +1090,7 @@ meowsky() {
     current="$(pwd -P)"
 
     local root
-    case "$current/" in
-      "$work_root"/*) root="$current" ;;
-      *) root="$work_root" ;;
-    esac
+    root="$current"
 
     if ! command -v tmux >/dev/null 2>&1; then
       echo "tmux was not found. Install it with: sudo apt install -y tmux" >&2
@@ -1104,7 +1123,7 @@ Workspace root: $root
 Top-level project tree:
 $tree
 
-Start by giving me a scoped orientation of this codebase from the tree above. Keep it concise: identify the likely main parts, what you would inspect first, and any setup files that look important. Do not make code changes unless I ask."
+At launch, inspect README.md and any docs you find before giving the orientation, so you understand what the codebase is about. Then give me a scoped orientation from the tree above. Keep it concise: identify the likely main parts, what you inspected first, and any setup files that look important. Do not make code changes unless I ask."
 
     tmux new-session -d -s "$session" -c "$root" codex -C . "$codex_prompt"
     tmux split-window -h -t "$session:0" -c "$root"
@@ -1190,6 +1209,9 @@ For project-specific import alias completion such as `@/...`, prefer configuring
 ## Notes
 
 - `Ctrl+Backspace` is terminal-dependent. If it does not work, try `Ctrl+H`.
+- VS Code bridge shortcuts are terminal-dependent. If Windows Terminal does not pass a keycode through, Neovim cannot map it.
+- `Ctrl+S`, `Ctrl+Z`, `Ctrl+Y`, `Ctrl+A`, `Ctrl+F`, `Ctrl+D`, `Ctrl+V`, `Ctrl+Left/Right`, `Ctrl+Up/Down`, and `Alt+Up/Down` are mapped as a transition layer.
+- `Ctrl+H` stays mapped to delete previous word because terminals often send `Ctrl+Backspace` as `Ctrl+H`.
 - Shift+Arrow, Ctrl+Shift+Left/Right, Shift+Home/End, and Ctrl+J/K are terminal-dependent. If Windows Terminal does not pass those keycodes correctly, the terminal profile may need keybinding changes.
 - `Ctrl+Shift+Left` / `Ctrl+Shift+Right` selects by word. `Ctrl+Shift+Up` / `Ctrl+Shift+Down` are intentionally left unmapped because they commonly conflict with terminal or window scrolling.
 - In visual mode, `Tab` indents the selected block and `Shift+Tab` outdents it while preserving the selection.

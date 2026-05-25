@@ -122,9 +122,9 @@ Personality:
 Answering rules:
 - Always tell me what folder and file or files we are actually working on.
 - Never make code edits without confirming the specific intended edit with me beforehand.
-- Always tell me when the current work has learning value. If it does, offer to walk me through the edits so I can do them myself before making code changes; wait for me to either accept doing them myself or ask you to do them instead. Use terse execution only for repetition or mechanical edits.
+- Only mention learning value when the current work has high learning value. When it does, briefly offer to walk me through the edits before making code changes; otherwise stay focused on execution. Use terse execution for routine or mechanical edits.
 
-Start by giving me a scoped orientation of this codebase from the tree above. Keep it concise: identify the likely main parts, what you would inspect first, and any setup files that look important.
+At launch, inspect README.md and any docs you find before giving the orientation, so you understand what the codebase is about. Then give me a scoped orientation from the tree above. Keep it concise: identify the likely main parts, what you inspected first, and any setup files that look important.
 '@
     }
 
@@ -208,16 +208,23 @@ Start by giving me a scoped orientation of this codebase from the tree above. Ke
       '.cache'
     )
 
-    $items = Get-ChildItem -LiteralPath $Root -Force -ErrorAction SilentlyContinue |
+    $maxItems = 50
+    $items = @(Get-ChildItem -LiteralPath $Root -Force -ErrorAction SilentlyContinue |
       Where-Object { $ignoredNames -notcontains $_.Name } |
-      Sort-Object @{ Expression = { -not $_.PSIsContainer } }, Name
+      Sort-Object @{ Expression = { -not $_.PSIsContainer } }, Name)
+    $visibleItems = @($items | Select-Object -First $maxItems)
+    $omittedCount = [Math]::Max(0, $items.Count - $visibleItems.Count)
 
     $lines = New-Object System.Collections.Generic.List[string]
     $lines.Add('.')
 
-    for ($i = 0; $i -lt $items.Count; $i++) {
-      $prefix = if ($i -eq $items.Count - 1) { '`-- ' } else { '|-- ' }
-      $lines.Add("$prefix$($items[$i].Name)")
+    for ($i = 0; $i -lt $visibleItems.Count; $i++) {
+      $prefix = if ($omittedCount -eq 0 -and $i -eq $visibleItems.Count - 1) { '`-- ' } else { '|-- ' }
+      $lines.Add("$prefix$($visibleItems[$i].Name)")
+    }
+
+    if ($omittedCount -gt 0) {
+      $lines.Add("``-- ... $omittedCount more item(s) omitted")
     }
 
     return $lines -join "`r`n"
@@ -367,18 +374,7 @@ Start by giving me a scoped orientation of this codebase from the tree above. Ke
   }
 
   if ($Action -eq './' -or $Action -eq '.') {
-    $current = (Get-Location).Path
-    $workRootWithSlash = $workRoot.TrimEnd('\') + '\'
-    $currentWithSlash = $current.TrimEnd('\') + '\'
-
-    $root = if (
-      $current.Equals($workRoot, [StringComparison]::OrdinalIgnoreCase) -or
-      $currentWithSlash.StartsWith($workRootWithSlash, [StringComparison]::OrdinalIgnoreCase)
-    ) {
-      $current
-    } else {
-      $workRoot
-    }
+    $root = (Get-Location).Path
 
     $wt = (Get-Command wt.exe -ErrorAction SilentlyContinue).Source
 
@@ -465,16 +461,62 @@ function ptree {
     [int]$Level = 3
   )
 
-  $eza = (Get-Command eza.exe -ErrorAction SilentlyContinue).Source
-  if (-not $eza -or (Get-Item -LiteralPath $eza -ErrorAction SilentlyContinue).Length -eq 0) {
-    $eza = Get-ChildItem -Path "$env:LOCALAPPDATA\Microsoft\WinGet\Packages" -Recurse -Filter eza.exe -ErrorAction SilentlyContinue |
-      Select-Object -First 1 -ExpandProperty FullName
-  }
-  if (-not $eza) {
-    throw "eza.exe was not found. Install it with: winget install --id eza-community.eza --exact"
+  $maxItems = 50
+  $ignoredNames = @(
+    'node_modules',
+    '.git',
+    'dist',
+    'build',
+    'coverage',
+    '.next',
+    '.nuxt',
+    '.turbo',
+    '.vite',
+    '.cache'
+  )
+
+  function Write-MeowskyTree {
+    param(
+      [Parameter(Mandatory = $true)]
+      [string]$Path,
+
+      [Parameter(Mandatory = $true)]
+      [AllowEmptyString()]
+      [string]$Prefix,
+
+      [Parameter(Mandatory = $true)]
+      [int]$Depth
+    )
+
+    if ($Depth -le 0) {
+      return
+    }
+
+    $items = @(Get-ChildItem -LiteralPath $Path -Force -ErrorAction SilentlyContinue |
+      Where-Object { $ignoredNames -notcontains $_.Name } |
+      Sort-Object @{ Expression = { -not $_.PSIsContainer } }, Name)
+    $visibleItems = @($items | Select-Object -First $maxItems)
+    $omittedCount = [Math]::Max(0, $items.Count - $visibleItems.Count)
+
+    for ($i = 0; $i -lt $visibleItems.Count; $i++) {
+      $item = $visibleItems[$i]
+      $isLast = $omittedCount -eq 0 -and $i -eq $visibleItems.Count - 1
+      $connector = if ($isLast) { '`-- ' } else { '|-- ' }
+      Write-Host "$Prefix$connector$($item.Name)"
+
+      if ($item.PSIsContainer) {
+        $childPrefix = if ($isLast) { "$Prefix    " } else { "$Prefix|   " }
+        Write-MeowskyTree -Path $item.FullName -Prefix $childPrefix -Depth ($Depth - 1)
+      }
+    }
+
+    if ($omittedCount -gt 0) {
+      Write-Host "$Prefix``-- ... $omittedCount more item(s) omitted"
+    }
   }
 
-  & $eza -T -L $Level --color=never -I "node_modules|.git|dist|build|coverage|.next|.nuxt|.turbo|.vite|.cache" .
+  Write-Host '.'
+  Write-MeowskyTree -Path (Get-Location).Path -Prefix '' -Depth $Level
 }
 
 if (Get-Module -ListAvailable -Name PSReadLine) {
