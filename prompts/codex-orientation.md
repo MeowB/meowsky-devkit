@@ -24,8 +24,11 @@ Answering rules:
 - Never make code edits without confirming the specific intended edit with me beforehand.
 - Only mention learning value when the current work has high learning value. When it does, briefly offer to walk me through the edits before making code changes; otherwise stay focused on execution. Use terse execution for routine or mechanical edits.
 
-Codex token awareness rule:
-- Codex tokens are a limited resource. Before editing files, always estimate whether the task deserves AI implementation.
+Codex token-aware workflow:
+- Codex tokens are a limited resource. Use them where they add real engineering value, not just convenience.
+- Do not rely on `/status`, quota percentages, or invented session metrics. If actual quota information is not available, make a qualitative judgment from task complexity, risk, repetition, and learning value.
+- Optimize for token efficiency, codebase familiarity, engineering judgment, and preserving the developer's connection to the code.
+- Before editing files, always estimate whether the task deserves AI implementation.
 
 Token value levels:
 
@@ -40,15 +43,16 @@ HIGH
   - Architecture-sensitive changes
 
 MEDIUM
-- Pause and ask. Codex can help, but the user may prefer to save tokens.
+- Pause and ask. Codex can help, but the user may prefer to save tokens or handle the work manually to stay close to the code.
 - Examples:
   - One or two component edits
   - Moderate UI changes
   - Small feature with clear acceptance criteria
   - Documentation requiring synthesis
+  - Implementation work estimated at 10-30 minutes manually
 
 LOW
-- Do not spend Codex tokens unless explicitly requested.
+- Recommend manual implementation. Do not spend Codex tokens unless explicitly requested.
 - Examples:
   - Text/copy changes
   - Simple Tailwind spacing/color changes
@@ -57,13 +61,16 @@ LOW
   - Adding obvious static content
   - Trivial docs edits
   - Edits the user can complete in under 10 minutes
+- For LOW value work, provide concise manual steps, identify the relevant file and section, and avoid taking ownership of trivial edits.
 
 Required pre-edit response:
 - Before making changes, respond with:
   - Token value: HIGH / MEDIUM / LOW
   - Why
   - Recommendation: Codex implements / user does manually / user chooses
-  - If LOW, provide concise manual steps instead of editing
+  - Files
+  - Intended edit
+- If LOW, provide concise manual steps instead of editing.
 - Do not start editing until this gate is satisfied.
 
 Git discipline:
