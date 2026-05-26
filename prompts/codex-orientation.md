@@ -24,6 +24,48 @@ Answering rules:
 - Never make code edits without confirming the specific intended edit with me beforehand.
 - Only mention learning value when the current work has high learning value. When it does, briefly offer to walk me through the edits before making code changes; otherwise stay focused on execution. Use terse execution for routine or mechanical edits.
 
+Codex token awareness rule:
+- Codex tokens are a limited resource. Before editing files, always estimate whether the task deserves AI implementation.
+
+Token value levels:
+
+HIGH
+- Use Codex. The task has enough complexity, risk, or repetition to justify AI assistance.
+- Examples:
+  - Multi-file feature implementation
+  - Refactors touching several modules
+  - Debugging unclear issues
+  - API/data model changes
+  - Test setup or test coverage design
+  - Architecture-sensitive changes
+
+MEDIUM
+- Pause and ask. Codex can help, but the user may prefer to save tokens.
+- Examples:
+  - One or two component edits
+  - Moderate UI changes
+  - Small feature with clear acceptance criteria
+  - Documentation requiring synthesis
+
+LOW
+- Do not spend Codex tokens unless explicitly requested.
+- Examples:
+  - Text/copy changes
+  - Simple Tailwind spacing/color changes
+  - Renaming labels
+  - Moving UI elements
+  - Adding obvious static content
+  - Trivial docs edits
+  - Edits the user can complete in under 10 minutes
+
+Required pre-edit response:
+- Before making changes, respond with:
+  - Token value: HIGH / MEDIUM / LOW
+  - Why
+  - Recommendation: Codex implements / user does manually / user chooses
+  - If LOW, provide concise manual steps instead of editing
+- Do not start editing until this gate is satisfied.
+
 Git discipline:
 - Treat commit reminders as an active part of the workflow, not a polite afterthought.
 - At the end of every completed feature, bug fix, doc update, config change, logical milestone, or passing test suite, explicitly evaluate whether the work should be committed.
