@@ -335,6 +335,29 @@ At launch, inspect README.md and any docs you find before giving the orientation
     }
   }
 
+  function Set-MeowskyTerminalColor {
+    param(
+      [string]$Color
+    )
+
+    if (-not $Color) {
+      Write-Host 'Available colors:'
+      foreach ($name in $script:MeowskyColorMap.Keys) {
+        $consoleColor = $script:MeowskyColorMap[$name]
+        Write-Host ("  {0}" -f $name) -ForegroundColor $consoleColor
+      }
+      return
+    }
+
+    $normalizedColor = $Color.ToLowerInvariant()
+    if (-not $script:MeowskyColorMap.Contains($normalizedColor)) {
+      $available = $script:MeowskyColorMap.Keys -join ', '
+      throw "Unknown color '$Color'. Available colors: $available"
+    }
+
+    $Host.UI.RawUI.ForegroundColor = [ConsoleColor]$script:MeowskyColorMap[$normalizedColor]
+  }
+
   $workRoot = Get-WorkRoot
 
   if ($Action) {
@@ -342,6 +365,11 @@ At launch, inspect README.md and any docs you find before giving the orientation
 
     if ($normalizedAction -eq 'matrix') {
       Start-MeowskyMatrix
+      return
+    }
+
+    if ($normalizedAction -eq 'color') {
+      Set-MeowskyTerminalColor -Color $Target
       return
     }
 
@@ -535,6 +563,32 @@ function ptree {
   Write-MeowskyTree -Path (Get-Location).Path -Prefix '' -Depth $Level
 }
 
+$script:MeowskyColorMap = [ordered]@{
+  green = 'Green'
+  red = 'Red'
+  blue = 'Blue'
+  purple = 'Magenta'
+  orange = 'DarkYellow'
+  teal = 'Cyan'
+  cyan = 'Cyan'
+  yellow = 'Yellow'
+  white = 'White'
+  gray = 'Gray'
+  grey = 'Gray'
+  black = 'Black'
+  magenta = 'Magenta'
+  darkblue = 'DarkBlue'
+  darkgreen = 'DarkGreen'
+  darkcyan = 'DarkCyan'
+  darkred = 'DarkRed'
+  darkmagenta = 'DarkMagenta'
+  darkyellow = 'DarkYellow'
+  darkgray = 'DarkGray'
+  darkgrey = 'DarkGray'
+  default = 'Gray'
+  reset = 'Gray'
+}
+
 if (Get-Module -ListAvailable -Name PSReadLine) {
   Set-PSReadLineKeyHandler -Key Tab -Function MenuComplete
 }
@@ -556,7 +610,7 @@ $meowskyCompleter = {
     }
   }
 
-  $builtIns = @('.', './', 'codex', 'matrix', 'md', 'markdown', 'pdf')
+  $builtIns = @('.', './', 'codex', 'color', 'matrix', 'md', 'markdown', 'pdf')
   foreach ($item in $builtIns) {
     if ($item -like "$wordToComplete*") {
       [System.Management.Automation.CompletionResult]::new($item, $item, 'ParameterValue', $item)
@@ -577,8 +631,30 @@ $meowskyCompleter = {
     }
 }
 
+$meowskyColorCompleter = {
+  param($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
+
+  $action = $null
+  if ($commandAst.CommandElements.Count -ge 2) {
+    $action = $commandAst.CommandElements[1].Extent.Text.Trim("'`"").ToLowerInvariant()
+  }
+
+  if ($action -ne 'color') {
+    return
+  }
+
+  foreach ($item in $script:MeowskyColorMap.Keys) {
+    if ($item -like "$wordToComplete*") {
+      $consoleColor = $script:MeowskyColorMap[$item]
+      [System.Management.Automation.CompletionResult]::new($item, $item, 'ParameterValue', "$item -> $consoleColor")
+    }
+  }
+}
+
 Register-ArgumentCompleter -CommandName meowsky -ParameterName Action -ScriptBlock $meowskyCompleter
 Register-ArgumentCompleter -CommandName dev -ParameterName Action -ScriptBlock $meowskyCompleter
+Register-ArgumentCompleter -CommandName meowsky -ParameterName Target -ScriptBlock $meowskyColorCompleter
+Register-ArgumentCompleter -CommandName dev -ParameterName Target -ScriptBlock $meowskyColorCompleter
 
 # Compatibility alias for the old shortcut name. Prefer using `meowsky` in new notes.
 if (-not (Get-Alias dev -ErrorAction SilentlyContinue)) {
