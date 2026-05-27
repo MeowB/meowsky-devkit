@@ -243,6 +243,8 @@ At launch, inspect README.md and any docs you find before giving the orientation
   function Start-MeowskyMatrix {
     $random = [Random]::new()
     $glyphs = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz@#$%&*+-=<>[]{}'
+    $color = Get-MeowskyProjectConsoleColor
+    $nextColorRefresh = [datetime]::MinValue
     $previousForeground = $Host.UI.RawUI.ForegroundColor
     $previousCursorVisible = $true
 
@@ -273,6 +275,12 @@ At launch, inspect README.md and any docs you find before giving the orientation
         }
 
         while ($true) {
+          $now = [datetime]::UtcNow
+          if ($now -ge $nextColorRefresh) {
+            $color = Get-MeowskyProjectConsoleColor
+            $nextColorRefresh = $now.AddSeconds(1)
+          }
+
           $currentWidth = [Math]::Max(1, [Console]::WindowWidth)
           $currentHeight = [Math]::Max(1, [Console]::WindowHeight)
           if ($currentWidth -ne $width -or $currentHeight -ne $height) {
@@ -297,7 +305,7 @@ At launch, inspect README.md and any docs you find before giving the orientation
             $y = $column.Y
             if ($y -ge 0 -and $y -lt $height) {
               [Console]::SetCursorPosition($x, $y)
-              $Host.UI.RawUI.ForegroundColor = 'Green'
+              $Host.UI.RawUI.ForegroundColor = $color
               Write-Host $glyphs[$random.Next(0, $glyphs.Length)] -NoNewline
             }
 
@@ -341,21 +349,15 @@ At launch, inspect README.md and any docs you find before giving the orientation
     )
 
     if (-not $Color) {
-      Write-Host 'Available colors:'
-      foreach ($name in $script:MeowskyColorMap.Keys) {
-        $consoleColor = $script:MeowskyColorMap[$name]
-        Write-Host ("  {0}" -f $name) -ForegroundColor $consoleColor
-      }
+      Show-MeowskyTerminalColors -Path (Get-Location).Path
       return
     }
 
-    $normalizedColor = $Color.ToLowerInvariant()
-    if (-not $script:MeowskyColorMap.Contains($normalizedColor)) {
-      $available = $script:MeowskyColorMap.Keys -join ', '
-      throw "Unknown color '$Color'. Available colors: $available"
+    Set-MeowskyProjectColor -Path (Get-Location).Path -Color $Color
+    if ($env:MEOWSKY_PANEL -eq 'status') {
+      Clear-Host
+      Start-MeowskyStatusPanel -GitStatus $env:MEOWSKY_GIT_STATUS
     }
-
-    $Host.UI.RawUI.ForegroundColor = [ConsoleColor]$script:MeowskyColorMap[$normalizedColor]
   }
 
   $workRoot = Get-WorkRoot
@@ -384,8 +386,7 @@ At launch, inspect README.md and any docs you find before giving the orientation
     }
 
     if ($normalizedAction -eq 'codex') {
-      $codex = (Get-Command codex -ErrorAction SilentlyContinue).Source
-      if (-not $codex) {
+      if (-not (Resolve-MeowskyCodexCommand)) {
         throw 'codex was not found. Install the Codex CLI before using meowsky codex.'
       }
 
@@ -395,8 +396,12 @@ At launch, inspect README.md and any docs you find before giving the orientation
       $promptTree = Get-MeowskyPromptTree -Root $root
       $gitStatus = Get-MeowskyGitSummary -Root $root
       $codexPrompt = Get-MeowskyCodexPrompt -Today $today -Root $root -Tree $promptTree -GitStatus $gitStatus
+      $promptPath = New-MeowskyCodexPromptFile -Prompt $codexPrompt
 
-      & $codex -C $root $codexPrompt
+      Apply-MeowskyConsoleColor -Color cyan
+      Clear-Host
+      Start-Sleep -Milliseconds 250
+      Invoke-MeowskyCodex -Root $root -PromptPath $promptPath
       return
     }
 
@@ -424,37 +429,31 @@ At launch, inspect README.md and any docs you find before giving the orientation
     $promptTree = Get-MeowskyPromptTree -Root $root
     $gitStatus = Get-MeowskyGitSummary -Root $root
     $codexPrompt = Get-MeowskyCodexPrompt -Today $today -Root $root -Tree $promptTree -GitStatus $gitStatus
-
-    $promptDir = Join-Path ([System.IO.Path]::GetTempPath()) 'meowsky-prompts'
-    New-Item -ItemType Directory -Force -Path $promptDir | Out-Null
-    $promptPath = Join-Path $promptDir ("codex-prompt-{0}.txt" -f ([Guid]::NewGuid().ToString('N')))
-    Set-Content -LiteralPath $promptPath -Value $codexPrompt -Encoding UTF8
+    $promptPath = New-MeowskyCodexPromptFile -Prompt $codexPrompt
 
     $promptPathEncoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($promptPath))
     $gitStatusEncoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($gitStatus))
-    $profilePrelude = "`$WarningPreference = 'SilentlyContinue'`r`n. `$PROFILE`r`n`$WarningPreference = 'Continue'"
+    $profilePrelude = "`$WarningPreference = 'SilentlyContinue'`r`n. `$PROFILE`r`nApply-MeowskyProjectColor`r`n`$WarningPreference = 'Continue'"
     $idleScript = "$profilePrelude`r`nmeowsky matrix`r`n"
-    $codexScript = @"
+$codexScript = @"
 $profilePrelude
+Apply-MeowskyConsoleColor -Color cyan
+Clear-Host
+Start-Sleep -Milliseconds 250
 `$promptPath = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('$promptPathEncoded'))
-`$prompt = Get-Content -Raw -LiteralPath `$promptPath
-if (Get-Command codex -ErrorAction SilentlyContinue) {
-  codex -C . `$prompt
+if (Resolve-MeowskyCodexCommand) {
+  Invoke-MeowskyCodex -Root . -PromptPath `$promptPath
 } else {
   Write-Host ''
 }
 "@
-    $treeScript = "$profilePrelude`r`nptree`r`n"
+    $treeScript = "$profilePrelude`r`nStart-MeowskyTreePanel`r`n"
     $meowskyScript = @(
       $profilePrelude,
       "`$gitStatus = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('$gitStatusEncoded'))",
-      "Write-Host ''",
-      "Write-Host ' /\_/\\   Meowsky' -ForegroundColor Green",
-      "Write-Host '( o.o )  work mode' -ForegroundColor Green",
-      "Write-Host ' > ^ <' -ForegroundColor Green",
-      "Write-Host (Get-Location).Path -ForegroundColor Cyan",
-      "Write-Host ''",
-      "Write-Host `$gitStatus"
+      "`$env:MEOWSKY_PANEL = 'status'",
+      "`$env:MEOWSKY_GIT_STATUS = `$gitStatus",
+      "Start-MeowskyStatusPanel -GitStatus `$gitStatus"
     ) -join "`r`n"
 
     $codexEncoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($codexScript))
@@ -563,6 +562,51 @@ function ptree {
   Write-MeowskyTree -Path (Get-Location).Path -Prefix '' -Depth $Level
 }
 
+function Start-MeowskyTreePanel {
+  param(
+    [int]$Level = 3,
+    [int]$PollMilliseconds = 500
+  )
+
+  $previousForeground = $Host.UI.RawUI.ForegroundColor
+  $signalPath = Get-MeowskyColorSignalPath
+  $lastSignalWrite = if (Test-Path -LiteralPath $signalPath) {
+    (Get-Item -LiteralPath $signalPath).LastWriteTimeUtc
+  } else {
+    [datetime]::MinValue
+  }
+
+  function Redraw-MeowskyTree {
+    $Host.UI.RawUI.ForegroundColor = Get-MeowskyProjectConsoleColor
+    Clear-Host
+    ptree $Level
+  }
+
+  try {
+    Redraw-MeowskyTree
+
+    while ($true) {
+      Start-Sleep -Milliseconds $PollMilliseconds
+
+      if (-not (Test-Path -LiteralPath $signalPath)) {
+        continue
+      }
+
+      $signalWrite = (Get-Item -LiteralPath $signalPath).LastWriteTimeUtc
+      if ($signalWrite -ne $lastSignalWrite) {
+        $lastSignalWrite = $signalWrite
+        Redraw-MeowskyTree
+      }
+    }
+  } finally {
+    try {
+      $Host.UI.RawUI.ForegroundColor = $previousForeground
+    } catch {
+      Write-Host ''
+    }
+  }
+}
+
 $script:MeowskyColorMap = [ordered]@{
   green = 'Green'
   red = 'Red'
@@ -587,6 +631,338 @@ $script:MeowskyColorMap = [ordered]@{
   darkgrey = 'DarkGray'
   default = 'Gray'
   reset = 'Gray'
+}
+
+$script:MeowskyAnsiColorMap = @{
+  Black = 30
+  DarkRed = 31
+  DarkGreen = 32
+  DarkYellow = 33
+  DarkBlue = 34
+  DarkMagenta = 35
+  DarkCyan = 36
+  Gray = 37
+  DarkGray = 90
+  Red = 91
+  Green = 92
+  Yellow = 93
+  Blue = 94
+  Magenta = 95
+  Cyan = 96
+  White = 97
+}
+
+function Resolve-MeowskyCodexCommand {
+  if ($IsWindows -or $env:OS -eq 'Windows_NT') {
+    $cmdShim = (Get-Command codex.cmd -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1).Source
+    if ($cmdShim) {
+      return $cmdShim
+    }
+  }
+
+  $codex = (Get-Command codex -ErrorAction SilentlyContinue | Select-Object -First 1).Source
+  if ($codex) {
+    return $codex
+  }
+}
+
+function New-MeowskyCodexPromptFile {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$Prompt
+  )
+
+  $promptDir = Join-Path ([System.IO.Path]::GetTempPath()) 'meowsky-prompts'
+  New-Item -ItemType Directory -Force -Path $promptDir | Out-Null
+  $promptPath = Join-Path $promptDir ("codex-prompt-{0}.txt" -f ([Guid]::NewGuid().ToString('N')))
+  [System.IO.File]::WriteAllText($promptPath, $Prompt, [System.Text.UTF8Encoding]::new($false))
+  return $promptPath
+}
+
+function New-MeowskyCodexNodeLauncher {
+  $launcherDir = Join-Path ([System.IO.Path]::GetTempPath()) 'meowsky-prompts'
+  New-Item -ItemType Directory -Force -Path $launcherDir | Out-Null
+  $launcherPath = Join-Path $launcherDir 'codex-prompt-launcher.js'
+
+  $launcherScript = @'
+const { spawnSync } = require("node:child_process");
+const fs = require("node:fs");
+
+const [, , entrypoint, root, promptPath] = process.argv;
+const args = ["-C", root];
+
+if (promptPath) {
+  args.push(fs.readFileSync(promptPath, "utf8"));
+}
+
+const result = spawnSync(process.execPath, [entrypoint, ...args], {
+  stdio: "inherit",
+  windowsHide: false,
+});
+
+if (promptPath) {
+  try {
+    fs.unlinkSync(promptPath);
+  } catch {
+  }
+}
+
+if (result.error) {
+  console.error(result.error.message);
+  process.exit(1);
+}
+
+process.exit(result.status ?? 0);
+'@
+  [System.IO.File]::WriteAllText($launcherPath, $launcherScript, [System.Text.UTF8Encoding]::new($false))
+
+  return $launcherPath
+}
+
+function Invoke-MeowskyCodex {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$Root,
+
+    [string]$PromptPath
+  )
+
+  $codexCommand = Get-Command codex -ErrorAction SilentlyContinue | Select-Object -First 1
+
+  if ($codexCommand -and ($IsWindows -or $env:OS -eq 'Windows_NT') -and $codexCommand.Source -like '*.ps1') {
+    $basedir = Split-Path $codexCommand.Source -Parent
+    $entrypoint = Join-Path $basedir 'node_modules\@openai\codex\bin\codex.js'
+    if (Test-Path -LiteralPath $entrypoint) {
+      $node = if (Test-Path -LiteralPath (Join-Path $basedir 'node.exe')) {
+        Join-Path $basedir 'node.exe'
+      } else {
+        (Get-Command node.exe -ErrorAction SilentlyContinue | Select-Object -First 1).Source
+      }
+
+      if ($node) {
+        if ($PromptPath) {
+          $launcher = New-MeowskyCodexNodeLauncher
+          & $node $launcher $entrypoint $Root $PromptPath
+        } else {
+          & $node $entrypoint -C $Root
+        }
+        return
+      }
+    }
+  }
+
+  $codex = Resolve-MeowskyCodexCommand
+  if (-not $codex) {
+    throw 'codex was not found. Install the Codex CLI before using meowsky.'
+  }
+
+  if ($PromptPath) {
+    $prompt = Get-Content -Raw -LiteralPath $PromptPath
+    try {
+      & $codex -C $Root $prompt
+    } finally {
+      Remove-Item -LiteralPath $PromptPath -Force -ErrorAction SilentlyContinue
+    }
+    return
+  }
+
+  & $codex -C $Root
+}
+
+function Get-MeowskyProjectColorConfigPath {
+  $configRoot = if ($env:LOCALAPPDATA) {
+    Join-Path $env:LOCALAPPDATA 'Meowsky'
+  } else {
+    Join-Path $HOME '.meowsky'
+  }
+
+  New-Item -ItemType Directory -Force -Path $configRoot | Out-Null
+  return (Join-Path $configRoot 'project-colors.json')
+}
+
+function Get-MeowskyColorSignalPath {
+  $signalRoot = Join-Path ([System.IO.Path]::GetTempPath()) 'meowsky-prompts'
+  New-Item -ItemType Directory -Force -Path $signalRoot | Out-Null
+  return (Join-Path $signalRoot 'project-color-signal.txt')
+}
+
+function Update-MeowskyColorSignal {
+  $signalPath = Get-MeowskyColorSignalPath
+  [System.IO.File]::WriteAllText($signalPath, ([datetime]::UtcNow.Ticks.ToString()), [System.Text.UTF8Encoding]::new($false))
+}
+
+function Get-MeowskyProjectColorKey {
+  param(
+    [string]$Path = (Get-Location).Path
+  )
+
+  if (Test-Path -LiteralPath $Path) {
+    return (Resolve-Path -LiteralPath $Path).Path
+  }
+
+  return $Path
+}
+
+function Read-MeowskyProjectColors {
+  $configPath = Get-MeowskyProjectColorConfigPath
+  $colors = @{}
+
+  if (-not (Test-Path -LiteralPath $configPath)) {
+    return $colors
+  }
+
+  $json = Get-Content -Raw -LiteralPath $configPath
+  if (-not $json.Trim()) {
+    return $colors
+  }
+
+  $data = $json | ConvertFrom-Json
+  foreach ($property in $data.PSObject.Properties) {
+    $colors[$property.Name] = [string]$property.Value
+  }
+
+  return $colors
+}
+
+function Save-MeowskyProjectColors {
+  param(
+    [hashtable]$Colors
+  )
+
+  $ordered = [ordered]@{}
+  foreach ($key in ($Colors.Keys | Sort-Object)) {
+    $ordered[$key] = $Colors[$key]
+  }
+
+  $configPath = Get-MeowskyProjectColorConfigPath
+  $ordered | ConvertTo-Json | Set-Content -LiteralPath $configPath -Encoding UTF8
+}
+
+function Apply-MeowskyConsoleColor {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$Color
+  )
+
+  $normalizedColor = $Color.ToLowerInvariant()
+  if (-not $script:MeowskyColorMap.Contains($normalizedColor)) {
+    $available = $script:MeowskyColorMap.Keys -join ', '
+    throw "Unknown color '$Color'. Available colors: $available"
+  }
+
+  $consoleColor = [ConsoleColor]$script:MeowskyColorMap[$normalizedColor]
+  $Host.UI.RawUI.ForegroundColor = $consoleColor
+  [Console]::ForegroundColor = $consoleColor
+  if ($script:MeowskyAnsiColorMap.ContainsKey($consoleColor.ToString())) {
+    $ansiCode = $script:MeowskyAnsiColorMap[$consoleColor.ToString()]
+    [Console]::Write(([char]27).ToString() + "[$ansiCode" + 'm')
+  }
+}
+
+function Get-MeowskyProjectConsoleColor {
+  param(
+    [string]$Path = (Get-Location).Path
+  )
+
+  $color = Get-MeowskyProjectColor -Path $Path
+  if ($color -and $script:MeowskyColorMap.Contains($color)) {
+    return [ConsoleColor]$script:MeowskyColorMap[$color]
+  }
+
+  return [ConsoleColor]$script:MeowskyColorMap['green']
+}
+
+function Start-MeowskyStatusPanel {
+  param(
+    [string]$GitStatus = ''
+  )
+
+  $color = Get-MeowskyProjectConsoleColor
+  Write-Host ''
+  Write-Host ' /\_/\   Meowsky' -ForegroundColor $color
+  Write-Host '( o.o )  work mode' -ForegroundColor $color
+  Write-Host ' > ^ <' -ForegroundColor $color
+  Write-Host (Get-Location).Path -ForegroundColor $color
+  Write-Host ''
+  Write-Host $GitStatus
+}
+
+function Get-MeowskyProjectColor {
+  param(
+    [string]$Path = (Get-Location).Path
+  )
+
+  $key = Get-MeowskyProjectColorKey -Path $Path
+  $colors = Read-MeowskyProjectColors
+
+  if ($colors.ContainsKey($key)) {
+    return $colors[$key]
+  }
+}
+
+function Apply-MeowskyProjectColor {
+  param(
+    [string]$Path = (Get-Location).Path
+  )
+
+  $color = Get-MeowskyProjectColor -Path $Path
+  if ($color) {
+    Apply-MeowskyConsoleColor -Color $color
+  }
+}
+
+function Set-MeowskyProjectColor {
+  param(
+    [string]$Path = (Get-Location).Path,
+    [Parameter(Mandatory = $true)]
+    [string]$Color
+  )
+
+  $normalizedColor = $Color.ToLowerInvariant()
+  if (-not $script:MeowskyColorMap.Contains($normalizedColor)) {
+    $available = $script:MeowskyColorMap.Keys -join ', '
+    throw "Unknown color '$Color'. Available colors: $available"
+  }
+
+  $key = Get-MeowskyProjectColorKey -Path $Path
+  $colors = Read-MeowskyProjectColors
+
+  if ($normalizedColor -eq 'reset' -or $normalizedColor -eq 'default') {
+    if ($colors.ContainsKey($key)) {
+      $colors.Remove($key)
+      Save-MeowskyProjectColors -Colors $colors
+    }
+    Apply-MeowskyConsoleColor -Color 'reset'
+    Update-MeowskyColorSignal
+    Write-Host "Reset Meowsky color for $key"
+    return
+  }
+
+  $colors[$key] = $normalizedColor
+  Save-MeowskyProjectColors -Colors $colors
+  Apply-MeowskyConsoleColor -Color $normalizedColor
+  Update-MeowskyColorSignal
+  Write-Host "Meowsky color for ${key}: $normalizedColor"
+}
+
+function Show-MeowskyTerminalColors {
+  param(
+    [string]$Path = (Get-Location).Path
+  )
+
+  $key = Get-MeowskyProjectColorKey -Path $Path
+  $current = Get-MeowskyProjectColor -Path $key
+  if ($current) {
+    Write-Host "Current project color: $current" -ForegroundColor $script:MeowskyColorMap[$current]
+  } else {
+    Write-Host 'Current project color: none'
+  }
+
+  Write-Host 'Available colors:'
+  foreach ($name in $script:MeowskyColorMap.Keys) {
+    $consoleColor = $script:MeowskyColorMap[$name]
+    Write-Host ("  {0}" -f $name) -ForegroundColor $consoleColor
+  }
 }
 
 if (Get-Module -ListAvailable -Name PSReadLine) {
