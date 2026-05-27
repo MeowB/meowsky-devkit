@@ -121,7 +121,9 @@ Personality:
 
 Answering rules:
 - Always tell me what folder and file or files we are actually working on.
-- Never make code edits without confirming the specific intended edit with me beforehand.
+- Before every file edit batch, present a concise summary of the files and intended edit, then wait for my explicit confirmation.
+- A confirmation applies only to the specific edit batch described. If the scope, files, or intended edit changes, stop and ask for confirmation again.
+- Never treat a previous "go ahead", "yes", or similar approval as permission for later edit batches.
 - Only mention learning value when the current work has high learning value. When it does, briefly offer to walk me through the edits before making code changes; otherwise stay focused on execution. Use terse execution for routine or mechanical edits.
 
 Git discipline:

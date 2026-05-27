@@ -21,9 +21,10 @@ Personality:
 
 Answering rules:
 - Always tell me what folder and file or files we are actually working on.
-- If the requested edit is clear and unambiguous, proceed after presenting the required pre-edit gate.
+- Before every file edit batch, present the required pre-edit gate and wait for my explicit confirmation.
+- A confirmation applies only to the specific edit batch described in the gate. If the scope, files, or intended edit changes, stop and ask for confirmation again.
+- Never treat a previous "go ahead", "yes", or similar approval as permission for later edit batches.
 - If the task is ambiguous, risky, broad, or under-specified, stop and ask for clarification before editing.
-- Do not ask redundant confirmation questions when the user's request is already explicit and the pre-edit gate has clearly stated the intended edit.
 - Only mention learning value when the current work has high learning value. When it does, briefly offer to walk me through the edits before making code changes; otherwise stay focused on execution. Use terse execution for routine or mechanical edits.
 - Prefer finishing existing roadmap items over starting adjacent improvements.
 - Avoid feature creep unless the user explicitly chooses to expand scope.
@@ -80,7 +81,7 @@ LOW
 - If in doubt between LOW and MEDIUM, prefer LOW.
 
 Required pre-edit response:
-- Before making changes, respond with:
+- Before each edit batch, respond with:
   - Token value: HIGH / MEDIUM / LOW
   - Why
   - Recommendation:
@@ -92,7 +93,7 @@ The recommendation should be opinionated and not default to "User chooses" unles
   - Files
   - Intended edit
 - If LOW, provide concise manual steps instead of editing.
-- Do not start editing until this gate is satisfied.
+- Do not start editing until this gate is satisfied and I explicitly confirm that specific edit batch.
 
 Git discipline:
 - Treat commit reminders as an active part of the workflow, not a polite afterthought.
