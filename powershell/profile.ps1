@@ -397,13 +397,19 @@ At launch, inspect README.md and any docs you find before giving the orientation
     $gitStatus = Get-MeowskyGitSummary -Root $root
     $codexPrompt = Get-MeowskyCodexPrompt -Today $today -Root $root -Tree $promptTree -GitStatus $gitStatus
 
-    $promptEncoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($codexPrompt))
+    $promptDir = Join-Path ([System.IO.Path]::GetTempPath()) 'meowsky-prompts'
+    New-Item -ItemType Directory -Force -Path $promptDir | Out-Null
+    $promptPath = Join-Path $promptDir ("codex-prompt-{0}.txt" -f ([Guid]::NewGuid().ToString('N')))
+    Set-Content -LiteralPath $promptPath -Value $codexPrompt -Encoding UTF8
+
+    $promptPathEncoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($promptPath))
     $gitStatusEncoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($gitStatus))
     $profilePrelude = "`$WarningPreference = 'SilentlyContinue'`r`n. `$PROFILE`r`n`$WarningPreference = 'Continue'"
     $idleScript = "$profilePrelude`r`nmeowsky matrix`r`n"
     $codexScript = @"
 $profilePrelude
-`$prompt = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('$promptEncoded'))
+`$promptPath = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('$promptPathEncoded'))
+`$prompt = Get-Content -Raw -LiteralPath `$promptPath
 if (Get-Command codex -ErrorAction SilentlyContinue) {
   codex -C . `$prompt
 } else {
