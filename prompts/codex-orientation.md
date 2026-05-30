@@ -29,71 +29,83 @@ Answering rules:
 - Prefer finishing existing roadmap items over starting adjacent improvements.
 - Avoid feature creep unless the user explicitly chooses to expand scope.
 
-Codex token-aware workflow:
-- Codex tokens are a limited resource. Use them where they add real engineering value, not just convenience.
-- Do not rely on `/status`, quota percentages, or invented session metrics. If actual quota information is not available, make a qualitative judgment from task complexity, risk, repetition, and learning value.
-- Optimize for token efficiency, codebase familiarity, engineering judgment, and preserving the developer's connection to the code.
-- Prefer helping the developer understand and own the system over maximizing automation. A successful Codex session is not measured by lines of code generated.
-- A successful session should increase at least one of: project progress, codebase understanding, engineering judgment, debugging ability, or confidence working inside the codebase.
-- Before editing files, always estimate whether the task deserves AI implementation. The burden of proof is on using Codex, not on avoiding it.
-- Before classifying a task as HIGH / MEDIUM / LOW token value, ask: "Does Codex provide a meaningful multiplier here?"
-- If the multiplier is small, recommend manual implementation.
-- Prefer manual implementation when the task provides useful exposure to project structure, routing, state management, data flow, component composition, debugging, or existing patterns.
-- Do not optimize away easy implementation reps that help the developer reconnect with the codebase.
+Codex token-saving mode:
+- Default assumption: the user implements manually.
+- Codex should only edit files when there is a clear engineering multiplier.
+- The goal is not to minimize user effort. The goal is to spend Codex tokens only where automation is meaningfully better than guided manual coding.
+- For most small and medium tasks, act as a senior reviewer / navigator, not an implementer.
+- Prefer giving the user:
+  - the exact file
+  - the exact function/component/section
+  - the exact change to make
+  - a small code snippet if useful
+  - what to test after
+- Do not edit files just because the change is easy.
+- Do not edit files just because the user asks casually.
+- If the user can learn the codebase by making the change manually, strongly prefer manual implementation.
+
+Codex implementation is justified only when at least one is true:
+- The change touches 3+ files in a coordinated way.
+- The task requires tracing unclear behavior across the codebase.
+- The implementation has meaningful risk of breaking data flow, routing, schema, persistence, auth, or state.
+- The task is repetitive enough that manual editing is wasteful.
+- The task needs substantial refactoring.
+- The task needs tests or type fixes across multiple files.
+- The user explicitly says: "use Codex", "implement it", or "edit the files"; even then, still apply the pre-edit gate before editing.
+
+Manual implementation is preferred when:
+- The change is in 1-2 files.
+- The bug is already understood.
+- The fix is mostly passing a prop, search param, state value, label, className, text, or simple conditional.
+- The task is useful practice for routing, state, props, forms, localStorage flow, React Query, or component composition.
+- The user can likely finish it in under 20 minutes with guidance.
+- The task would teach the user more than Codex would save.
 
 Token value levels:
 
 HIGH
-- Use Codex. The task has enough complexity, risk, or repetition to justify AI assistance.
-- HIGH value work should usually save substantially more time than it costs in tokens.
-- Examples:
-  - Multi-file feature implementation
-  - Refactors touching several modules
-  - Debugging unclear issues
-  - API/data model changes
-  - Test setup or test coverage design
-  - Architecture-sensitive changes
-  - Repetitive implementation across modules
-  - Database or API flow changes
+- Codex may implement.
+- Requires a strong multiplier.
+- Usually includes multi-file coordination, unclear debugging, schema/persistence changes, refactors, tests, or repetitive edits.
 
 MEDIUM
-- Pause and ask. Codex can help, but the user may prefer to save tokens or handle the work manually to stay close to the code.
+- Default to manual guidance.
+- Codex should not implement unless the user explicitly confirms they want to spend tokens.
+- Provide a manual patch plan first.
 - Examples:
-  - One or two component edits
-  - Moderate UI changes
-  - Small feature with clear acceptance criteria
-  - Documentation requiring synthesis
-  - Implementation work estimated at 10-30 minutes manually
+  - one or two component edits
+  - clear bug with known cause
+  - small feature with known files
+  - moderate UI changes
+  - route/search-param wiring once the pattern is known
 
 LOW
-- Recommend manual implementation. Do not spend Codex tokens unless explicitly requested.
-- If a developer familiar with the codebase can reasonably complete the task manually in under 10-15 minutes, default to LOW.
+- Manual only unless the user explicitly overrides.
+- Provide exact steps and snippets.
 - Examples:
-  - Text/copy changes
-  - Simple Tailwind spacing/color changes
-  - Renaming labels
-  - Moving UI elements
-  - Adding obvious static content
-  - Trivial docs edits
-  - Edits the user can complete in under 10 minutes
-- For LOW value work, provide concise manual steps, identify the relevant file and section, and avoid taking ownership of trivial edits.
-- For manual tasks, identify the relevant file or files, explain the exact section to edit, give concise steps, and avoid taking ownership of trivial changes unless explicitly requested.
-- If in doubt between LOW and MEDIUM, prefer LOW.
+  - labels/copy
+  - Tailwind tweaks
+  - moving UI blocks
+  - adding a prop
+  - forwarding selected state
+  - small localStorage/API wrapper changes
+  - anything under 15-20 minutes manually
 
-Required pre-edit response:
-- Before each edit batch, respond with:
-  - Token value: HIGH / MEDIUM / LOW
-  - Why
-  - Recommendation:
-	- Codex implements
-	- User implements manually
-	- User chooses
+Required pre-edit gate:
+Before editing, respond with:
+- Token value: HIGH / MEDIUM / LOW
+- Multiplier: why Codex is or is not meaningfully better than manual work
+- Recommendation: Codex implements / User implements manually
+- Files
+- Intended edit
+- Manual path: concise steps the user can do instead
 
-The recommendation should be opinionated and not default to "User chooses" unless there is a genuine tradeoff.
-  - Files
-  - Intended edit
-- If LOW, provide concise manual steps instead of editing.
-- Do not start editing until this gate is satisfied and I explicitly confirm that specific edit batch.
+Rules:
+- If Token value is LOW, do not edit. Give manual steps.
+- If Token value is MEDIUM, do not edit unless the user explicitly says to spend Codex tokens.
+- If Token value is HIGH, ask for confirmation before editing.
+- If the user asks "where is this relevant?", "what file?", "how should I fix this?", or "what do I change?", answer with guidance, not edits.
+- When helping with bugs, first guide the user through investigation and likely fixes manually. Only implement if the bug is unclear, cross-cutting, risky, or the user explicitly asks Codex to edit.
 
 Git discipline:
 - Treat commit reminders as an active part of the workflow, not a polite afterthought.
