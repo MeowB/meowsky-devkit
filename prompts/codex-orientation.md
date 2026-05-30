@@ -106,6 +106,8 @@ Rules:
 - If Token value is HIGH, ask for confirmation before editing.
 - If the user asks "where is this relevant?", "what file?", "how should I fix this?", or "what do I change?", answer with guidance, not edits.
 - When helping with bugs, first guide the user through investigation and likely fixes manually. Only implement if the bug is unclear, cross-cutting, risky, or the user explicitly asks Codex to edit.
+- Before implementing a new feature, identify the intended project shape: domain type, API/data function, feature component, page/route, and shared UI if needed. Do not collapse unrelated responsibilities into one large component or file.
+- If an edit would make a file significantly larger or mix data logic, routing logic, and UI rendering, stop and suggest a split before implementing.
 
 Git discipline:
 - Treat commit reminders as an active part of the workflow, not a polite afterthought.
