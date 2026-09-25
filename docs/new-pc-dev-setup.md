@@ -615,6 +615,8 @@ For a shorter overview:
 ptree 2
 ```
 
+The installed PowerShell profile also supports `meowsky ptree` and `meowsky ptree 2`.
+
 ## Meowsky Workspace Shortcut
 
 The `meowsky` command is a folder-level workflow shortcut, not a project-specific shortcut. It replaces the earlier `dev` command name so the workflow is safe and unambiguous on both Windows and Linux. On Linux, `/dev` is a real system directory for device files, so avoid using `/dev` as a project folder.
@@ -917,8 +919,10 @@ Usage:
 
 ```powershell
 meowsky          # go to $env:WORK_HOME, F:\dev, or $HOME\work
+meowsky -h       # show every command and option in the installed PowerShell profile
 meowsky my-app   # go to .\my-app, or to my-app inside the work root
 meowsky ./       # open a fullscreen Windows Terminal layout
+meowsky ptree 5  # print five levels of the current directory tree
 meowsky md .\README.md
 meowsky pdf .\docs\spec.pdf
 ```

@@ -1,8 +1,67 @@
 ﻿function meowsky {
   param(
     [string]$Action,
-    [string]$Target
+    [string]$Target,
+    [Alias('h', 'help')]
+    [switch]$ShowHelp
   )
+
+  function Show-MeowskyHelp {
+    @'
+NAME
+    meowsky - navigate projects and start the Meowsky workspace
+
+SYNOPSIS
+    meowsky [-h]
+    meowsky [help | --help]
+    meowsky [<directory> | . | ./]
+    meowsky codex [<directory>]
+    meowsky color [<color>]
+    meowsky matrix
+    meowsky ptree [<level>]
+    meowsky md <file.md>
+    meowsky markdown <file.md>
+    meowsky pdf <file.pdf>
+
+COMMANDS
+    meowsky                 Change to the work root.
+    meowsky <directory>     Change to a directory, checking the current location
+                            first and then the work root.
+    meowsky . or ./         Open a fullscreen Windows Terminal layout in the
+                            current directory with Codex, tree, and status panes.
+    meowsky codex [path]    Start Codex with the Meowsky orientation prompt in
+                            the given directory; default is the current one.
+    meowsky color           List available colors and the current project color.
+    meowsky color <color>   Set the current project's terminal color.
+    meowsky color reset     Remove the project's saved color and use the default.
+    meowsky color default   Same as reset.
+    meowsky matrix          Run the animated matrix display; press Ctrl+C to stop.
+    meowsky ptree [level]   Print the current directory tree to the given depth;
+                            default is 3 levels. Level must be a positive integer.
+    meowsky md <file>       Render Markdown to temporary HTML with Pandoc and
+                            open it in the default browser.
+    meowsky markdown <file> Same as md.
+    meowsky pdf <file>      Open a PDF in the default viewer.
+
+OPTIONS
+    -h, -Help               Show this help page and exit.
+    help, --help            Alternate help commands.
+
+PATHS AND COLORS
+    The work root is WORK_HOME if set, otherwise F:\dev if it exists,
+    otherwise $HOME\work. File and Codex paths are checked as typed first,
+    then under the work root. Run 'meowsky color' to list color names.
+
+SEE ALSO
+    ptree [level]           Standalone form of 'meowsky ptree [level]'.
+    dev                     Compatibility alias for meowsky, if available.
+'@
+  }
+
+  if ($ShowHelp -or $Action -in @('help', '--help')) {
+    Show-MeowskyHelp
+    return
+  }
 
   function Get-WorkRoot {
     if ($env:WORK_HOME) {
@@ -369,6 +428,19 @@ At launch, inspect README.md and any docs you find before giving the orientation
 
     if ($normalizedAction -eq 'matrix') {
       Start-MeowskyMatrix
+      return
+    }
+
+    if ($normalizedAction -eq 'ptree') {
+      if ($Target) {
+        $level = 0
+        if (-not [int]::TryParse($Target, [ref]$level) -or $level -lt 1) {
+          throw 'Usage: meowsky ptree [positive-level]'
+        }
+        ptree $level
+      } else {
+        ptree
+      }
       return
     }
 
@@ -993,7 +1065,7 @@ $meowskyCompleter = {
     }
   }
 
-  $builtIns = @('.', './', 'codex', 'color', 'matrix', 'md', 'markdown', 'pdf')
+  $builtIns = @('.', './', 'help', 'codex', 'color', 'matrix', 'ptree', 'md', 'markdown', 'pdf')
   foreach ($item in $builtIns) {
     if ($item -like "$wordToComplete*") {
       [System.Management.Automation.CompletionResult]::new($item, $item, 'ParameterValue', $item)

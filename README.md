@@ -79,6 +79,8 @@ The full Linux workflow is documented in [docs/new-pc-dev-setup.md](docs/new-pc-
 
 ## Daily Flow
 
+Run `meowsky -h` for the complete command reference, including actions and arguments.
+
 ```powershell
 meowsky
 ```
@@ -98,11 +100,12 @@ meowsky codex my-app
 meowsky codex ./
 ```
 
-Use the editor helpers:
+Use the preview and tree helpers:
 
 ```powershell
 meowsky md .\README.md
 meowsky pdf .\docs\spec.pdf
+meowsky ptree 5
 ```
 
 When `meowsky ./` runs in any folder, it opens a fullscreen Windows Terminal layout with:
@@ -111,6 +114,25 @@ When `meowsky ./` runs in any folder, it opens a fullscreen Windows Terminal lay
 - a shell at the project root
 - a tree view pane
 - a compact status pane
+
+## PowerShell Command Reference
+
+| Command | What it does |
+| --- | --- |
+| `meowsky` | Change to the work root. |
+| `meowsky <directory>` | Change to a directory, checking the current location and then the work root. |
+| `meowsky .` or `meowsky ./` | Open the fullscreen Windows Terminal layout in the current directory. |
+| `meowsky codex [directory]` | Start Codex with the Meowsky orientation prompt; defaults to the current directory. |
+| `meowsky color` | Show the current project color and all available colors. |
+| `meowsky color <color>` | Save and apply a terminal color for the current project. |
+| `meowsky color reset` or `meowsky color default` | Remove the saved project color and restore the default. |
+| `meowsky matrix` | Run the animated matrix display; stop it with `Ctrl+C`. |
+| `meowsky ptree [level]` | Print the current directory tree; defaults to 3 levels and accepts a positive integer such as `15`. |
+| `meowsky md <file.md>` or `meowsky markdown <file.md>` | Render Markdown with Pandoc and open the HTML preview. |
+| `meowsky pdf <file.pdf>` | Open a PDF in the default viewer. |
+| `meowsky -h`, `meowsky -Help`, `meowsky help`, or `meowsky --help` | Print the built-in command manual. |
+
+`ptree [level]` also works as a standalone command. `dev` is a compatibility alias for `meowsky` when available. The work root is `$env:WORK_HOME` if set, otherwise `F:\dev` if it exists, otherwise `$HOME\work`. Run `meowsky -h` for the terminal manual.
 
 ## Neovim Highlights
 
