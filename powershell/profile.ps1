@@ -656,6 +656,11 @@ $script:MeowskyAnsiColorMap = @{
 
 function Resolve-MeowskyCodexCommand {
   if ($IsWindows -or $env:OS -eq 'Windows_NT') {
+    $ps1Shim = (Get-Command codex.ps1 -CommandType ExternalScript -ErrorAction SilentlyContinue | Select-Object -First 1).Source
+    if ($ps1Shim) {
+      return $ps1Shim
+    }
+
     $cmdShim = (Get-Command codex.cmd -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1).Source
     if ($cmdShim) {
       return $cmdShim
