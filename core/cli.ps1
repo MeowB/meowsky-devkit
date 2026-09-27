@@ -17,8 +17,8 @@ function meowsky {
     }
     return
   }
-  # Read-only features must not create the work root as a dispatch side effect.
-  $workRoot = if (-not ($feature -and $feature.ReadOnly)) { Get-WorkRoot }
+  # Features independent of project navigation must not create the work root.
+  $workRoot = if (-not ($feature -and $feature.SkipWorkRoot)) { Get-WorkRoot }
   if ($feature) {
     if ($feature.AcceptsArguments) {
       & $feature.Handler -Target $Target -WorkRoot $workRoot -Arguments $args

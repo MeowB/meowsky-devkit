@@ -41,8 +41,8 @@ try {
   }
   . (Join-Path $repo 'powershell/profile.ps1')
   Assert-Equal $script:MeowskyCommands.Count 10 'Registered commands and aliases'
-  Assert-Equal ($script:MeowskyCommands['identity'].ReadOnly) $true 'Identity read-only dispatch'
-  Assert-Equal (@($script:MeowskyCommands.Values | Where-Object { $_.ReadOnly }).Count) 1 'Other features retain work-root behavior'
+  Assert-Equal ($script:MeowskyCommands['identity'].SkipWorkRoot) $true 'Identity skips work-root dispatch'
+  Assert-Equal (@($script:MeowskyCommands.Values | Where-Object { $_.SkipWorkRoot }).Count) 1 'Other features retain work-root behavior'
   Assert-Equal (@($script:MeowskyCommands.Values | Where-Object { $_.AcceptsArguments }).Count) 1 'Only Identity opts into extra arguments'
   foreach ($command in @('codex', 'color', 'identity', 'matrix', 'ptree', 'md', 'markdown', 'pdf', '.', './')) {
     $manifest = $script:MeowskyCommands[$command]

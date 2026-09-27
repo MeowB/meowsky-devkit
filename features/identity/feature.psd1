@@ -6,6 +6,6 @@
     Handler = 'Invoke-MeowskyIdentityFeature'
     Help = 'help.txt'
     Description = 'Explore semantic development environment identities'
-    ReadOnly = $true
+    SkipWorkRoot = $true
     AcceptsArguments = $true
 }

@@ -9,6 +9,7 @@ SYNOPSIS
     meowsky color [<color>]
     meowsky identity [list | --help]
     meowsky identity apply <id> --dry-run
+    meowsky identity apply <id> --target windows [--dry-run]
     meowsky matrix
     meowsky ptree [<level>]
     meowsky md <file.md>
@@ -31,6 +32,7 @@ COMMANDS
     meowsky identity list   Discover available identity theme definitions.
     meowsky identity --help Show Identity help; no settings are applied.
     meowsky identity apply <id> --dry-run  Validate and preview an identity plan.
+    meowsky identity apply <id> --target windows  Install a contrast theme; activate manually.
     meowsky matrix          Run the animated matrix display; press Ctrl+C to stop.
     meowsky ptree [level]   Print the current directory tree to the given depth;
                             default is 3 levels. Level must be a positive integer.

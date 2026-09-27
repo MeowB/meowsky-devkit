@@ -34,7 +34,9 @@ function Get-MeowskyIdentityTargets {
 }
 
 function New-MeowskyIdentityPlan {
-  param([string]$Id)
+  param([string]$Id, [string]$Target, [bool]$DryRun = $true)
+
+  if ($Target -and $Target -cne 'windows') { throw 'Only the windows target is implemented.' }
 
   $path = Resolve-MeowskyIdentityTheme -Id $Id
   $theme = Read-MeowskyIdentityTheme -Path $path
@@ -42,7 +44,9 @@ function New-MeowskyIdentityPlan {
     Identity = $theme
     ThemeFile = $path
     Targets = @(Get-MeowskyIdentityTargets)
-    DryRun = $true
+    DryRun = $DryRun
+    SelectedTarget = $Target
+    Windows = Get-MeowskyWindowsTheme -Theme $theme
   }
 }
 
@@ -52,7 +56,8 @@ function Show-MeowskyIdentityPlan {
   $theme = $Plan.Identity
   "Identity dry-run: $($theme.id) ($($theme.name))"
   "Theme file: $($Plan.ThemeFile)"
-  'Targets (detection only; no adapters implemented):'
+  if ($Plan.SelectedTarget) { "Requested target: $($Plan.SelectedTarget)" }
+  'Targets (only the Windows contrast theme adapter is implemented):'
   foreach ($target in $Plan.Targets) {
     if ($target.Available) { "  $($target.Name): detected ($($target.Evidence))" }
     else { "  $($target.Name): not detected; skipped" }
@@ -61,5 +66,14 @@ function Show-MeowskyIdentityPlan {
   "Syntax: keyword $($theme.syntax.keyword), function $($theme.syntax.function), string $($theme.syntax.string), comment $($theme.syntax.comment)"
   "Status colors: warning $($theme.ui.warning), error $($theme.ui.error)"
   "Cursor preference: $($theme.preferences.cursor.style)"
+  "Windows adapter would generate: $($Plan.Windows.Path)"
+  'Windows contrast colors (semantic role -> system color -> RGB):'
+  foreach ($color in $Plan.Windows.Colors) { "  $($color.Role) -> $($color.Key) = $($color.Rgb) ($($color.Hex))" }
+  if (-not ($Plan.Targets | Where-Object { $_.Name -eq 'Windows' -and $_.Available })) {
+    'Windows is not detected; installation is unavailable on this machine.'
+  }
+  'Installation would create/update only the owned Meowsky theme; identical files are left untouched.'
+  "Manual activation after installation: $($Plan.Windows.ManualStep)"
+  'Syntax colors and the block/bar/underline cursor preference are not mapped by this Windows adapter.'
   'Dry-run complete. No changes were made. No settings or active identity were saved.'
 }

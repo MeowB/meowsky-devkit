@@ -142,6 +142,7 @@ When `meowsky ./` runs in any folder, it opens a fullscreen Windows Terminal lay
 | `meowsky identity list` | Discover available semantic identity themes. |
 | `meowsky identity --help` | Show Identity help. |
 | `meowsky identity apply <id> --dry-run` | Validate a theme and preview targets and palette without changing settings. |
+| `meowsky identity apply <id> --target windows` | Install a Windows contrast theme for manual activation. |
 | `meowsky color <color>` | Save and apply a terminal color for the current project. |
 | `meowsky color reset` or `meowsky color default` | Remove the saved project color and restore the default. |
 | `meowsky matrix` | Run the animated matrix display; stop it with `Ctrl+C`. |
@@ -154,7 +155,7 @@ When `meowsky ./` runs in any folder, it opens a fullscreen Windows Terminal lay
 
 ## Identity
 
-Identity defines semantic UI colors, syntax colors, and visual preferences independently of tools. Add themes under `features/identity/themes/`; see [docs/identity.md](docs/identity.md) for the model and planned integrations. Use `meowsky identity apply meo-matrix --dry-run` to validate a theme and preview an application plan. No settings are changed.
+Identity defines semantic UI colors, syntax colors, and visual preferences independently of tools. Add themes under `features/identity/themes/`; see [docs/identity.md](docs/identity.md) for the model and planned integrations. Use `meowsky identity apply meo-matrix --dry-run` to preview without writes, or `meowsky identity apply meo-matrix --target windows` to install its Windows contrast theme. Activation is manual.
 
 ## Neovim Highlights
 

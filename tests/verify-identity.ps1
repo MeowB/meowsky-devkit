@@ -43,7 +43,7 @@ try {
   Assert-Equal ((meowsky identity -Help).TrimEnd()) $help 'Root named help'
   $message = ''
   try { meowsky identity apply } catch { $message = $_.Exception.Message }
-  Assert-Equal ($message -like 'Only dry-run planning is supported.*') $true 'Apply without arguments rejected'
+  Assert-Equal ($message -like 'Specify --dry-run or --target windows.*') $true 'Apply without arguments rejected'
   $planOutput = (meowsky identity apply meo-matrix --dry-run) -join "`n"
   Assert-Equal ($planOutput -match 'Identity dry-run: meo-matrix \(Meo Matrix\)') $true 'Selected identity in plan'
   Assert-Equal ($planOutput.Contains((Join-Path $repo 'features/identity/themes/meo-matrix.json'))) $true 'Resolved theme file in plan'
@@ -53,9 +53,19 @@ try {
   Assert-Equal (Test-Path -LiteralPath $env:WORK_HOME) $false 'Dry-run does not create absent work root'
   Assert-Error { meowsky identity apply missing-identity --dry-run } "Identity 'missing-identity' was not found.*"
   Assert-Error { meowsky identity apply ../meo-matrix --dry-run } '*lowercase slug*'
-  Assert-Error { meowsky identity apply meo-matrix } 'Only dry-run planning is supported.*'
-  Assert-Error { meowsky identity apply meo-matrix --force } 'Only dry-run planning is supported.*'
-  Assert-Error { meowsky identity apply meo-matrix --dry-run extra } 'Only dry-run planning is supported.*'
+  Assert-Error { meowsky identity apply meo-matrix } 'Specify --dry-run or --target windows.*'
+  Assert-Error { meowsky identity apply meo-matrix --force } "Unknown argument '--force'.*"
+  Assert-Error { meowsky identity apply meo-matrix --dry-run extra } "Unknown argument 'extra'.*"
+  Assert-Error { meowsky identity apply meo-matrix --target terminal --dry-run } 'Only --target windows is supported*'
+  Assert-Error { meowsky identity apply meo-matrix --target } 'Only --target windows is supported*'
+  Assert-Error { meowsky identity apply meo-matrix --target windows --target windows } 'Only --target windows is supported*'
+  Assert-Error { meowsky identity apply meo-matrix --dry-run --dry-run } 'Duplicate --dry-run*'
+  $windowsPreview = (meowsky identity apply meo-matrix --target windows --dry-run) -join "`n"
+  Assert-Equal ($windowsPreview.Contains('meowsky-meo-matrix.theme')) $true 'Dry-run shows destination'
+  Assert-Equal ($windowsPreview.Contains('ui.background -> Window = 5 8 6')) $true 'Dry-run shows Windows mapping'
+  Assert-Equal ($windowsPreview.Contains('Settings > Accessibility > Contrast themes > Meo Matrix > Apply')) $true 'Dry-run shows manual activation'
+  Assert-Equal ($windowsPreview.Contains('No changes were made.')) $true 'Targeted dry-run remains read-only'
+  Assert-Equal ((meowsky identity apply meo-matrix --dry-run --target windows) -join "`n") $windowsPreview 'Flag order is flexible'
   Assert-Error { meowsky identity list extra } 'Usage: meowsky identity*'
   Assert-Error { meowsky identity unsupported } 'Usage: meowsky identity*'
   Assert-Equal (Test-Path -LiteralPath $env:LOCALAPPDATA) $false 'Identity commands do not create config'
@@ -182,6 +192,65 @@ try {
   }
   Assert-Equal (Test-Path -LiteralPath $env:WORK_HOME) $false 'All Identity cases leave absent work root absent'
   Assert-Equal (Test-Path -LiteralPath $env:LOCALAPPDATA) $false 'All Identity cases leave configuration absent'
+
+  # The adapter uses the redirected LOCALAPPDATA fixture, never the actual user's themes.
+  $definition = Get-MeowskyWindowsTheme -Theme $theme
+  $expectedMapping = @{
+    Window = '5 8 6'; WindowText = '199 249 204'; HotTrackingColor = '57 255 20'
+    GrayText = '102 128 106'; HilightText = '199 249 204'; Hilight = '32 77 39'
+    ButtonText = '199 249 204'; ButtonFace = '11 17 13'
+  }
+  foreach ($key in $expectedMapping.Keys) {
+    Assert-Equal (($definition.Colors | Where-Object { $_.Key -eq $key }).Rgb) $expectedMapping[$key] "Windows mapping $key"
+  }
+  foreach ($section in @('[Theme]', '[Control Panel\Colors]', '[Control Panel\Desktop]', '[VisualStyles]', '[MasterThemeSelector]', 'DisplayName=Meo Matrix', 'HighContrast=1', 'MTSM=RJSPBS')) {
+    Assert-Equal ($definition.Content.Contains($section)) $true "Theme contains $section"
+  }
+  $other = $validSecond | ConvertFrom-Json
+  $other.ui.background = '#112233'
+  Assert-Equal (((Get-MeowskyWindowsTheme -Theme $other).Colors | Where-Object { $_.Key -eq 'Window' }).Rgb) '17 34 51' 'Renderer uses each identity palette'
+  $other.name = "Bad`n[Injected]"
+  Assert-Error { Get-MeowskyWindowsTheme -Theme $other } 'Windows theme name must be plain text*'
+
+  if ([Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT) {
+    $installOutput = (meowsky identity apply meo-matrix --target windows) -join "`n"
+    Assert-Equal ($installOutput.Contains("Installed Windows contrast theme 'Meo Matrix'")) $true 'CLI installs selected theme'
+    Assert-Equal ($installOutput.Contains('Automatic activation is not implemented.')) $true 'Installation does not activate'
+    Assert-Equal ([IO.File]::ReadAllText($definition.Path)) $definition.Content 'Installed content matches preview'
+    $bytes = [IO.File]::ReadAllBytes($definition.Path)
+    Assert-Equal (($bytes[0..1] -join ',')) '255,254' 'Theme uses UTF-16LE with BOM'
+    $timestamp = (Get-Item -LiteralPath $definition.Path).LastWriteTimeUtc.Ticks
+    Assert-Equal (Install-MeowskyWindowsTheme -Theme $theme).Status 'Unchanged' 'Repeated installation is idempotent'
+    Assert-Equal (Get-Item -LiteralPath $definition.Path).LastWriteTimeUtc.Ticks $timestamp 'Idempotent installation preserves timestamp'
+    $changed = $theme | ConvertTo-Json -Depth 8 | ConvertFrom-Json
+    $changed.ui.accent = '#112233'
+    Assert-Equal (Install-MeowskyWindowsTheme -Theme $changed).Status 'Updated' 'Owned theme can be updated'
+    Assert-Equal ([IO.File]::ReadAllText($definition.Path).Contains('HotTrackingColor=17 34 51')) $true 'Update uses changed semantic value'
+    $locked = [IO.File]::Open($definition.Path, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::None)
+    try {
+      Assert-Error { Install-MeowskyWindowsTheme -Theme $theme } '*Could not install Windows theme*'
+    } finally { $locked.Dispose() }
+    Assert-Equal ([IO.File]::ReadAllText($definition.Path).Contains('HotTrackingColor=17 34 51')) $true 'Failed installation preserves previous theme'
+    $other = $validSecond | ConvertFrom-Json
+    $otherDefinition = Get-MeowskyWindowsTheme -Theme $other
+    [IO.File]::WriteAllText($otherDefinition.Path, 'Unrelated user theme')
+    Assert-Error { Install-MeowskyWindowsTheme -Theme $other } '*unrelated theme*not be overwritten*'
+    Assert-Equal ([IO.File]::ReadAllText($otherDefinition.Path)) 'Unrelated user theme' 'Filename collision leaves unrelated file intact'
+    $blocked = $theme | ConvertTo-Json -Depth 8 | ConvertFrom-Json
+    $blocked.id = 'directory-collision'
+    $blockedDefinition = Get-MeowskyWindowsTheme -Theme $blocked
+    New-Item -ItemType Directory -Path $blockedDefinition.Path | Out-Null
+    Assert-Error { Install-MeowskyWindowsTheme -Theme $blocked } '*destination is a directory*'
+    Assert-Equal (Test-Path -LiteralPath $blockedDefinition.Path -PathType Container) $true 'Directory collision preserved'
+    Assert-Equal (@(Get-ChildItem -LiteralPath (Split-Path $definition.Path -Parent) -Filter '*.tmp' -Force).Count) 0 'No staging files remain'
+    Assert-Equal (Test-Path -LiteralPath $env:WORK_HOME) $false 'Installation does not create work root'
+    $before = [IO.File]::ReadAllText($definition.Path)
+    $null = meowsky identity apply meo-matrix --target windows --dry-run
+    Assert-Equal ([IO.File]::ReadAllText($definition.Path)) $before 'Dry-run does not rewrite an existing theme'
+  } else {
+    Assert-Error { Install-MeowskyWindowsTheme -Theme $theme } '*requires Windows*'
+    Assert-Equal (Test-Path -LiteralPath $env:LOCALAPPDATA) $false 'Non-Windows installation leaves config absent'
+  }
   Write-Host "PASS: $checks Identity checks."
 } finally {
   Set-Location $originalLocation
