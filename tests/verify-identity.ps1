@@ -43,7 +43,7 @@ try {
   Assert-Equal ((meowsky identity -Help).TrimEnd()) $help 'Root named help'
   $message = ''
   try { meowsky identity apply } catch { $message = $_.Exception.Message }
-  Assert-Equal ($message -like 'Specify --dry-run or --target windows.*') $true 'Apply without arguments rejected'
+  Assert-Equal ($message -like 'Specify --dry-run or --target windows|terminal.*') $true 'Apply without arguments rejected'
   $planOutput = (meowsky identity apply meo-matrix --dry-run) -join "`n"
   Assert-Equal ($planOutput -match 'Identity dry-run: meo-matrix \(Meo Matrix\)') $true 'Selected identity in plan'
   Assert-Equal ($planOutput.Contains((Join-Path $repo 'features/identity/themes/meo-matrix.json'))) $true 'Resolved theme file in plan'
@@ -53,12 +53,12 @@ try {
   Assert-Equal (Test-Path -LiteralPath $env:WORK_HOME) $false 'Dry-run does not create absent work root'
   Assert-Error { meowsky identity apply missing-identity --dry-run } "Identity 'missing-identity' was not found.*"
   Assert-Error { meowsky identity apply ../meo-matrix --dry-run } '*lowercase slug*'
-  Assert-Error { meowsky identity apply meo-matrix } 'Specify --dry-run or --target windows.*'
+  Assert-Error { meowsky identity apply meo-matrix } 'Specify --dry-run or --target windows|terminal.*'
   Assert-Error { meowsky identity apply meo-matrix --force } "Unknown argument '--force'.*"
   Assert-Error { meowsky identity apply meo-matrix --dry-run extra } "Unknown argument 'extra'.*"
-  Assert-Error { meowsky identity apply meo-matrix --target terminal --dry-run } 'Only --target windows is supported*'
-  Assert-Error { meowsky identity apply meo-matrix --target } 'Only --target windows is supported*'
-  Assert-Error { meowsky identity apply meo-matrix --target windows --target windows } 'Only --target windows is supported*'
+  Assert-Error { meowsky identity apply meo-matrix --target vscode --dry-run } 'Only --target windows or terminal is supported*'
+  Assert-Error { meowsky identity apply meo-matrix --target } 'Only --target windows or terminal is supported*'
+  Assert-Error { meowsky identity apply meo-matrix --target windows --target windows } 'Only --target windows or terminal is supported*'
   Assert-Error { meowsky identity apply meo-matrix --dry-run --dry-run } 'Duplicate --dry-run*'
   $windowsPreview = (meowsky identity apply meo-matrix --target windows --dry-run) -join "`n"
   Assert-Equal ($windowsPreview.Contains('meowsky-meo-matrix.theme')) $true 'Dry-run shows destination'
@@ -89,6 +89,7 @@ try {
     error = '#FF5C57'; warning = '#FFD866'
   }
   foreach ($role in $expectedUi.Keys) { Assert-Equal $theme.ui.$role $expectedUi[$role] "UI $role" }
+  Assert-Equal $theme.ui.terminalText '#39FF14' 'Terminal text semantic role'
   foreach ($role in $expectedSyntax.Keys) { Assert-Equal $theme.syntax.$role $expectedSyntax[$role] "Syntax $role" }
 
   # Redirect discovery only inside this process; repository themes remain untouched.
@@ -137,6 +138,16 @@ try {
   $second.name = ''
   $second | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $secondPath
   Assert-InvalidTheme "Invalid identity theme 'meo-evil.json': *metadata: name*"
+  foreach ($value in @('green', $null, "#39FF14`n")) {
+    $second = $validSecond | ConvertFrom-Json
+    $second.ui.terminalText = $value
+    $second | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $secondPath
+    Assert-InvalidTheme "Invalid identity theme 'meo-evil.json': *ui.terminalText*"
+  }
+  $second = $validSecond | ConvertFrom-Json
+  $second.ui.PSObject.Properties.Remove('terminalText')
+  $second | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $secondPath
+  Assert-Equal (@(Get-MeowskyIdentities).Count) 2 'Older themes without terminalText remain valid'
   foreach ($value in @('#123', '#12345678', '#GG0000', '', 123456, "#050806`n", ' #050806')) {
     $second = $validSecond | ConvertFrom-Json
     $second.ui.background = $value

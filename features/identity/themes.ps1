@@ -39,6 +39,12 @@ function Assert-MeowskyIdentityTheme {
       }
     }
   }
+  # Optional surface-specific text role; older version-1 themes remain valid.
+  if ($Theme.ui.PSObject.Properties['terminalText']) {
+    if ($Theme.ui.terminalText -isnot [string] -or $Theme.ui.terminalText -notmatch '\A#[0-9a-fA-F]{6}\z') {
+      throw 'Invalid color for ui.terminalText; expected #RRGGBB.'
+    }
+  }
   if ($Theme.preferences -isnot [pscustomobject] -or $Theme.preferences.cursor -isnot [pscustomobject]) {
     throw 'Missing or invalid required preference: preferences.cursor.style.'
   }

@@ -36,7 +36,7 @@ function Get-MeowskyIdentityTargets {
 function New-MeowskyIdentityPlan {
   param([string]$Id, [string]$Target, [bool]$DryRun = $true)
 
-  if ($Target -and $Target -cne 'windows') { throw 'Only the windows target is implemented.' }
+  if ($Target -and $Target -cnotin @('windows', 'terminal')) { throw 'Only the windows and terminal targets are implemented.' }
 
   $path = Resolve-MeowskyIdentityTheme -Id $Id
   $theme = Read-MeowskyIdentityTheme -Path $path
@@ -46,7 +46,8 @@ function New-MeowskyIdentityPlan {
     Targets = @(Get-MeowskyIdentityTargets)
     DryRun = $DryRun
     SelectedTarget = $Target
-    Windows = Get-MeowskyWindowsTheme -Theme $theme
+    Windows = $(if ($Target -ne 'terminal') { Get-MeowskyWindowsTheme -Theme $theme })
+    Terminal = $(if ($Target -eq 'terminal') { New-MeowskyTerminalPlan -Theme $theme })
   }
 }
 
@@ -57,7 +58,7 @@ function Show-MeowskyIdentityPlan {
   "Identity dry-run: $($theme.id) ($($theme.name))"
   "Theme file: $($Plan.ThemeFile)"
   if ($Plan.SelectedTarget) { "Requested target: $($Plan.SelectedTarget)" }
-  'Targets (only the Windows contrast theme adapter is implemented):'
+  'Targets (Windows contrast and Windows Terminal adapters are implemented):'
   foreach ($target in $Plan.Targets) {
     if ($target.Available) { "  $($target.Name): detected ($($target.Evidence))" }
     else { "  $($target.Name): not detected; skipped" }
@@ -66,14 +67,17 @@ function Show-MeowskyIdentityPlan {
   "Syntax: keyword $($theme.syntax.keyword), function $($theme.syntax.function), string $($theme.syntax.string), comment $($theme.syntax.comment)"
   "Status colors: warning $($theme.ui.warning), error $($theme.ui.error)"
   "Cursor preference: $($theme.preferences.cursor.style)"
-  "Windows adapter would generate: $($Plan.Windows.Path)"
-  'Windows contrast colors (semantic role -> system color -> RGB):'
-  foreach ($color in $Plan.Windows.Colors) { "  $($color.Role) -> $($color.Key) = $($color.Rgb) ($($color.Hex))" }
-  if (-not ($Plan.Targets | Where-Object { $_.Name -eq 'Windows' -and $_.Available })) {
-    'Windows is not detected; installation is unavailable on this machine.'
+  if ($Plan.Windows) {
+    "Windows adapter would generate: $($Plan.Windows.Path)"
+    'Windows contrast colors (semantic role -> system color -> RGB):'
+    foreach ($color in $Plan.Windows.Colors) { "  $($color.Role) -> $($color.Key) = $($color.Rgb) ($($color.Hex))" }
+    if (-not ($Plan.Targets | Where-Object { $_.Name -eq 'Windows' -and $_.Available })) {
+      'Windows is not detected; installation is unavailable on this machine.'
+    }
+    'Installation would create/update only the owned Meowsky theme; identical files are left untouched.'
+    "Manual activation after installation: $($Plan.Windows.ManualStep)"
+    'Syntax colors and the block/bar/underline cursor preference are not mapped by this Windows adapter.'
   }
-  'Installation would create/update only the owned Meowsky theme; identical files are left untouched.'
-  "Manual activation after installation: $($Plan.Windows.ManualStep)"
-  'Syntax colors and the block/bar/underline cursor preference are not mapped by this Windows adapter.'
+  if ($Plan.Terminal) { Show-MeowskyTerminalPlan -Plan $Plan.Terminal }
   'Dry-run complete. No changes were made. No settings or active identity were saved.'
 }

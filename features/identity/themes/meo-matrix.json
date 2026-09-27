@@ -7,6 +7,7 @@
     "surface": "#0B110D",
     "surfaceRaised": "#102516",
     "text": "#C7F9CC",
+    "terminalText": "#39FF14",
     "muted": "#66806A",
     "accent": "#39FF14",
     "accentBright": "#4AFF64",

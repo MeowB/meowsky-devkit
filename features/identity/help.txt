@@ -17,6 +17,16 @@ Install a named Windows Contrast Theme in the current user's Windows Themes fold
 Only owned Meowsky files are updated; identical files are left untouched.
 Activate manually: Settings > Accessibility > Contrast themes > <theme name> > Apply.
 
-Step 3: Windows theme generation/installation only; no automatic activation.
+The Windows adapter generates/installs a theme without automatic activation.
 Syntax colors and cursor style are not applied by the Windows contrast adapter.
-Windows Terminal, VS Code, and Neovim adapters are not implemented.
+
+meowsky identity apply <id> --target terminal [--dry-run]
+Discover Windows Terminal settings, add/update the named semantic ANSI scheme,
+and set profiles.defaults.colorScheme and cursorShape. Preserve individual profiles,
+other schemes, comments, layouts, and unrelated settings. Back up original bytes first.
+--dry-run shows the actual settings path, palette, cursor, and changes without writes.
+Repeated application creates no write or new backup when settings already match.
+If multiple settings files exist, run in the desired Terminal with WT_SETTINGS_DIR
+set to its settings directory; no file is chosen arbitrarily.
+
+Step 4 implements Windows and Terminal adapters. VS Code and Neovim are not implemented.

@@ -21,7 +21,7 @@ Folder names do not create commands: tree remains `ptree`, workspace remains `.`
 | pdf | Viewer launch | paths |
 | codex | Launchers and primary/fallback prompts | paths, git, directory-tree, terminal |
 | color | Existing color command and completion | terminal |
-| identity | Semantic theme loading, validation, planning, Windows adapter, and help | feature-loader (help resource) |
+| identity | Semantic theme loading, validation, planning, Windows/Terminal adapters, and help | feature-loader (help resource) |
 | matrix | Animation | terminal |
 | workspace | Layout and status banner | feature-loader, terminal, git |
 
@@ -29,7 +29,7 @@ For a feature change, read that directory and the listed core files. Tree and Co
 
 Workspace is the composition exception: it uses Codex context/launch functions, the tree panel and matrix dispatch. It checks those features before opening a window. Workspace registers a status-refresh scriptblock with terminal core; color calls that core hook without depending on workspace directly.
 
-Identity follows the same manifest and handler contract. `identity.ps1` handles CLI syntax, `themes.ps1` resolves/loads/validates JSON definitions, and `plan.ps1` detects targets and produces a structured plan plus display output. `adapters/windows.ps1` translates semantic UI roles into a Windows Contrast Theme and installs only the dedicated owned file when requested. Its renderer is shared by previews and installation; dry-run never calls the installer. UI colors, syntax colors, and visual preferences are separate semantic groups; future identities need only another definition. See [identity.md](identity.md) for mapping, safety, and manual activation. Windows Terminal, VS Code, and Neovim adapters are not implemented.
+Identity follows the same manifest and handler contract. `identity.ps1` handles CLI syntax, `themes.ps1` resolves/loads/validates JSON definitions, and `plan.ps1` detects targets and produces a structured plan plus display output. `adapters/windows.ps1` translates semantic UI roles into a Windows Contrast Theme and installs only the dedicated owned file when requested. `adapters/terminal.ps1` translates semantic colors into ANSI roles, discovers settings, and backs up/merges Terminal settings. Its JSONC span editing lives in `terminal-settings.ps1` to preserve unrelated text and comments. Renderers are shared by previews and application; dry-run never calls a writer. UI colors, syntax colors, and visual preferences are separate semantic groups; future identities need only another definition. See [identity.md](identity.md) for mappings and safety. VS Code and Neovim adapters are not implemented.
 
 Removing an ordinary feature directory removes its registered commands on a fresh profile load. Other ordinary features continue loading. Workspace reports a missing composed feature before starting. An unregistered action may still navigate to a matching directory. Start a fresh shell after removals: old functions can remain in an already-running shell.
 
@@ -46,6 +46,7 @@ Linux has a `shell/meowsky.sh` bootstrap and `.sh` implementations beside their 
 ```powershell
 powershell -NoProfile -File tests/verify-refactor.ps1
 powershell -NoProfile -File tests/verify-identity.ps1
+powershell -NoProfile -File tests/verify-terminal.ps1
 ```
 
 ```bash
