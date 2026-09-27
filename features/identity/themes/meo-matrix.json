@@ -8,6 +8,8 @@
     "surfaceRaised": "#102516",
     "text": "#C7F9CC",
     "terminalText": "#39FF14",
+    "terminalBackground": "#000000",
+    "terminalBlack": "#182019",
     "muted": "#66806A",
     "accent": "#39FF14",
     "accentBright": "#4AFF64",
@@ -28,6 +30,13 @@
     "operator": "#91AA96",
     "error": "#FF5C57",
     "warning": "#FFD866"
+  },
+  "windows": {
+    "mode": "normal",
+    "systemTheme": "dark",
+    "appTheme": "dark",
+    "accent": "ui.accent",
+    "transparency": true
   },
   "preferences": {
     "cursor": {

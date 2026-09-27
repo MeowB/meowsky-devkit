@@ -1,7 +1,7 @@
 # Syntax definitions are independent of settings discovery and installation.
 function Get-MeowskyVSCodeSyntax {
-  param($Theme)
-  Assert-MeowskyIdentityTheme -Theme $Theme -ExpectedId $Theme.id
+  param($Theme, [switch]$Validated)
+  if (-not $Validated) { Assert-MeowskyIdentityTheme -Theme $Theme -ExpectedId $Theme.id }
   $semanticRoles = [ordered]@{
     comment = @('comment'); keyword = @('keyword'); function = @('function', 'method')
     type = @('type', 'class', 'struct', 'enum', 'interface', 'typeParameter', 'namespace')

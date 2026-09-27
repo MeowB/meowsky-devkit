@@ -28,15 +28,17 @@ function Get-MeowskyTerminalBrightColor {
 }
 
 function Get-MeowskyTerminalScheme {
-  param($Theme)
+  param($Theme, [switch]$Validated)
 
-  Assert-MeowskyIdentityTheme -Theme $Theme -ExpectedId $Theme.id
+  if (-not $Validated) { Assert-MeowskyIdentityTheme -Theme $Theme -ExpectedId $Theme.id }
   $foreground = if ($Theme.ui.PSObject.Properties['terminalText']) { $Theme.ui.terminalText } else { $Theme.ui.accent }
+  $background = if ($Theme.ui.PSObject.Properties['terminalBackground']) { $Theme.ui.terminalBackground } else { $Theme.ui.background }
+  $black = if ($Theme.ui.PSObject.Properties['terminalBlack']) { $Theme.ui.terminalBlack } else { $Theme.ui.background }
   $scheme = [ordered]@{
     name = $Theme.name
-    background = $Theme.ui.background; foreground = $foreground
+    background = $background; foreground = $foreground
     selectionBackground = $Theme.ui.selection; cursorColor = $Theme.ui.accentBright
-    black = $Theme.ui.background; red = $Theme.ui.error; green = $Theme.ui.accent
+    black = $black; red = $Theme.ui.error; green = $Theme.ui.accent
     yellow = $Theme.ui.warning
     blue = Move-MeowskyTerminalHue -Hex $Theme.syntax.constant -Degrees 60
     purple = Move-MeowskyTerminalHue -Hex $Theme.syntax.type -Degrees 160
@@ -93,9 +95,9 @@ function Resolve-MeowskyTerminalSettings {
 }
 
 function New-MeowskyTerminalPlan {
-  param($Theme)
+  param($Theme, [switch]$Validated)
 
-  $definition = Get-MeowskyTerminalScheme -Theme $Theme
+  $definition = Get-MeowskyTerminalScheme -Theme $Theme -Validated:$Validated
   $path = Resolve-MeowskyTerminalSettings
   # StreamReader detects UTF BOMs; preserve the encoding and exact original bytes for backup.
   $bytes = [IO.File]::ReadAllBytes($path)

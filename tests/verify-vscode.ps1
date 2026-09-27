@@ -35,9 +35,13 @@ try {
     'sideBar.background' = '#0B110D'; 'activityBar.background' = '#0B110D'; 'statusBar.background' = '#0B110D'
     'tab.activeBackground' = '#050806'; 'panel.background' = '#0B110D'; 'panel.border' = '#204D27'
     'input.background' = '#0B110D'; 'focusBorder' = '#39FF14'; 'list.activeSelectionBackground' = '#204D27'
-    'scrollbarSlider.background' = '#66806A66'; 'terminal.foreground' = '#39FF14'; 'terminal.background' = '#050806'
+    'scrollbarSlider.background' = '#66806A66'; 'terminal.foreground' = '#39FF14'; 'terminal.background' = '#000000'
+    'terminalCursor.background' = '#000000'; 'terminal.ansiBlack' = '#182019'
   }
   foreach ($key in $expected.Keys) { Assert-Equal $definition.Colors[$key] $expected[$key] "UI mapping $key" }
+  $ansiMerged = Edit-MeowskyVSCodeSettings '{"workbench.colorCustomizations":{"terminal.ansiBlack":"#050806","terminal.ansiRed":"#123456"}}' $definition | ConvertFrom-Json
+  Assert-Equal $ansiMerged.'workbench.colorCustomizations'.'terminal.ansiBlack' '#182019' 'Owned ANSI black is updated'
+  Assert-Equal $ansiMerged.'workbench.colorCustomizations'.'terminal.ansiRed' '#123456' 'Other ANSI overrides remain untouched'
   Assert-Equal $definition.Settings['editor.cursorStyle'] 'block' 'Editor block cursor'
   Assert-Equal $definition.Settings['terminal.integrated.cursorStyle'] 'block' 'Terminal block cursor'
   Assert-Equal $definition.Settings['window.border'] 'default' 'Native border enabled'
@@ -50,6 +54,20 @@ try {
   Assert-Equal $alternate.Colors['editor.background'] '#123456' 'Uses another identity background'
   Assert-Equal $alternate.Colors['editor.foreground'] $other.syntax.text 'Editor text uses the syntax text role'
   Assert-Equal $alternate.Colors['terminal.foreground'] '#112233' 'Uses terminal text semantic role'
+  $other.ui.terminalBackground = '#223344'; $other.ui.terminalBlack = '#334455'
+  $terminalVariant = Get-MeowskyVSCodeDefinition $other
+  Assert-Equal $terminalVariant.Colors['terminal.background'] '#223344' 'Uses dedicated terminal background'
+  Assert-Equal $terminalVariant.Colors['terminalCursor.background'] '#223344' 'Cursor glyph background matches terminal'
+  Assert-Equal $terminalVariant.Colors['terminal.ansiBlack'] '#334455' 'Uses dedicated ANSI black'
+  Assert-Equal $terminalVariant.Colors['editor.background'] '#123456' 'Terminal background leaves editor background independent'
+  $other.ui.PSObject.Properties.Remove('terminalBackground')
+  $other.ui.PSObject.Properties.Remove('terminalBlack')
+  $legacy = Get-MeowskyVSCodeDefinition $other
+  Assert-Equal $legacy.Colors['terminal.background'] '#123456' 'Legacy terminal background fallback'
+  Assert-Equal $legacy.Colors['terminalCursor.background'] '#123456' 'Legacy cursor background fallback'
+  Assert-Equal $legacy.Colors.Contains('terminal.ansiBlack') $false 'Legacy themes do not override ANSI black'
+  $legacyMerged = Edit-MeowskyVSCodeSettings '{"workbench.colorCustomizations":{"terminal.ansiBlack":"#445566"}}' $legacy | ConvertFrom-Json
+  Assert-Equal $legacyMerged.'workbench.colorCustomizations'.'terminal.ansiBlack' '#445566' 'Legacy application preserves existing ANSI black override'
   Assert-Equal $alternate.Colors['window.activeBorder'] '#102030' 'Active border uses identity selection'
   Assert-Equal $alternate.Colors['window.inactiveBorder'] '#456789' 'Inactive border uses identity muted'
   Assert-Equal $alternate.Settings['editor.cursorStyle'] 'line' 'Bar mapping'
@@ -69,6 +87,8 @@ try {
     $updated = Edit-MeowskyVSCodeSettings $text $definition
     $parsed = ConvertFrom-Json $updated
     Assert-Equal $parsed.'workbench.colorCustomizations'.'editor.background' '#050806' 'Independent parser validates edits'
+    Assert-Equal $parsed.'workbench.colorCustomizations'.'terminal.background' '#000000' 'Terminal background written'
+    Assert-Equal $parsed.'workbench.colorCustomizations'.'terminal.ansiBlack' '#182019' 'ANSI black written'
     Assert-Equal $parsed.'editor.cursorStyle' 'block' 'Cursor written'
     Assert-Equal $parsed.'window.border' 'default' 'Native border enabled during merge'
     Assert-Equal $parsed.'workbench.colorCustomizations'.'window.activeBorder' '#204D27' 'Native border color written'
@@ -137,7 +157,7 @@ try {
   $env:MEOWSKY_VSCODE_SETTINGS_PATH = $stable
   if ([Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT) {
     $output = (meowsky identity apply meo-matrix --target vscode) -join "`n"
-    Assert-Equal ($output.Contains("Updated VS Code identity 'Meo Matrix'")) $true 'CLI reaches writer'
+    Assert-Equal ($output -match 'VS Code\s+applied') $true 'CLI reaches writer'
     $backups = @(Get-ChildItem (Split-Path $stable -Parent) -Filter '*.bak')
     Assert-Equal $backups.Count 1 'One backup created'
     Assert-Equal ([Convert]::ToBase64String([IO.File]::ReadAllBytes($backups[0].FullName))) $before 'Backup contains original bytes'

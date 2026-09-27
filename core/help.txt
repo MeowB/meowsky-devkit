@@ -8,8 +8,10 @@ SYNOPSIS
     meowsky codex [<directory>]
     meowsky color [<color>]
     meowsky identity [list | --help]
+    meowsky identity apply <id>
     meowsky identity apply <id> --dry-run
     meowsky identity apply <id> --target windows [--dry-run]
+    meowsky identity apply <id> --windows-mode normal|contrast [--dry-run]
     meowsky identity apply <id> --target terminal [--dry-run]
     meowsky identity apply <id> --target vscode [--dry-run]
     meowsky matrix
@@ -33,8 +35,10 @@ COMMANDS
     meowsky identity        Describe the Identity theme system.
     meowsky identity list   Discover available identity theme definitions.
     meowsky identity --help Show Identity help; no settings are applied.
+    meowsky identity apply <id>  Apply detected Windows, Terminal, and VS Code adapters.
     meowsky identity apply <id> --dry-run  Validate and preview an identity plan.
-    meowsky identity apply <id> --target windows  Install a contrast theme; activate manually.
+    meowsky identity apply <id> --target windows  Apply configured Windows mode (Meo Matrix: normal).
+    meowsky identity apply <id> --windows-mode contrast  Install contrast theme; activate manually.
     meowsky identity apply <id> --target terminal  Merge a Terminal scheme/defaults with backup.
     meowsky identity apply <id> --target vscode  Merge VS Code UI colors/cursors with backup.
     meowsky matrix          Run the animated matrix display; press Ctrl+C to stop.

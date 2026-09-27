@@ -39,10 +39,12 @@ function Assert-MeowskyIdentityTheme {
       }
     }
   }
-  # Optional surface-specific text role; older version-1 themes remain valid.
-  if ($Theme.ui.PSObject.Properties['terminalText']) {
-    if ($Theme.ui.terminalText -isnot [string] -or $Theme.ui.terminalText -notmatch '\A#[0-9a-fA-F]{6}\z') {
-      throw 'Invalid color for ui.terminalText; expected #RRGGBB.'
+  # Optional terminal-specific roles; older version-1 themes remain valid.
+  foreach ($role in @('terminalText', 'terminalBackground', 'terminalBlack')) {
+    if ($Theme.ui.PSObject.Properties[$role]) {
+      if ($Theme.ui.$role -isnot [string] -or $Theme.ui.$role -notmatch '\A#[0-9a-fA-F]{6}\z') {
+        throw "Invalid color for ui.$role; expected #RRGGBB."
+      }
     }
   }
   if ($Theme.preferences -isnot [pscustomobject] -or $Theme.preferences.cursor -isnot [pscustomobject]) {
@@ -50,6 +52,24 @@ function Assert-MeowskyIdentityTheme {
   }
   if ($Theme.preferences.cursor.style -isnot [string] -or $Theme.preferences.cursor.style -cnotin @('block', 'bar', 'underline')) {
     throw 'Invalid preferences.cursor.style; supported values: block, bar, underline.'
+  }
+  # Optional for compatibility with existing version-1 definitions (which use contrast).
+  if ($Theme.PSObject.Properties['windows']) {
+    if ($Theme.windows -isnot [pscustomobject] -or $Theme.windows.mode -cnotin @('normal', 'contrast')) {
+      throw 'Invalid windows.mode; supported values: normal, contrast.'
+    }
+    foreach ($property in @('systemTheme', 'appTheme')) {
+      if ($Theme.windows.$property -cnotin @('dark', 'light')) { throw "Invalid windows.$property; supported values: dark, light." }
+    }
+    if ($Theme.windows.transparency -isnot [bool]) { throw 'Invalid windows.transparency; expected a JSON boolean.' }
+    if ($Theme.windows.accent -isnot [string] -or $Theme.windows.accent -cnotmatch '\Aui\.([a-zA-Z]+)\z') {
+      throw 'Invalid windows.accent; expected a semantic reference such as ui.accent.'
+    }
+    $accentRole = $Theme.windows.accent.Substring(3)
+    $accentProperty = $Theme.ui.PSObject.Properties[$accentRole]
+    if (-not $accentProperty -or $accentProperty.Name -cne $accentRole -or $accentProperty.Value -cnotmatch '\A#[0-9a-fA-F]{6}\z') {
+      throw "Invalid windows.accent reference '$($Theme.windows.accent)'; expected an existing UI color."
+    }
   }
 }
 

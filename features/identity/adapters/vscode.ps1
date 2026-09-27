@@ -1,11 +1,11 @@
 . (Join-Path $PSScriptRoot 'vscode-syntax.ps1')
 function Get-MeowskyVSCodeDefinition {
-  param($Theme)
+  param($Theme, [switch]$Validated)
 
-  Assert-MeowskyIdentityTheme -Theme $Theme -ExpectedId $Theme.id
+  if (-not $Validated) { Assert-MeowskyIdentityTheme -Theme $Theme -ExpectedId $Theme.id }
   # Each group names a semantic source and the VS Code properties owned by Identity.
   $roles = [ordered]@{
-    background = @('editor.background', 'editorCursor.background', 'tab.activeBackground', 'terminal.background')
+    background = @('editor.background', 'editorCursor.background', 'tab.activeBackground')
     surface = @('sideBar.background', 'activityBar.background', 'statusBar.background', 'statusBar.noFolderBackground', 'tab.inactiveBackground', 'editorGroupHeader.tabsBackground', 'panel.background', 'titleBar.activeBackground', 'titleBar.inactiveBackground', 'input.background', 'dropdown.background', 'dropdown.listBackground', 'editor.lineHighlightBackground', 'editorGutter.background')
     surfaceRaised = @('editorWidget.background', 'editorHoverWidget.background', 'quickInput.background', 'list.hoverBackground', 'tab.hoverBackground', 'button.secondaryBackground', 'button.secondaryHoverBackground')
     text = @('foreground', 'editor.foreground', 'sideBar.foreground', 'sideBarTitle.foreground', 'activityBar.foreground', 'statusBar.foreground', 'statusBar.noFolderForeground', 'tab.activeForeground', 'tab.hoverForeground', 'panelTitle.activeForeground', 'titleBar.activeForeground', 'input.foreground', 'dropdown.foreground', 'list.activeSelectionForeground', 'list.inactiveSelectionForeground', 'list.focusForeground', 'list.hoverForeground', 'editorWidget.foreground', 'editorHoverWidget.foreground', 'quickInput.foreground', 'button.secondaryForeground')
@@ -21,10 +21,15 @@ function Get-MeowskyVSCodeDefinition {
   foreach ($role in $roles.Keys) {
     foreach ($key in $roles[$role]) { $colors[$key] = $Theme.ui.$role }
   }
-  foreach ($key in @('button.foreground', 'badge.foreground', 'activityBarBadge.foreground', 'statusBar.debuggingForeground', 'terminalCursor.background')) {
+  foreach ($key in @('button.foreground', 'badge.foreground', 'activityBarBadge.foreground', 'statusBar.debuggingForeground')) {
     $colors[$key] = $Theme.ui.background
   }
   $colors['terminal.foreground'] = if ($Theme.ui.PSObject.Properties['terminalText']) { $Theme.ui.terminalText } else { $Theme.ui.accent }
+  $terminalBackground = if ($Theme.ui.PSObject.Properties['terminalBackground']) { $Theme.ui.terminalBackground } else { $Theme.ui.background }
+  $colors['terminal.background'] = $terminalBackground
+  $colors['terminalCursor.background'] = $terminalBackground
+  # Older themes retain their existing integrated-terminal ANSI settings.
+  if ($Theme.ui.PSObject.Properties['terminalBlack']) { $colors['terminal.ansiBlack'] = $Theme.ui.terminalBlack }
   # Transparency keeps editor annotations visible and gives scrollbars a quiet idle state.
   $colors['editor.selectionHighlightBackground'] = $Theme.ui.selection + '80'
   $colors['scrollbarSlider.background'] = $Theme.ui.muted + '66'
@@ -36,7 +41,7 @@ function Get-MeowskyVSCodeDefinition {
   $editorCursors = @{ block = 'block'; bar = 'line'; underline = 'underline' }
   [pscustomobject]@{
     Colors = $colors
-    Syntax = Get-MeowskyVSCodeSyntax -Theme $Theme
+    Syntax = Get-MeowskyVSCodeSyntax -Theme $Theme -Validated
     Settings = [ordered]@{
       'window.border' = 'default'
       'editor.semanticHighlighting.enabled' = $true
@@ -123,9 +128,9 @@ function Edit-MeowskyVSCodeSettings {
 }
 
 function New-MeowskyVSCodePlan {
-  param($Theme)
+  param($Theme, [switch]$Validated)
 
-  $definition = Get-MeowskyVSCodeDefinition -Theme $Theme
+  $definition = Get-MeowskyVSCodeDefinition -Theme $Theme -Validated:$Validated
   $path = Resolve-MeowskyVSCodeSettings
   $bytes = [IO.File]::ReadAllBytes($path)
   $stream = New-Object IO.MemoryStream(,$bytes)

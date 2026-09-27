@@ -1,7 +1,7 @@
 function Get-MeowskyWindowsTheme {
-  param($Theme)
+  param($Theme, [switch]$Validated)
 
-  Assert-MeowskyIdentityTheme -Theme $Theme -ExpectedId $Theme.id
+  if (-not $Validated) { Assert-MeowskyIdentityTheme -Theme $Theme -ExpectedId $Theme.id }
   if ($Theme.name -match '[\x00-\x1f]' -or $Theme.name.StartsWith('@')) {
     throw 'Windows theme name must be plain text without control characters or a resource reference.'
   }
@@ -50,12 +50,12 @@ function Get-MeowskyWindowsTheme {
 }
 
 function Install-MeowskyWindowsTheme {
-  param($Theme)
+  param($Theme, $Definition)
 
   if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) {
     throw 'The Windows contrast theme adapter requires Windows. Use --dry-run to inspect a plan.'
   }
-  $definition = Get-MeowskyWindowsTheme -Theme $Theme
+  $definition = if ($Definition) { $Definition } else { Get-MeowskyWindowsTheme -Theme $Theme }
   $directory = Split-Path $definition.Path -Parent
   $temporaryPath = $null
   try {

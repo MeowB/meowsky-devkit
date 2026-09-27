@@ -141,8 +141,10 @@ When `meowsky ./` runs in any folder, it opens a fullscreen Windows Terminal lay
 | `meowsky identity` | Describe the Identity system; no settings are applied. |
 | `meowsky identity list` | Discover available semantic identity themes. |
 | `meowsky identity --help` | Show Identity help. |
+| `meowsky identity apply <id>` | Apply detected Windows, Terminal, and VS Code adapters sequentially; summarize each result. |
 | `meowsky identity apply <id> --dry-run` | Validate a theme and preview targets and palette without changing settings. |
-| `meowsky identity apply <id> --target windows` | Install a Windows contrast theme for manual activation. |
+| `meowsky identity apply <id> --target windows` | Apply configured Windows personalization; Meo Matrix defaults to normal dark mode. |
+| `meowsky identity apply <id> --windows-mode contrast` | Use the existing Windows contrast theme instead; activate it manually. |
 | `meowsky identity apply <id> --target terminal` | Back up Terminal settings, merge the identity scheme, and set default scheme/cursor. |
 | `meowsky identity apply <id> --target vscode` | Back up VS Code settings, merge UI/syntax colors, and set visual preferences. |
 | `meowsky color <color>` | Save and apply a terminal color for the current project. |
@@ -157,11 +159,13 @@ When `meowsky ./` runs in any folder, it opens a fullscreen Windows Terminal lay
 
 ## Identity
 
-Identity defines semantic UI colors, syntax colors, and visual preferences independently of tools. Add themes under `features/identity/themes/`; see [docs/identity.md](docs/identity.md) for the model and planned integrations. Use `meowsky identity apply meo-matrix --dry-run` to preview without writes, or `meowsky identity apply meo-matrix --target windows` to install its Windows contrast theme. Activation is manual.
+Identity defines semantic UI colors, syntax colors, and visual preferences independently of tools. Add themes under `features/identity/themes/`; see [docs/identity.md](docs/identity.md) for the model and integrations. Use `meowsky identity apply meo-matrix --dry-run` to preview all detected targets without writes, then `meowsky identity apply meo-matrix` to apply Windows, Terminal, and VS Code in that order. Meo Matrix defaults to normal Windows rendering with dark system/apps, its semantic accent, and transparency. `--windows-mode contrast` retains the stronger contrast theme with manual activation. Terminal and VS Code remain independent of the Windows mode. Missing applications are skipped; per-target failures are reported while other targets continue. Targeted application remains available through `--target windows|terminal|vscode`.
 
 `meowsky identity apply meo-matrix --target terminal --dry-run` previews the Terminal scheme and settings changes. Remove `--dry-run` to apply with a backup. The existing Matrix animation, cat/header, layouts, commands, and individual profile overrides are preserved.
 
-Meo Matrix uses green `ui.terminalText` (`#39FF14`) for default Terminal writing and pale `ui.text` (`#C7F9CC`) for Windows windows, making the two environments visually distinct. Both roles live in the theme definition; errors remain red and warnings yellow.
+Meo Matrix uses green `ui.terminalText` (`#39FF14`) for default Terminal writing and pale `ui.text` (`#C7F9CC`) for contrast-mode Windows text, making the two environments visually distinct. Normal Windows mode retains Windows-managed text colors. Both semantic roles live in the theme definition; errors remain red and warnings yellow.
+
+Terminal backgrounds use `ui.terminalBackground` (`#000000`); ANSI black uses green-charcoal `ui.terminalBlack` (`#182019`) in both Windows Terminal and VS Code's integrated terminal. Windows/editor backgrounds remain `ui.background` (`#050806`). Other integrated-terminal ANSI colors retain their existing settings.
 
 `meowsky identity apply meo-matrix --target vscode --dry-run` previews VS Code UI and syntax overrides. Remove `--dry-run` to apply with a backup. Editor text uses `syntax.text`; UI text uses `ui.text`; integrated-terminal text uses `ui.terminalText`. Semantic and TextMate colors come from the JSON syntax palette. The selected base theme, unrelated token rules/styles, fonts, extensions, keybindings, and other settings are preserved. See [Identity](docs/identity.md) for mappings, settings discovery, and the 14 language samples under `docs/samples/`.
 

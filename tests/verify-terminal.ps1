@@ -30,11 +30,11 @@ try {
   $definition = Get-MeowskyTerminalScheme $theme
   Assert-Equal $definition.CursorShape 'filledBox' 'Block cursor mapping'
   $expected = @{
-    black = '#050806'; red = '#FF5C57'; green = '#39FF14'; yellow = '#FFD866'
+    black = '#182019'; red = '#FF5C57'; green = '#39FF14'; yellow = '#FFD866'
     blue = '#7295E5'; purple = '#C765D9'; cyan = '#72E5C2'; white = '#C7F9CC'
     brightBlack = '#66806A'; brightRed = '#FF8581'; brightGreen = '#4AFF64'; brightYellow = '#FFE28C'
     brightBlue = '#95B0EC'; brightPurple = '#D58CE2'; brightCyan = '#95ECD1'; brightWhite = '#D5FAD9'
-    background = '#050806'; foreground = '#39FF14'; selectionBackground = '#204D27'; cursorColor = '#4AFF64'
+    background = '#000000'; foreground = '#39FF14'; selectionBackground = '#204D27'; cursorColor = '#4AFF64'
   }
   foreach ($name in $expected.Keys) { Assert-Equal $definition.Scheme[$name] $expected[$name] "Scheme $name" }
   Assert-Equal (@($definition.Scheme.Values | Select-Object -Unique).Count -gt 16) $true 'Palette retains distinct categories'
@@ -53,6 +53,14 @@ try {
   Assert-Equal (((Get-MeowskyWindowsTheme $other).Colors | Where-Object { $_.Key -eq 'WindowText' }).Hex) '#C7F9CC' 'Windows text remains independent of terminalText'
   $other.ui.PSObject.Properties.Remove('terminalText')
   Assert-Equal (Get-MeowskyTerminalScheme $other).Scheme.foreground '#ABCDEF' 'Older themes fall back to accent for Terminal foreground'
+  $other.ui.terminalBackground = '#112233'; $other.ui.terminalBlack = '#223344'
+  Assert-Equal (Get-MeowskyTerminalScheme $other).Scheme.background '#112233' 'Terminal background uses dedicated role'
+  Assert-Equal (Get-MeowskyTerminalScheme $other).Scheme.black '#223344' 'ANSI black uses dedicated role'
+  Assert-Equal (((Get-MeowskyWindowsTheme $other).Colors | Where-Object { $_.Key -eq 'Window' }).Hex) $other.ui.background 'Windows contrast background remains independent'
+  $other.ui.PSObject.Properties.Remove('terminalBackground')
+  $other.ui.PSObject.Properties.Remove('terminalBlack')
+  Assert-Equal (Get-MeowskyTerminalScheme $other).Scheme.background $other.ui.background 'Legacy terminal background fallback'
+  Assert-Equal (Get-MeowskyTerminalScheme $other).Scheme.black $other.ui.background 'Legacy ANSI black fallback'
 
   # Strict JSON can be checked with an independent parser.
   foreach ($text in @('{}', '{"schemes":[]}', '{"profiles":{}}', '{"profiles":{"defaults":{}}}', '{"schemes":[{"name":"Other","red":"#123456"}],"profiles":{"defaults":{"font":{"size":12}},"list":[]}}')) {
@@ -119,7 +127,7 @@ try {
 
   if ([Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT) {
     $output = (meowsky identity apply meo-matrix --target terminal) -join "`n"
-    Assert-Equal ($output.Contains("Updated Terminal identity 'Meo Matrix'")) $true 'CLI applies adapter'
+    Assert-Equal ($output -match 'Windows Terminal\s+applied') $true 'CLI applies adapter'
     $backups = @(Get-ChildItem (Split-Path $stable -Parent) -Filter '*.bak')
     Assert-Equal $backups.Count 1 'Creates one backup before modification'
     Assert-Equal ([Convert]::ToBase64String([IO.File]::ReadAllBytes($backups[0].FullName))) $before 'Backup is byte-for-byte original'
