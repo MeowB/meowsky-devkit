@@ -43,7 +43,7 @@ try {
   Assert-Equal ((meowsky identity -Help).TrimEnd()) $help 'Root named help'
   $message = ''
   try { meowsky identity apply } catch { $message = $_.Exception.Message }
-  Assert-Equal ($message -like 'Specify --dry-run or --target windows|terminal.*') $true 'Apply without arguments rejected'
+  Assert-Equal ($message -like 'Specify --dry-run or --target windows|terminal|vscode.*') $true 'Apply without arguments rejected'
   $planOutput = (meowsky identity apply meo-matrix --dry-run) -join "`n"
   Assert-Equal ($planOutput -match 'Identity dry-run: meo-matrix \(Meo Matrix\)') $true 'Selected identity in plan'
   Assert-Equal ($planOutput.Contains((Join-Path $repo 'features/identity/themes/meo-matrix.json'))) $true 'Resolved theme file in plan'
@@ -53,12 +53,12 @@ try {
   Assert-Equal (Test-Path -LiteralPath $env:WORK_HOME) $false 'Dry-run does not create absent work root'
   Assert-Error { meowsky identity apply missing-identity --dry-run } "Identity 'missing-identity' was not found.*"
   Assert-Error { meowsky identity apply ../meo-matrix --dry-run } '*lowercase slug*'
-  Assert-Error { meowsky identity apply meo-matrix } 'Specify --dry-run or --target windows|terminal.*'
+  Assert-Error { meowsky identity apply meo-matrix } 'Specify --dry-run or --target windows|terminal|vscode.*'
   Assert-Error { meowsky identity apply meo-matrix --force } "Unknown argument '--force'.*"
   Assert-Error { meowsky identity apply meo-matrix --dry-run extra } "Unknown argument 'extra'.*"
-  Assert-Error { meowsky identity apply meo-matrix --target vscode --dry-run } 'Only --target windows or terminal is supported*'
-  Assert-Error { meowsky identity apply meo-matrix --target } 'Only --target windows or terminal is supported*'
-  Assert-Error { meowsky identity apply meo-matrix --target windows --target windows } 'Only --target windows or terminal is supported*'
+  Assert-Error { meowsky identity apply meo-matrix --target nvim --dry-run } 'Only --target windows, terminal, or vscode is supported*'
+  Assert-Error { meowsky identity apply meo-matrix --target } 'Only --target windows, terminal, or vscode is supported*'
+  Assert-Error { meowsky identity apply meo-matrix --target windows --target windows } 'Only --target windows, terminal, or vscode is supported*'
   Assert-Error { meowsky identity apply meo-matrix --dry-run --dry-run } 'Duplicate --dry-run*'
   $windowsPreview = (meowsky identity apply meo-matrix --target windows --dry-run) -join "`n"
   Assert-Equal ($windowsPreview.Contains('meowsky-meo-matrix.theme')) $true 'Dry-run shows destination'
@@ -210,6 +210,7 @@ try {
     Window = '5 8 6'; WindowText = '199 249 204'; HotTrackingColor = '57 255 20'
     GrayText = '102 128 106'; HilightText = '199 249 204'; Hilight = '32 77 39'
     ButtonText = '199 249 204'; ButtonFace = '11 17 13'
+    WindowFrame = '32 77 39'; ActiveBorder = '32 77 39'; InactiveBorder = '102 128 106'
   }
   foreach ($key in $expectedMapping.Keys) {
     Assert-Equal (($definition.Colors | Where-Object { $_.Key -eq $key }).Rgb) $expectedMapping[$key] "Windows mapping $key"
@@ -220,6 +221,13 @@ try {
   $other = $validSecond | ConvertFrom-Json
   $other.ui.background = '#112233'
   Assert-Equal (((Get-MeowskyWindowsTheme -Theme $other).Colors | Where-Object { $_.Key -eq 'Window' }).Rgb) '17 34 51' 'Renderer uses each identity palette'
+  $other.ui.selection = '#102030'
+  $other.ui.accent = '#A1B2C3'
+  $otherDefinition = Get-MeowskyWindowsTheme -Theme $other
+  foreach ($key in @('WindowFrame', 'ActiveBorder')) {
+    Assert-Equal (($otherDefinition.Colors | Where-Object { $_.Key -eq $key }).Rgb) '16 32 48' "Windows $key uses semantic selection independently of accent"
+  }
+  Assert-Equal (($otherDefinition.Colors | Where-Object { $_.Key -eq 'HotTrackingColor' }).Rgb) '161 178 195' 'Hyperlinks keep the identity accent'
   $other.name = "Bad`n[Injected]"
   Assert-Error { Get-MeowskyWindowsTheme -Theme $other } 'Windows theme name must be plain text*'
 

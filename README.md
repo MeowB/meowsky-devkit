@@ -144,6 +144,7 @@ When `meowsky ./` runs in any folder, it opens a fullscreen Windows Terminal lay
 | `meowsky identity apply <id> --dry-run` | Validate a theme and preview targets and palette without changing settings. |
 | `meowsky identity apply <id> --target windows` | Install a Windows contrast theme for manual activation. |
 | `meowsky identity apply <id> --target terminal` | Back up Terminal settings, merge the identity scheme, and set default scheme/cursor. |
+| `meowsky identity apply <id> --target vscode` | Back up VS Code settings, merge UI/syntax colors, and set visual preferences. |
 | `meowsky color <color>` | Save and apply a terminal color for the current project. |
 | `meowsky color reset` or `meowsky color default` | Remove the saved project color and restore the default. |
 | `meowsky matrix` | Run the animated matrix display; stop it with `Ctrl+C`. |
@@ -161,6 +162,8 @@ Identity defines semantic UI colors, syntax colors, and visual preferences indep
 `meowsky identity apply meo-matrix --target terminal --dry-run` previews the Terminal scheme and settings changes. Remove `--dry-run` to apply with a backup. The existing Matrix animation, cat/header, layouts, commands, and individual profile overrides are preserved.
 
 Meo Matrix uses green `ui.terminalText` (`#39FF14`) for default Terminal writing and pale `ui.text` (`#C7F9CC`) for Windows windows, making the two environments visually distinct. Both roles live in the theme definition; errors remain red and warnings yellow.
+
+`meowsky identity apply meo-matrix --target vscode --dry-run` previews VS Code UI and syntax overrides. Remove `--dry-run` to apply with a backup. Editor text uses `syntax.text`; UI text uses `ui.text`; integrated-terminal text uses `ui.terminalText`. Semantic and TextMate colors come from the JSON syntax palette. The selected base theme, unrelated token rules/styles, fonts, extensions, keybindings, and other settings are preserved. See [Identity](docs/identity.md) for mappings, settings discovery, and the 14 language samples under `docs/samples/`.
 
 ## Neovim Highlights
 

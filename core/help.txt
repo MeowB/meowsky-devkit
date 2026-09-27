@@ -11,6 +11,7 @@ SYNOPSIS
     meowsky identity apply <id> --dry-run
     meowsky identity apply <id> --target windows [--dry-run]
     meowsky identity apply <id> --target terminal [--dry-run]
+    meowsky identity apply <id> --target vscode [--dry-run]
     meowsky matrix
     meowsky ptree [<level>]
     meowsky md <file.md>
@@ -35,6 +36,7 @@ COMMANDS
     meowsky identity apply <id> --dry-run  Validate and preview an identity plan.
     meowsky identity apply <id> --target windows  Install a contrast theme; activate manually.
     meowsky identity apply <id> --target terminal  Merge a Terminal scheme/defaults with backup.
+    meowsky identity apply <id> --target vscode  Merge VS Code UI colors/cursors with backup.
     meowsky matrix          Run the animated matrix display; press Ctrl+C to stop.
     meowsky ptree [level]   Print the current directory tree to the given depth;
                             default is 3 levels. Level must be a positive integer.

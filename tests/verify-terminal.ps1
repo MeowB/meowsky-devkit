@@ -88,7 +88,7 @@ try {
   Assert-Equal (Edit-MeowskyTerminalSettings $changed $definition.Scheme $definition.CursorShape) $changed 'JSONC edits are idempotent'
   foreach ($text in @(('{"schemes":[] // last member comment' + "`n}"), '{"schemes":[/* empty */],"profiles":{"defaults":{/* empty */}}}', '{"schemes":[{"name":"Other"}/* end */]}')) {
     $updated = Edit-MeowskyTerminalSettings $text $definition.Scheme $definition.CursorShape
-    Assert-Equal (Read-MeowskyTerminalJson $updated).Kind '{' 'Insertion around comments remains valid'
+    Assert-Equal (Read-MeowskySettingsJson $updated).Kind '{' 'Insertion around comments remains valid'
   }
   foreach ($text in @('{broken', '{"x":1 "y":2}', '{"x":1, "x":2}', '{"schemes":{}}', '{"profiles":[]}', '{"profiles":{"defaults":null}}', '{"schemes":[{"name":"Meo Matrix"},{"name":"Meo Matrix"}]}')) {
     Assert-Error { Edit-MeowskyTerminalSettings $text $definition.Scheme $definition.CursorShape } '*'

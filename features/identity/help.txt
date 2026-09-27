@@ -29,4 +29,22 @@ Repeated application creates no write or new backup when settings already match.
 If multiple settings files exist, run in the desired Terminal with WT_SETTINGS_DIR
 set to its settings directory; no file is chosen arbitrarily.
 
-Step 4 implements Windows and Terminal adapters. VS Code and Neovim are not implemented.
+meowsky identity apply <id> --target vscode [--dry-run]
+Discover VS Code User settings, merge Identity-owned UI and syntax colors,
+enable semantic highlighting, and set cursor styles. Back up original bytes first.
+Set window.activeBorder to ui.selection, window.inactiveBorder to ui.muted,
+and window.border to default. Restart VS Code if its native border mode changes.
+Preserve comments, other colors, scoped overrides, the selected base theme,
+unrelated token rules/style properties,
+fonts, extensions, keybindings, and unrelated preferences.
+--dry-run shows the resolved path and every owned property without writes.
+Repeated application creates no write or new backup when settings already match.
+For multiple installations/profiles or custom user-data locations, open
+Preferences: Open User Settings (JSON) and set MEOWSKY_VSCODE_SETTINGS_PATH
+to that file's absolute path. Missing/ambiguous files fail without writing.
+Scoped/workspace/remote overrides retain precedence and may affect appearance.
+
+Step 6 implements Windows, Terminal, and VS Code UI/syntax adapters.
+Syntax uses semantic selectors plus named TextMate fallbacks from the theme JSON.
+Errors/warnings use diagnostic colors; language providers determine symbol detail.
+Inspect docs/samples/ for all 14 requested languages. Neovim is not implemented.

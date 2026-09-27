@@ -21,7 +21,7 @@ function Get-MeowskyWindowsTheme {
     ActiveTitle = 'surfaceRaised'; TitleText = 'text'
     InactiveTitle = 'surface'; InactiveTitleText = 'muted'
     GradientActiveTitle = 'surfaceRaised'; GradientInactiveTitle = 'surface'
-    WindowFrame = 'accent'; ActiveBorder = 'accent'; InactiveBorder = 'muted'
+    WindowFrame = 'selection'; ActiveBorder = 'selection'; InactiveBorder = 'muted'
     AppWorkspace = 'background'; Scrollbar = 'surface'
     ButtonShadow = 'background'; ButtonDkShadow = 'background'
     ButtonHilight = 'accentSoft'; ButtonLight = 'surfaceRaised'; ButtonAlternateFace = 'surface'

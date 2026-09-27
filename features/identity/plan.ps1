@@ -36,7 +36,7 @@ function Get-MeowskyIdentityTargets {
 function New-MeowskyIdentityPlan {
   param([string]$Id, [string]$Target, [bool]$DryRun = $true)
 
-  if ($Target -and $Target -cnotin @('windows', 'terminal')) { throw 'Only the windows and terminal targets are implemented.' }
+  if ($Target -and $Target -cnotin @('windows', 'terminal', 'vscode')) { throw 'Only the windows, terminal, and vscode targets are implemented.' }
 
   $path = Resolve-MeowskyIdentityTheme -Id $Id
   $theme = Read-MeowskyIdentityTheme -Path $path
@@ -46,8 +46,9 @@ function New-MeowskyIdentityPlan {
     Targets = @(Get-MeowskyIdentityTargets)
     DryRun = $DryRun
     SelectedTarget = $Target
-    Windows = $(if ($Target -ne 'terminal') { Get-MeowskyWindowsTheme -Theme $theme })
+    Windows = $(if (-not $Target -or $Target -eq 'windows') { Get-MeowskyWindowsTheme -Theme $theme })
     Terminal = $(if ($Target -eq 'terminal') { New-MeowskyTerminalPlan -Theme $theme })
+    VSCode = $(if ($Target -eq 'vscode') { New-MeowskyVSCodePlan -Theme $theme })
   }
 }
 
@@ -58,7 +59,7 @@ function Show-MeowskyIdentityPlan {
   "Identity dry-run: $($theme.id) ($($theme.name))"
   "Theme file: $($Plan.ThemeFile)"
   if ($Plan.SelectedTarget) { "Requested target: $($Plan.SelectedTarget)" }
-  'Targets (Windows contrast and Windows Terminal adapters are implemented):'
+  'Targets (Windows contrast, Windows Terminal, and VS Code UI/syntax adapters are implemented):'
   foreach ($target in $Plan.Targets) {
     if ($target.Available) { "  $($target.Name): detected ($($target.Evidence))" }
     else { "  $($target.Name): not detected; skipped" }
@@ -79,5 +80,6 @@ function Show-MeowskyIdentityPlan {
     'Syntax colors and the block/bar/underline cursor preference are not mapped by this Windows adapter.'
   }
   if ($Plan.Terminal) { Show-MeowskyTerminalPlan -Plan $Plan.Terminal }
+  if ($Plan.VSCode) { Show-MeowskyVSCodePlan -Plan $Plan.VSCode }
   'Dry-run complete. No changes were made. No settings or active identity were saved.'
 }

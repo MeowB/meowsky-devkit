@@ -1,0 +1,8 @@
+/* Inspect selectors, property names, values and numbers. */
+:root { --spacing: 4px; }
+.item, #preview {
+  color: inherit;
+  padding: var(--spacing);
+  font-family: "Example", sans-serif;
+}
+@media (min-width: 640px) { .item { display: grid; } }
