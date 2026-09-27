@@ -5,7 +5,7 @@ Personal Windows-first devkit for web work, scripting, and fast project starts.
 It is a small repo, but it does three concrete things:
 
 1. Sets up the machine with the tools this workflow expects.
-2. Gives Neovim a VS Code-friendlier editing surface for web development.
+2. Sets up Neovim for web development with native editing controls.
 3. Provides a `meowsky` terminal shortcut that opens a project-aware Codex layout.
 
 ## What It Does
@@ -14,7 +14,7 @@ It is a small repo, but it does three concrete things:
 | --- | --- |
 | Machine setup | Installs the core Windows tools this workflow expects: Neovim, Git, Node.js, tree-sitter, Zig, eza, and Pandoc |
 | GitHub CLI | Optional, only if you want terminal-first GitHub repo workflows |
-| Editor setup | Loads a personal Neovim config with web-focused plugins, LSPs, Treesitter, completion, and keymaps |
+| Editor setup | Loads a personal Neovim config with web-focused plugins, LSPs, Treesitter, and completion |
 | Workspace flow | Adds `meowsky` to PowerShell so you can jump to the work root, open the fullscreen project layout, or start Codex directly |
 | Prompting | Keeps the Codex orientation prompt in a separate file so it can be reused and edited independently |
 | Preview helpers | Uses Pandoc to preview Markdown and the default PDF viewer for PDFs |
@@ -26,7 +26,7 @@ This setup is meant to feel like:
 
 - a personal dev machine template
 - a project starter for coding sessions
-- a Neovim workflow with familiar VS Code-style movement and selection shortcuts
+- a Neovim workflow using native movement and selection controls
 - a shareable repo that is easy to clone, inspect, and adapt later
 
 ## Repo Map
@@ -154,18 +154,11 @@ The editor config in [nvim/init.lua](nvim/init.lua) is tuned for:
 - `tokyonight.nvim` styling
 - Treesitter parsing for Lua, Vim, JavaScript, TypeScript, TSX, JSON, HTML, CSS, Markdown, and Prisma
 - Mason-managed LSPs for TypeScript, ESLint, HTML, CSS, JSON, Lua, and Prisma
-- `Ctrl+Space` completion
-- VS Code bridge mappings for save, undo, redo, select all, find, clipboard paste, word movement, line duplication, and line movement
-- `Ctrl+Backspace` and `Ctrl+H` word deletion in insert mode
+- completion from language servers, snippets, paths, and buffers
 - auto-pairs for brackets and quotes
 - automatic HTML/React closing tags
-- `Space e` copies diagnostics on the current line
-- `Space F` formats with LSP when available, otherwise fixes indentation
-- `Ctrl+D` or `Ctrl+Shift+D` duplicates the current line from insert mode
-- VS Code-style Shift+Arrow, Ctrl+Shift+Left/Right, and Shift+Home/End selection
-- `Ctrl+J` / `Ctrl+K` move lines or selected blocks down/up in normal, insert, and visual mode
-- `Space j` / `Space k` are fallback movement shortcuts in normal and visual mode
-- visual-mode tab indentation and outdentation
+
+The configuration defines no custom key mappings. Use native Neovim commands and any defaults supplied by plugins.
 
 ## Sharing
 

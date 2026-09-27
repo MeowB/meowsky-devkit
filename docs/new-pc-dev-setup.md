@@ -82,6 +82,6 @@ Linux retains its smaller command set, original Codex prompt, tmux layout and se
 
 Open Neovim, inspect `:checkhealth`, `:Lazy`, and `:Mason`, and edit TypeScript/TSX to verify highlighting, completion and diagnostics. `nvim/init.lua` is unchanged by this refactor.
 
-Shortcuts depend on terminal keycodes. Use `Ctrl+H` if `Ctrl+Backspace` fails. `Ctrl+J` / `Ctrl+K` move lines or selections; `Space j` / `Space k` are normal/visual fallbacks. `Space e` copies diagnostics, `Space F` formats or indents, and visual Tab / Shift+Tab adjust indentation.
+The configuration defines no custom key mappings. Verify native controls: `:w` saves, `u` undoes, `Ctrl+R` redoes, and `v` starts visual selection. Plugins may supply their own defaults. The installer copies `nvim/init.lua` to `%LOCALAPPDATA%\nvim\init.lua`; update that installed copy and restart Neovim to apply configuration changes.
 
 See [architecture.md](architecture.md) for ownership, dependencies and regression verification.
