@@ -24,12 +24,38 @@ function Get-MeowskyVSCodeDefinition {
   foreach ($key in @('button.foreground', 'badge.foreground', 'activityBarBadge.foreground', 'statusBar.debuggingForeground')) {
     $colors[$key] = $Theme.ui.background
   }
+  # Separate structure, active indicators and labels without changing legacy themes.
+  if ($Theme.ui.PSObject.Properties['border']) {
+    foreach ($key in @('window.inactiveBorder', 'sideBar.border', 'activityBar.border', 'statusBar.border', 'panel.border', 'editorGroup.border', 'tab.border', 'input.border', 'dropdown.border', 'widget.border', 'editorWidget.border', 'editorHoverWidget.border')) {
+      $colors[$key] = $Theme.ui.border
+    }
+  }
+  if ($Theme.ui.PSObject.Properties['accentActive']) {
+    foreach ($key in @('window.activeBorder', 'focusBorder', 'activityBar.activeBorder', 'tab.activeBorderTop', 'panelTitle.activeBorder', 'inputOption.activeBorder', 'list.focusOutline', 'button.hoverBackground')) {
+      $colors[$key] = $Theme.ui.accentActive
+    }
+    # The fixed branding accent may be too dark to serve as readable link text.
+    $colors['textLink.foreground'] = $Theme.ui.accentSoft
+  }
+  if ($Theme.ui.PSObject.Properties['onAccent']) {
+    foreach ($key in @('button.foreground', 'badge.foreground', 'activityBarBadge.foreground')) {
+      $colors[$key] = $Theme.ui.onAccent
+    }
+  }
   $colors['terminal.foreground'] = if ($Theme.ui.PSObject.Properties['terminalText']) { $Theme.ui.terminalText } else { $Theme.ui.accent }
   $terminalBackground = if ($Theme.ui.PSObject.Properties['terminalBackground']) { $Theme.ui.terminalBackground } else { $Theme.ui.background }
   $colors['terminal.background'] = $terminalBackground
   $colors['terminalCursor.background'] = $terminalBackground
-  # Older themes retain their existing integrated-terminal ANSI settings.
-  if ($Theme.ui.PSObject.Properties['terminalBlack']) { $colors['terminal.ansiBlack'] = $Theme.ui.terminalBlack }
+  if ($Theme.PSObject.Properties['ansi']) {
+    foreach ($name in @('black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white',
+      'brightBlack', 'brightRed', 'brightGreen', 'brightYellow', 'brightBlue', 'brightMagenta', 'brightCyan', 'brightWhite')) {
+      $key = 'terminal.ansi' + [char]::ToUpperInvariant($name[0]) + $name.Substring(1)
+      $colors[$key] = $Theme.ansi.$name
+    }
+  } elseif ($Theme.ui.PSObject.Properties['terminalBlack']) {
+    # Older themes retain all other existing integrated-terminal ANSI settings.
+    $colors['terminal.ansiBlack'] = $Theme.ui.terminalBlack
+  }
   # Transparency keeps editor annotations visible and gives scrollbars a quiet idle state.
   $colors['editor.selectionHighlightBackground'] = $Theme.ui.selection + '80'
   $colors['scrollbarSlider.background'] = $Theme.ui.muted + '66'

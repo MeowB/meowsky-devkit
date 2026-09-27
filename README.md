@@ -137,7 +137,7 @@ When `meowsky ./` runs in any folder, it opens a fullscreen Windows Terminal lay
 | `meowsky <directory>` | Change to a directory, checking the current location and then the work root. |
 | `meowsky .` or `meowsky ./` | Open the fullscreen Windows Terminal layout in the current directory. |
 | `meowsky codex [directory]` | Start Codex with the Meowsky orientation prompt; defaults to the current directory. |
-| `meowsky color` | Show the current project color and all available colors. |
+| `meowsky color` | Explain retired project color overrides; all panels inherit the active Terminal theme. |
 | `meowsky identity` | Describe the Identity system; no settings are applied. |
 | `meowsky identity list` | Discover available semantic identity themes. |
 | `meowsky identity --help` | Show Identity help. |
@@ -147,8 +147,8 @@ When `meowsky ./` runs in any folder, it opens a fullscreen Windows Terminal lay
 | `meowsky identity apply <id> --windows-mode contrast` | Use the existing Windows contrast theme instead; activate it manually. |
 | `meowsky identity apply <id> --target terminal` | Back up Terminal settings, merge the identity scheme, and set default scheme/cursor. |
 | `meowsky identity apply <id> --target vscode` | Back up VS Code settings, merge UI/syntax colors, and set visual preferences. |
-| `meowsky color <color>` | Save and apply a terminal color for the current project. |
-| `meowsky color reset` or `meowsky color default` | Remove the saved project color and restore the default. |
+| `meowsky color <color>` | Compatibility command; changes no colors or settings. |
+| `meowsky color reset` or `meowsky color default` | Compatibility command; saved project colors are ignored. |
 | `meowsky matrix` | Run the animated matrix display; stop it with `Ctrl+C`. |
 | `meowsky ptree [level]` | Print the current directory tree; defaults to 3 levels and accepts a positive integer such as `15`. |
 | `meowsky md <file.md>` or `meowsky markdown <file.md>` | Render Markdown with Pandoc and open the HTML preview. |
@@ -161,11 +161,11 @@ When `meowsky ./` runs in any folder, it opens a fullscreen Windows Terminal lay
 
 Identity defines semantic UI colors, syntax colors, and visual preferences independently of tools. Add themes under `features/identity/themes/`; see [docs/identity.md](docs/identity.md) for the model and integrations. Use `meowsky identity apply meo-matrix --dry-run` to preview all detected targets without writes, then `meowsky identity apply meo-matrix` to apply Windows, Terminal, and VS Code in that order. Meo Matrix defaults to normal Windows rendering with dark system/apps, its semantic accent, and transparency. `--windows-mode contrast` retains the stronger contrast theme with manual activation. Terminal and VS Code remain independent of the Windows mode. Missing applications are skipped; per-target failures are reported while other targets continue. Targeted application remains available through `--target windows|terminal|vscode`.
 
-`meowsky identity apply meo-matrix --target terminal --dry-run` previews the Terminal scheme and settings changes. Remove `--dry-run` to apply with a backup. The existing Matrix animation, cat/header, layouts, commands, and individual profile overrides are preserved.
+`meowsky identity apply meo-matrix --target terminal --dry-run` previews the Terminal scheme and settings changes. Remove `--dry-run` to apply with a backup. The existing Matrix animation, cat/header, layouts, and commands are preserved; conflicting profile palette/cursor overrides are removed; unrelated profile settings are preserved.
 
-Meo Matrix uses green `ui.terminalText` (`#39FF14`) for default Terminal writing and pale `ui.text` (`#C7F9CC`) for contrast-mode Windows text, making the two environments visually distinct. Normal Windows mode retains Windows-managed text colors. Both semantic roles live in the theme definition; errors remain red and warnings yellow.
+Meo Matrix uses neon Matrix green `#39FF14` for ordinary terminal text, with black backgrounds and dark forest surfaces, muted green structure, and restrained `#58CB70` cursor/emphasis accents. Windows accent is fixed at `#265934`. Syntax uses neon-green keywords, cyan functions, bright-blue types, yellow strings, orange numbers, and magenta constants; syntax errors are bright red and warnings yellow. Matrix glyphs and the status header use ANSI green; folders use ANSI blue; the project path uses ANSI cyan. Working-tree status uses green when clean and yellow when dirty. Files, tree connectors, and other Git metadata retain ordinary terminal text. Normal Windows mode retains Windows-managed text colors.
 
-Terminal backgrounds use `ui.terminalBackground` (`#000000`); ANSI black uses green-charcoal `ui.terminalBlack` (`#182019`) in both Windows Terminal and VS Code's integrated terminal. Windows/editor backgrounds remain `ui.background` (`#050806`). Other integrated-terminal ANSI colors retain their existing settings.
+Terminal backgrounds use `ui.terminalBackground` (`#000000`); ANSI black uses green-charcoal `ansi.black` (`#1A2720`) in both Windows Terminal and VS Code's integrated terminal. Windows/editor backgrounds remain `ui.background` (`#000000`). The explicit `ansi` palette uses neon green and pale-green text, red errors, yellow warnings, and bright blue/magenta/cyan output, supplying all 16 ANSI colors in Windows Terminal and VS Code; older definitions without `ansi` retain their existing fallback behavior.
 
 `meowsky identity apply meo-matrix --target vscode --dry-run` previews VS Code UI and syntax overrides. Remove `--dry-run` to apply with a backup. Editor text uses `syntax.text`; UI text uses `ui.text`; integrated-terminal text uses `ui.terminalText`. Semantic and TextMate colors come from the JSON syntax palette. The selected base theme, unrelated token rules/styles, fonts, extensions, keybindings, and other settings are preserved. See [Identity](docs/identity.md) for mappings, settings discovery, and the 14 language samples under `docs/samples/`.
 
@@ -198,3 +198,7 @@ It does not need packaging yet. A GitHub repo is the right shape for this becaus
 ## Details
 
 The longer manual setup guide lives in [docs/new-pc-dev-setup.md](docs/new-pc-dev-setup.md).
+
+The terminal color direction follows `features/identity/themes/meo-matrix/terminal-view-aim.png`: true black and mostly luminous Matrix-green terminal text. ANSI output retains red/yellow alerts and bright blue, magenta, and cyan; syntax uses bright, distinct colors for functions, types, constants, strings, and numbers. The reference is a visual guide, not a source of layout or runtime behavior.
+
+PowerShell command input uses bright ANSI highlighting from `powershell/profile.ps1`: cyan commands, yellow strings, magenta numbers, blue parameters/types, and green keywords. Open a new PowerShell session or reload the profile to activate it. VS Code syntax uses its own bright semantic palette; reapply the VS Code target to update highlighting.

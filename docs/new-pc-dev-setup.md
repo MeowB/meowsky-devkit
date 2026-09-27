@@ -44,8 +44,7 @@ meowsky ./
 meowsky codex ./
 meowsky ptree 5
 meowsky ptree -h
-meowsky color teal
-meowsky color reset
+meowsky identity apply meo-matrix --target terminal
 meowsky matrix
 meowsky md .\README.md
 meowsky pdf .\docs\spec.pdf
@@ -53,11 +52,11 @@ meowsky pdf .\docs\spec.pdf
 
 The work root is `WORK_HOME`, otherwise `F:\dev` if it exists, otherwise `$HOME\work`. File and Codex paths are checked as typed, then under the work root. `meowsky .` and `./` always use the current directory.
 
-The fullscreen layout retains four panes: Codex, matrix animation, status, and tree. Stop the animation with `Ctrl+C` to use its shell. Status shows the project path and startup Git summary. Tree ignores dependency/build directories and limits each directory to 50 displayed entries.
+The fullscreen layout retains four panes: Codex, matrix animation, status, and tree. Stop the animation with `Ctrl+C` to use its shell. Status shows the project path and startup Git summary. The active Terminal palette supplies green Matrix glyphs and status header, blue folders, a cyan project path, and green/yellow clean/dirty working-tree status. Other text uses the default foreground; no project or Codex color override is applied. Tree ignores dependency/build directories and limits each directory to 50 displayed entries.
 
 `ptree [level]` remains available independently. `dev` aliases `meowsky` when an existing alias does not occupy that name. Feature help lives at `features/<name>/help.txt`: PowerShell supports `meowsky <command> -h` and `-Help`. Bare `meowsky -h`, `help`, and `--help` display global help.
 
-Colors remain stored in `%LOCALAPPDATA%\Meowsky\project-colors.json`, or `$HOME\.meowsky` without `LOCALAPPDATA`. Markdown previews use the system temporary directory under `meowsky-preview`. Windows Codex uses [its orientation resource](../features/codex/codex-orientation.md), retaining its existing fallback when the primary template cannot be found.
+Legacy `project-colors.json` files are ignored and left untouched. `meowsky color` remains an explanatory compatibility command. Apply terminal colors through `meowsky identity apply <id> --target terminal`. Markdown previews use the system temporary directory under `meowsky-preview`. Windows Codex uses [its orientation resource](../features/codex/codex-orientation.md), retaining its existing fallback when the primary template cannot be found.
 
 ## Linux / Ubuntu
 

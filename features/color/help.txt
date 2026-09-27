@@ -1,6 +1,6 @@
 meowsky color [color]
-No argument lists colors and the current project color.
-reset / default remove the saved color and restore Gray.
-Run meowsky color to see all supported color names.
+Project color overrides are retired. This compatibility command changes no settings.
+Saved project colors are ignored; all panels use the active terminal theme.
+Use meowsky identity apply <id> --target terminal to apply theme colors.
 
 Use -h or -Help after the command to show this help (PowerShell).

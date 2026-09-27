@@ -28,10 +28,18 @@ try {
     $script:registry = @{}
     $script:writes = 0; $script:refreshes = 0; $script:disables = 0
     $script:contrastEnabled = $false; $script:failDisable = $false; $script:failRead = $false; $script:failWrite = $false; $script:failRefresh = $false
+    $script:colorizationMode = ''; $script:pendingColor = $null; $script:pendingReads = 0; $script:settlingSleeps = 0
+    function Start-Sleep { param($Milliseconds); $script:settlingSleeps++ }
     function Get-MeowskyWindowsRegistryValues {
       param($Settings)
       foreach ($setting in $Settings) {
         $id = $setting.SubKey + '\' + $setting.Name
+        if ($setting.Name -eq 'ColorizationColor' -and $null -ne $script:pendingColor) {
+          if ($script:pendingReads -eq 0) {
+            $script:registry[$id].Value = $script:pendingColor
+            $script:pendingColor = $null
+          } else { $script:pendingReads-- }
+        }
         $value = $script:registry[$id]
         [pscustomobject]@{ SubKey = $setting.SubKey; Name = $setting.Name; Exists = [bool]$value
           Kind = $(if ($value) { $value.Kind } else { '' }); Value = $(if ($value) { $value.Value } else { $null }) }
@@ -42,6 +50,20 @@ try {
       if ($script:failWrite) { throw 'fixture write denied' }
       $script:writes++
       $script:registry[$Setting.SubKey + '\' + $Setting.Name] = [pscustomobject]@{ Kind = $Setting.Kind; Value = $Setting.Value }
+      if ($Setting.Name -eq 'ColorizationColor') {
+        $stored = $script:registry[$Setting.SubKey + '\' + $Setting.Name]
+        switch ($script:colorizationMode) {
+          'normalize' {
+            $bytes = [BitConverter]::GetBytes([int]$stored.Value); $bytes[3] = 196
+            $stored.Value = [BitConverter]::ToInt32($bytes, 0)
+          }
+          'reject' { $stored.Value = [int]0x123456 }
+          'settle' {
+            $script:pendingColor = $stored.Value; $script:pendingReads = 2
+            $stored.Value = [int]0x123456
+          }
+        }
+      }
     }
     function Get-MeowskyWindowsContrastState {
       if ($script:failRead) { throw 'fixture contrast query failed' }
@@ -54,17 +76,23 @@ try {
       # Windows can restore older personalization when leaving contrast.
       $script:registry['Software\Microsoft\Windows\CurrentVersion\Themes\Personalize\AppsUseLightTheme'] = [pscustomobject]@{ Kind = 'DWord'; Value = 1 }
     }
-    function Send-MeowskyWindowsPersonalizationRefresh { $script:refreshes++; return (-not $script:failRefresh) }
+    function Send-MeowskyWindowsPersonalizationRefresh {
+      $script:refreshes++
+      if ($script:rejectOnRefresh) {
+        $script:registry['Software\Microsoft\Windows\DWM\ColorizationColor'].Value = [int]0x123456
+      }
+      return (-not $script:failRefresh)
+    }
     function Get-MeowskyIdentityTargets {
       foreach ($name in @('Windows', 'Windows Terminal', 'VS Code')) { [pscustomobject]@{ Name = $name; Available = $true; Evidence = 'fixture' } }
     }
 
-    $theme = Read-MeowskyIdentityTheme (Join-Path $repo 'features/identity/themes/meo-matrix.json')
+    $theme = Read-MeowskyIdentityTheme (Join-Path $repo 'features/identity/themes/meo-matrix/meo-matrix.json')
     $plan = New-MeowskyIdentityPlan -Id meo-matrix
     Assert-Equal $plan.Windows.Mode normal 'Default mode'
     Assert-Equal $plan.Windows.Accent $theme.ui.accent 'Accent source'
     $preview = (meowsky identity apply meo-matrix --dry-run) -join "`n"
-    foreach ($fragment in @('Windows mode: normal', 'System theme: dark', 'App theme: dark', 'Accent: #39FF14 (ui.accent)', 'Transparency: enabled', 'No changes were made')) {
+    foreach ($fragment in @('Windows mode: normal', 'System theme: dark', 'App theme: dark', 'Accent: #265934 (ui.accent)', 'Transparency: enabled', 'No changes were made')) {
       Assert-Equal $preview.Contains($fragment) $true "Dry-run includes $fragment"
     }
     Assert-Equal $script:writes 0 'Dry-run writes no registry values'
@@ -129,16 +157,57 @@ try {
       $normal = New-MeowskyWindowsPlan $theme
       $argb = ($normal.Settings | Where-Object Name -eq ColorizationColor).Value
       $abgr = ($normal.Settings | Where-Object Name -eq AccentColor).Value
-      Assert-Equal ([BitConverter]::ToUInt32([BitConverter]::GetBytes([int]$argb), 0).ToString('X8')) FF39FF14 'ARGB color encoding'
-      Assert-Equal ([BitConverter]::ToUInt32([BitConverter]::GetBytes([int]$abgr), 0).ToString('X8')) FF14FF39 'ABGR color encoding'
+      Assert-Equal ([BitConverter]::ToUInt32([BitConverter]::GetBytes([int]$argb), 0).ToString('X8')) FF265934 'ARGB color encoding'
+      Assert-Equal ([BitConverter]::ToUInt32([BitConverter]::GetBytes([int]$abgr), 0).ToString('X8')) FF345926 'ABGR color encoding'
       $palette = ($normal.Settings | Where-Object Name -eq AccentPalette).Value
-      Assert-Equal (($palette[12..15]) -join ',') '57,255,20,0' 'Palette base accent RGB slot'
+      Assert-Equal (($palette[12..15]) -join ',') '38,89,52,0' 'Palette base accent RGB slot'
       $palette[28] = 123
       $palette[29] = 45
       $script:registry['Software\Microsoft\Windows\CurrentVersion\Explorer\Accent\AccentPalette'].Value = $palette
       $normal = New-MeowskyWindowsPlan $theme
       Assert-Equal $normal.Settings[-1].Value[28] 123 'Eighth palette slot preserved'
       Assert-Equal $normal.Settings[-1].Value[29] 45 'Eighth palette slot preserved entirely'
+
+      $colorId = 'Software\Microsoft\Windows\DWM\ColorizationColor'
+      $bytes = [BitConverter]::GetBytes([int]$argb); $bytes[3] = 196
+      $script:registry[$colorId].Value = [BitConverter]::ToInt32($bytes, 0)
+      $preserved = New-MeowskyWindowsPlan $theme
+      $plannedColor = ($preserved.Settings | Where-Object Name -eq ColorizationColor).Value
+      Assert-Equal ([BitConverter]::GetBytes([int]$plannedColor)[3]) 196 'Plan preserves existing DWM high byte'
+      $script:registry[$colorId].Value = [int]0x123456
+      $script:colorizationMode = 'normalize'
+      $before = $script:writes
+      $applied = Set-MeowskyWindowsNormalIdentity (New-MeowskyWindowsPlan $theme)
+      Assert-Equal $applied.Status Applied 'OS high-byte normalization accepted with matching RGB'
+      Assert-Equal ($script:writes - $before) 1 'Normalization needs only one write'
+      $before = $script:writes
+      Assert-Equal (Set-MeowskyWindowsNormalIdentity (New-MeowskyWindowsPlan $theme)).Status Unchanged 'Normalized high byte remains idempotent'
+      Assert-Equal $script:writes $before 'Normalized reapplication writes nothing'
+
+      $script:registry[$colorId].Value = [int]0x123456
+      $script:colorizationMode = 'settle'; $script:settlingSleeps = 0
+      $applied = Set-MeowskyWindowsNormalIdentity (New-MeowskyWindowsPlan $theme)
+      Assert-Equal $applied.Status Applied 'Delayed RGB settlement succeeds'
+      Assert-Equal $script:settlingSleeps 2 'Settlement is bounded read polling'
+
+      $script:registry[$colorId].Value = [int]0x123456
+      $script:colorizationMode = 'reject'; $script:settlingSleeps = 0
+      $before = $script:writes
+      Assert-Error { Set-MeowskyWindowsNormalIdentity (New-MeowskyWindowsPlan $theme) } '*ColorizationColor: expected 0x00265934 (DWord), observed 0x00123456 (DWord)*Backup retained*'
+      Assert-Equal $script:settlingSleeps 5 'Rejected RGB stops after bounded settlement'
+      Assert-Equal ($script:writes - $before) 1 'Rejected RGB is never repeatedly overwritten'
+      $script:colorizationMode = ''
+      $null = Set-MeowskyWindowsNormalIdentity (New-MeowskyWindowsPlan $theme)
+
+      $script:registry['Software\Microsoft\Windows\CurrentVersion\Themes\Personalize\EnableTransparency'].Value = 0
+      $script:rejectOnRefresh = $true
+      Assert-Error { Set-MeowskyWindowsNormalIdentity (New-MeowskyWindowsPlan $theme) } '*after refresh*ColorizationColor*observed 0x00123456*Backup retained*'
+      $script:rejectOnRefresh = $false
+      $null = Set-MeowskyWindowsNormalIdentity (New-MeowskyWindowsPlan $theme)
+
+      $expectedColor = [pscustomobject]@{ SubKey = 'unrelated'; Name = 'ColorizationColor'; Kind = 'DWord'; Value = $argb }
+      $actualColor = [pscustomobject]@{ Exists = $true; Kind = 'DWord'; Value = $plannedColor }
+      Assert-Equal (Test-MeowskyWindowsRegistryMatch $actualColor $expectedColor) $false 'High-byte tolerance applies only to the DWM property'
 
       # A real contrast theme install uses only the redirected fixture directory, never activates it.
       $output = (meowsky identity apply meo-matrix --target windows --windows-mode contrast) -join "`n"

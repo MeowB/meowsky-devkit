@@ -85,7 +85,7 @@ try {
   }
   $plan = [pscustomobject]@{ Path = 'fixture/settings.json'; Definition = $definition; Changed = $true }
   $preview = (Show-MeowskyVSCodePlan $plan) -join "`n"
-  foreach ($fragment in @('semantic function: #8FFFA0', 'semantic variable: #C7F9CC', 'Meowsky Identity: comment:', 'editorError.foreground: #FF5C57', 'editorWarning.foreground: #FFD866', 'editor.semanticHighlighting.enabled: True')) {
+  foreach ($fragment in @('semantic function: #00E5FF', 'semantic variable: #E8FFE8', 'Meowsky Identity: comment:', 'editorError.foreground: #FF7070', 'editorWarning.foreground: #FFE45C', 'editor.semanticHighlighting.enabled: True')) {
     Assert-Equal ($preview.Contains($fragment)) $true "Preview shows syntax $fragment"
   }
 

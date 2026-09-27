@@ -26,31 +26,106 @@ try {
   $env:WT_SETTINGS_DIR = ''
   $env:WORK_HOME = Join-Path $fixture 'work'
   . (Join-Path $repo 'powershell/profile.ps1')
+  # Capture real renderer output without opening panes or changing live settings.
+  $escape = [char]27
+  $renderRoot = Join-Path $fixture 'render'
+  [IO.Directory]::CreateDirectory((Join-Path $renderRoot 'folder')) | Out-Null
+  [IO.File]::WriteAllText((Join-Path $renderRoot 'file.txt'), 'fixture')
+  Push-Location $renderRoot
+  try {
+    $treeOutput = ((ptree 1 6>&1 | ForEach-Object { $_.ToString() }) -join "`n")
+    Assert-Equal ($treeOutput.Contains("${escape}[34mfolder${escape}[39m")) $true 'Directory name uses theme blue and restores foreground'
+    Assert-Equal ($treeOutput.Contains("${escape}[34mfile.txt")) $false 'Files retain default foreground'
+    Assert-Equal ($treeOutput.Contains("|-- ${escape}[34m")) $true 'Tree connectors retain default foreground'
+    foreach ($workingTree in @('clean', '3 changed file(s)')) {
+      $summary = "Branch: main`r`nWorking tree: $workingTree"
+      $statusOutput = ((Start-MeowskyStatusPanel -GitStatus $summary 6>&1 | ForEach-Object { $_.ToString() }) -join "`n")
+      $statusColor = if ($workingTree -eq 'clean') { 32 } else { 33 }
+      Assert-Equal ($statusOutput.Contains("${escape}[${statusColor}mWorking tree: ${workingTree}${escape}[39m")) $true 'Status distinguishes clean and dirty worktrees and restores foreground'
+      Assert-Equal ($statusOutput.Contains("${escape}[36m${renderRoot}${escape}[39m")) $true 'Project path uses theme cyan'
+      Assert-Equal ($statusOutput.Contains("${escape}[32m /\_/\   Meowsky${escape}[39m")) $true 'Header uses theme green'
+      Assert-Equal ($statusOutput.Contains("${escape}[32mBranch:")) $false 'Other Git metadata retains default foreground'
+    }
+  } finally { Pop-Location }
   $theme = Read-MeowskyIdentityTheme (Resolve-MeowskyIdentityTheme 'meo-matrix')
   $definition = Get-MeowskyTerminalScheme $theme
   Assert-Equal $definition.CursorShape 'filledBox' 'Block cursor mapping'
   $expected = @{
-    black = '#182019'; red = '#FF5C57'; green = '#39FF14'; yellow = '#FFD866'
-    blue = '#7295E5'; purple = '#C765D9'; cyan = '#72E5C2'; white = '#C7F9CC'
-    brightBlack = '#66806A'; brightRed = '#FF8581'; brightGreen = '#4AFF64'; brightYellow = '#FFE28C'
-    brightBlue = '#95B0EC'; brightPurple = '#D58CE2'; brightCyan = '#95ECD1'; brightWhite = '#D5FAD9'
-    background = '#000000'; foreground = '#39FF14'; selectionBackground = '#204D27'; cursorColor = '#4AFF64'
+    black = '#1A2720'
+    red = '#E84848'
+    green = '#39FF14'
+    yellow = '#E6C52F'
+    blue = '#408CFF'
+    purple = '#E05CFF'
+    cyan = '#00CFE8'
+    white = '#8FFFA0'
+    brightBlack = '#738078'
+    brightRed = '#FF7070'
+    brightGreen = '#4AFF64'
+    brightYellow = '#FFE45C'
+    brightBlue = '#79B0FF'
+    brightPurple = '#FF79E6'
+    brightCyan = '#00E5FF'
+    brightWhite = '#C7F9CC'
+    background = '#000000'
+    foreground = '#39FF14'
+    selectionBackground = '#233C2B'
+    cursorColor = '#58CB70'
   }
   foreach ($name in $expected.Keys) { Assert-Equal $definition.Scheme[$name] $expected[$name] "Scheme $name" }
+  # Independent category checks protect meaning even when expected shades are retuned.
+  foreach ($prefix in @('', 'bright')) {
+    foreach ($category in @('red', 'green', 'yellow', 'blue', 'magenta', 'cyan')) {
+      $role = if ($prefix) { $prefix + [char]::ToUpperInvariant($category[0]) + $category.Substring(1) } else { $category }
+      $hex = $theme.ansi.$role
+      $r = [Convert]::ToInt32($hex.Substring(1, 2), 16)
+      $g = [Convert]::ToInt32($hex.Substring(3, 2), 16)
+      $b = [Convert]::ToInt32($hex.Substring(5, 2), 16)
+      $maximum = [Math]::Max($r, [Math]::Max($g, $b))
+      $minimum = [Math]::Min($r, [Math]::Min($g, $b))
+      $chroma = $maximum - $minimum
+      Assert-Equal ($chroma -gt 0) $true "ANSI $role remains chromatic"
+      Assert-Equal (($chroma / $maximum) -ge 0.4) $true "ANSI $role retains recognizable saturation"
+      $hue = if ($maximum -eq $r) { 60 * (($g - $b) / $chroma) }
+        elseif ($maximum -eq $g) { 60 * (2 + ($b - $r) / $chroma) }
+        else { 60 * (4 + ($r - $g) / $chroma) }
+      $hue = ($hue + 360) % 360
+      $recognizable = switch ($category) {
+        'red' { $hue -lt 20 -or $hue -gt 340 }
+        'green' { $hue -ge 95 -and $hue -le 155 }
+        'yellow' { $hue -ge 35 -and $hue -le 65 }
+        'blue' { $hue -ge 200 -and $hue -le 240 }
+        'magenta' { $hue -ge 275 -and $hue -le 325 }
+        'cyan' { $hue -ge 170 -and $hue -lt 200 }
+      }
+      Assert-Equal $recognizable $true "ANSI $role retains its semantic hue"
+    }
+  }
   Assert-Equal (@($definition.Scheme.Values | Select-Object -Unique).Count -gt 16) $true 'Palette retains distinct categories'
+  $independent = $theme | ConvertTo-Json -Depth 8 | ConvertFrom-Json
+  foreach ($group in @('ui', 'syntax')) {
+    foreach ($property in $independent.$group.PSObject.Properties) { $property.Value = '#123456' }
+  }
+  $independentScheme = (Get-MeowskyTerminalScheme $independent).Scheme
+  foreach ($key in @('red', 'green', 'yellow', 'blue', 'purple', 'cyan', 'brightRed', 'brightGreen', 'brightYellow', 'brightBlue', 'brightPurple', 'brightCyan')) {
+    Assert-Equal $independentScheme[$key] $definition.Scheme[$key] "ANSI $key is independent of branding and syntax"
+  }
+  $independent.ansi.blue = '#123456'
+  Assert-Equal (Get-MeowskyTerminalScheme $independent).Scheme.blue '#123456' 'ANSI blue comes from JSON, not adapter constants'
   $other = $theme | ConvertTo-Json -Depth 8 | ConvertFrom-Json
+  $other.PSObject.Properties.Remove('ansi')
   $other.syntax.constant = '#123456'
   $other.preferences.cursor.style = 'bar'
   Assert-Equal (Get-MeowskyTerminalScheme $other).Scheme.cyan '#123456' 'Different identity changes palette'
-  Assert-Equal ((Get-MeowskyTerminalScheme $other).Scheme.blue -cne $definition.Scheme.blue) $true 'Derived blue uses semantic source'
+  Assert-Equal ((Get-MeowskyTerminalScheme $other).Scheme.blue -cne (Move-MeowskyTerminalHue $theme.syntax.constant 60)) $true 'Derived blue uses semantic source'
   Assert-Equal (Get-MeowskyTerminalScheme $other).CursorShape 'bar' 'Bar cursor mapping'
   $other.preferences.cursor.style = 'underline'
   Assert-Equal (Get-MeowskyTerminalScheme $other).CursorShape 'underscore' 'Underline cursor mapping'
   $other.ui.terminalText = '#12AB34'
   $other.ui.accent = '#ABCDEF'
   Assert-Equal (Get-MeowskyTerminalScheme $other).Scheme.foreground '#12AB34' 'Terminal foreground uses its dedicated semantic role'
-  Assert-Equal (Get-MeowskyTerminalScheme $other).Scheme.white '#C7F9CC' 'ANSI white retains general UI text'
-  Assert-Equal (((Get-MeowskyWindowsTheme $other).Colors | Where-Object { $_.Key -eq 'WindowText' }).Hex) '#C7F9CC' 'Windows text remains independent of terminalText'
+  Assert-Equal (Get-MeowskyTerminalScheme $other).Scheme.white '#78C98A' 'ANSI white retains general UI text'
+  Assert-Equal (((Get-MeowskyWindowsTheme $other).Colors | Where-Object { $_.Key -eq 'WindowText' }).Hex) '#78C98A' 'Windows text remains independent of terminalText'
   $other.ui.PSObject.Properties.Remove('terminalText')
   Assert-Equal (Get-MeowskyTerminalScheme $other).Scheme.foreground '#ABCDEF' 'Older themes fall back to accent for Terminal foreground'
   $other.ui.terminalBackground = '#112233'; $other.ui.terminalBlack = '#223344'
@@ -88,10 +163,12 @@ try {
 }
 '@
   $changed = Edit-MeowskyTerminalSettings $jsonc $definition.Scheme $definition.CursorShape
-  foreach ($fragment in @('// Keep header', 'https://example.test/a//b', '"startupActions": "new-tab; split-pane -V"', '"font":{"face":"Cascadia Code"}', '"list": [ {"name":"Custom","guid":"abc","colorScheme":"Other","cursorShape":"emptyBox","commandline":"custom.exe","experimental.pixelShaderPath":"cat.hlsl"}, ]', '{"name":"Other","red":"#112233"}', '/* keep scheme comment */', '"customField":"keep"', '"unknown": {"numbers":[1,2.5,-3e2],"flag":true,"null":null}')) {
+  foreach ($fragment in @('// Keep header', 'https://example.test/a//b', '"startupActions": "new-tab; split-pane -V"', '"font":{"face":"Cascadia Code"}', '"commandline":"custom.exe","experimental.pixelShaderPath":"cat.hlsl"', '{"name":"Other","red":"#112233"}', '/* keep scheme comment */', '"customField":"keep"', '"unknown": {"numbers":[1,2.5,-3e2],"flag":true,"null":null}')) {
     Assert-Equal ($changed.Contains($fragment)) $true "Preserves unrelated source: $fragment"
   }
-  Assert-Equal ($changed.Contains('"red":"#FF5C57"')) $true 'Updates existing named scheme'
+  Assert-Equal ($changed.Contains('"colorScheme":"Other"')) $false 'Profile scheme override removed'
+  Assert-Equal ($changed.Contains('"cursorShape":"emptyBox"')) $false 'Profile cursor override removed'
+  Assert-Equal ($changed.Contains('"red":"#E84848"')) $true 'Updates existing named scheme'
   Assert-Equal ([regex]::Matches($changed, '"name":"Meo Matrix"').Count) 1 'No duplicate scheme'
   Assert-Equal (Edit-MeowskyTerminalSettings $changed $definition.Scheme $definition.CursorShape) $changed 'JSONC edits are idempotent'
   foreach ($text in @(('{"schemes":[] // last member comment' + "`n}"), '{"schemes":[/* empty */],"profiles":{"defaults":{/* empty */}}}', '{"schemes":[{"name":"Other"}/* end */]}')) {
@@ -100,6 +177,38 @@ try {
   }
   foreach ($text in @('{broken', '{"x":1 "y":2}', '{"x":1, "x":2}', '{"schemes":{}}', '{"profiles":[]}', '{"profiles":{"defaults":null}}', '{"schemes":[{"name":"Meo Matrix"},{"name":"Meo Matrix"}]}')) {
     Assert-Error { Edit-MeowskyTerminalSettings $text $definition.Scheme $definition.CursorShape } '*'
+  }
+
+  # Removal must handle adjacent overrides, first/last/only members, comments,
+  # escaped keys, trailing commas, and unfocused appearances without touching fonts.
+  foreach ($profile in @(
+    '{"foreground":"#FF0000"}',
+    '{"foreground":"#FF0000",}',
+    '{"foreground":"#FF0000","background":"#123456","name":"keep"}',
+    '{"name":"keep","foreground":"#FF0000","background":"#123456"}',
+    '{"name":"keep","foreground":"#FF0000","background":"#123456",}',
+    '{"foreground":"#FF0000","name":"keep","background":"#123456"}',
+    '{/* keep */ "foreground" /* key comment */ :"#FF0000", /* divider */ "font":{"size":12}}',
+    '{"fore\u0067round":"#FF0000","font":{"size":12}}',
+    '{"unfocusedAppearance":{"colorScheme":"Other","foreground":"#FF0000","background":"#123456",},"font":{"size":12}}'
+  )) {
+    $inputText = '{"profiles":{"defaults":' + $profile + ',"list":[' + $profile + ']}}'
+    $updated = Edit-MeowskyTerminalSettings $inputText $definition.Scheme $definition.CursorShape
+    $rootNode = Read-MeowskySettingsJson $updated
+    $profilesNode = Get-MeowskySettingsJsonProperty $rootNode 'profiles'
+    $defaultNode = Get-MeowskySettingsJsonProperty $profilesNode 'defaults'
+    $listNode = Get-MeowskySettingsJsonProperty $profilesNode 'list'
+    foreach ($node in @($defaultNode, $listNode.Items[0])) {
+      foreach ($name in @('foreground', 'background', 'selectionBackground', 'cursorColor')) {
+        Assert-Equal ($null -eq (Get-MeowskySettingsJsonProperty $node $name)) $true "Removes $name override"
+      }
+    }
+    Assert-Equal ($null -eq (Get-MeowskySettingsJsonProperty $listNode.Items[0] 'colorScheme')) $true 'Profile inherits default scheme'
+    $unfocused = Get-MeowskySettingsJsonProperty $listNode.Items[0] 'unfocusedAppearance'
+    if ($unfocused) { Assert-Equal $unfocused.Members.Count 0 'Unfocused palette overrides removed' }
+    if ($profile.Contains('keep')) { Assert-Equal ($updated.Contains('keep')) $true 'Preserves unrelated source/comments' }
+    if ($profile.Contains('"font"')) { Assert-Equal ($updated.Contains('"font":{"size":12}')) $true 'Preserves font settings' }
+    Assert-Equal (Edit-MeowskyTerminalSettings $updated $definition.Scheme $definition.CursorShape) $updated 'Override removal is idempotent'
   }
 
   Assert-Error { Resolve-MeowskyTerminalSettings -ExecutablePaths @() } 'No existing Windows Terminal settings.json*'

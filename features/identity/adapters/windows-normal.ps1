@@ -28,7 +28,37 @@ function Test-MeowskyWindowsRegistryMatch {
   if ($Expected.Kind -eq 'Binary') {
     return [Convert]::ToBase64String([byte[]]$Actual.Value) -ceq [Convert]::ToBase64String([byte[]]$Expected.Value)
   }
+  # DWM may normalize its colorization high byte. Only this property's RGB is owned.
+  if ($Expected.SubKey -eq 'Software\Microsoft\Windows\DWM' -and $Expected.Name -eq 'ColorizationColor') {
+    return ([int]$Actual.Value -band 0xFFFFFF) -eq ([int]$Expected.Value -band 0xFFFFFF)
+  }
   return $Actual.Value -eq $Expected.Value
+}
+
+function Confirm-MeowskyWindowsRegistryValues {
+  param([object[]]$Settings)
+  # Read-only settling after notification; never repeatedly overwrite OS changes.
+  for ($attempt = 0; $attempt -lt 6; $attempt++) {
+    $actual = @(Get-MeowskyWindowsRegistryValues -Settings $Settings)
+    $mismatches = @(for ($i = 0; $i -lt $Settings.Count; $i++) {
+      if (-not (Test-MeowskyWindowsRegistryMatch $actual[$i] $Settings[$i])) { $i }
+    })
+    if ($mismatches.Count -eq 0) { return }
+    if ($attempt -lt 5) { Start-Sleep -Milliseconds 100 }
+  }
+  $details = foreach ($i in $mismatches) {
+    $expected = $Settings[$i]; $observed = $actual[$i]
+    $wanted = if ($expected.Kind -eq 'DWord') {
+      '0x' + [BitConverter]::ToUInt32([BitConverter]::GetBytes([int]$expected.Value), 0).ToString('X8')
+    } else { [Convert]::ToBase64String([byte[]]$expected.Value) }
+    $received = if (-not $observed.Exists) { 'missing' }
+    elseif ($observed.Kind -eq 'DWord') {
+      '0x' + [BitConverter]::ToUInt32([BitConverter]::GetBytes([int]$observed.Value), 0).ToString('X8')
+    } elseif ($observed.Kind -eq 'Binary') { [Convert]::ToBase64String([byte[]]$observed.Value) }
+    else { [string]$observed.Value }
+    "HKCU\$($expected.SubKey)\$($expected.Name): expected $wanted ($($expected.Kind)), observed $received ($($observed.Kind))"
+  }
+  throw ('Windows did not retain personalization after refresh: ' + ($details -join '; ') + '.')
 }
 
 function Get-MeowskyWindowsAccentPalette {
@@ -91,6 +121,12 @@ function New-MeowskyWindowsPlan {
       }
     }
     try { $contrast = Get-MeowskyWindowsContrastState } catch { $contrastError = $_.Exception.Message }
+  }
+  $colorization = $snapshot | Where-Object { $_.SubKey -eq $dwm -and $_.Name -eq 'ColorizationColor' } | Select-Object -First 1
+  if ($colorization -and $colorization.Exists) {
+    $bytes = [BitConverter]::GetBytes([int]$argb)
+    $bytes[3] = [BitConverter]::GetBytes([int]$colorization.Value)[3]
+    ($settings | Where-Object Name -eq 'ColorizationColor').Value = [BitConverter]::ToInt32($bytes, 0)
   }
   $previousPalette = if ($snapshot.Count) { $snapshot[-1] } else { [pscustomobject]@{ Exists = $false } }
   $settings[-1].Value = Get-MeowskyWindowsAccentPalette -Hex $accent -Previous $previousPalette
@@ -173,13 +209,10 @@ function Set-MeowskyWindowsNormalIdentity {
           $changed = $true
         }
       }
-      $verified = @(Get-MeowskyWindowsRegistryValues -Settings $Plan.Settings)
-      for ($i = 0; $i -lt $Plan.Settings.Count; $i++) {
-        if (-not (Test-MeowskyWindowsRegistryMatch $verified[$i] $Plan.Settings[$i])) { throw "Windows did not retain $($Plan.Settings[$i].Name)." }
-      }
       try {
         if (-not (Send-MeowskyWindowsPersonalizationRefresh)) { $detail += ' Refresh broadcast timed out; reopen affected applications if needed.' }
       } catch { $detail += ' Refresh failed; reopen affected applications if needed: ' + $_.Exception.Message }
+      Confirm-MeowskyWindowsRegistryValues -Settings $Plan.Settings
     }
     [pscustomobject]@{ Status = $(if ($changed) { 'Applied' } else { 'Unchanged' }); Path = ''; Backup = $backup; ManualStep = $manual; Detail = $detail }
   } catch {

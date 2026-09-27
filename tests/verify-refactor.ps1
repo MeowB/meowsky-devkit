@@ -10,7 +10,7 @@ $originalDevkitHome = $env:MEOWSKY_DEVKIT_HOME
 $originalPanel = $env:MEOWSKY_PANEL
 $checks = 0
 function Assert-Equal($actual, $expected, [string]$label) {
-  if ([string]$actual -cne [string]$expected) { throw "$label failed.`nExpected: $expected`nActual: $actual" }
+  if (([string]$actual -replace "`r`n", "`n") -cne ([string]$expected -replace "`r`n", "`n")) { throw "$label failed.`nExpected: $expected`nActual: $actual" }
   $script:checks++
 }
 function Assert-Throws([scriptblock]$action, [string]$message) {
@@ -20,6 +20,9 @@ function Assert-Throws([scriptblock]$action, [string]$message) {
 }
 function Capture([scriptblock]$action) {
   return ((& $action 6>&1 | ForEach-Object { $_.ToString() }) -join "`n").TrimEnd()
+}
+function Remove-Ansi([string]$Text) {
+  $Text -replace ([char]27 + '\[[0-9;]*m'), ''
 }
 try {
   New-Item -ItemType Directory -Path $fixture | Out-Null
@@ -40,6 +43,17 @@ try {
     Assert-Equal $parseErrors.Count 0 "Parse $($file.Name)"
   }
   . (Join-Path $repo 'powershell/profile.ps1')
+  if (Get-Module -Name PSReadLine) {
+    $inputColors = Get-PSReadLineOption
+    $expectedInputColors = @{
+      DefaultTokenColor = 39; CommentColor = 90; KeywordColor = 92
+      CommandColor = 96; StringColor = 93; NumberColor = 95; VariableColor = 97
+      OperatorColor = 97; ParameterColor = 94; TypeColor = 94; MemberColor = 96; ErrorColor = 91
+    }
+    foreach ($name in $expectedInputColors.Keys) {
+      Assert-Equal $inputColors.$name ([string][char]27 + '[' + $expectedInputColors[$name] + 'm') "PowerShell input $name follows ANSI palette"
+    }
+  }
   Assert-Equal $script:MeowskyCommands.Count 10 'Registered commands and aliases'
   Assert-Equal ($script:MeowskyCommands['identity'].SkipWorkRoot) $true 'Identity skips work-root dispatch'
   Assert-Equal (@($script:MeowskyCommands.Values | Where-Object { $_.SkipWorkRoot }).Count) 1 'Other features retain work-root behavior'
@@ -70,16 +84,17 @@ try {
   $oldHelp = $baselineAst.Find({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Show-MeowskyHelp' }, $true).Extent.Text
   $legacyHelp = ($globalHelp -split "`r?`n" | Where-Object { $_ -notmatch '^\s+meowsky identity' }) -join "`n"
   $expectedLegacyHelp = ((& { . ([scriptblock]::Create($oldHelp)); Show-MeowskyHelp }).TrimEnd()) -replace "`r`n", "`n"
-  Assert-Equal $legacyHelp $expectedLegacyHelp 'Original global help preserved alongside Identity'
+  $filter = { $_ -notmatch '^\s+meowsky color|^\s+then under the work root' }
+  Assert-Equal (($legacyHelp -split "`n" | Where-Object $filter) -join "`n") (($expectedLegacyHelp -split "`n" | Where-Object $filter) -join "`n") 'Global help preserved except retired colors and Identity'
   $oldTree = $baselineAst.Find({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'ptree' }, $true).Extent.Text
   foreach ($level in @(1, 2, 3, 15)) {
     $expected = Capture { . ([scriptblock]::Create($oldTree)); ptree $level }
-    Assert-Equal (Capture { ptree $level }) $expected "Tree depth $level"
-    Assert-Equal (Capture { meowsky ptree $level }) $expected "Dispatch tree depth $level"
+    Assert-Equal (Remove-Ansi (Capture { ptree $level })) $expected "Tree depth $level"
+    Assert-Equal (Remove-Ansi (Capture { meowsky ptree $level })) $expected "Dispatch tree depth $level"
   }
   Assert-Equal (Capture { meowsky PTREE }) (Capture { ptree }) 'Case-insensitive command'
   for ($i = 0; $i -lt 55; $i++) { Set-Content (Join-Path $project "item-$i.txt") 'item' }
-  Assert-Equal (Capture { ptree 2 }) (Capture { . ([scriptblock]::Create($oldTree)); ptree 2 }) 'Tree 50-item limit'
+  Assert-Equal (Remove-Ansi (Capture { ptree 2 })) (Capture { . ([scriptblock]::Create($oldTree)); ptree 2 }) 'Tree 50-item limit'
   $oldSnapshot = $baselineAst.Find({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Get-MeowskyPromptTree' }, $true).Extent.Text
   Assert-Equal (Get-MeowskyPromptTree $project) (& { . ([scriptblock]::Create($oldSnapshot)); Get-MeowskyPromptTree $project }) 'Codex snapshot output'
   $oldPrompt = $baselineAst.Find({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Get-MeowskyCodexPrompt' }, $true).Extent.Text
@@ -87,39 +102,29 @@ try {
   $expectedPrompt = & { . ([scriptblock]::Create($oldPrompt)); Get-MeowskyCodexPrompt '2026-09-26' $project 'tree fixture' 'git fixture' }
   Assert-Equal (Get-MeowskyCodexPrompt '2026-09-26' $project 'tree fixture' 'git fixture') $expectedPrompt 'Fallback prompt preserved'
   $env:MEOWSKY_DEVKIT_HOME = $repo
-  foreach ($name in @('Resolve-MeowskyCodexCommand', 'New-MeowskyCodexNodeLauncher', 'Invoke-MeowskyCodex', 'Start-MeowskyMatrix')) {
+  foreach ($name in @('Resolve-MeowskyCodexCommand', 'New-MeowskyCodexNodeLauncher', 'Invoke-MeowskyCodex')) {
     $oldFunction = $baselineAst.Find({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $name }, $true).Extent.Text
     Assert-Equal ((Get-Command $name).ScriptBlock.ToString().Trim()) (([scriptblock]::Create($oldFunction)).Ast.Find({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] }, $true).Body.ToString().Trim('{}').Trim()) "Preserved $name implementation"
   }
   Assert-Equal ((Get-Alias dev).Definition) 'meowsky' 'Compatibility alias'
   $completion = [Management.Automation.CommandCompletion]::CompleteInput('meowsky co', 10, $null)
   Assert-Equal (($completion.CompletionMatches.CompletionText | Sort-Object) -join ',') 'codex,color' 'Command completion'
-  $completion = [Management.Automation.CommandCompletion]::CompleteInput('meowsky color gr', 16, $null)
-  Assert-Equal (($completion.CompletionMatches.CompletionText | Sort-Object) -join ',') 'gray,green,grey' 'Color completion'
-
-  # Keep persistent state and console effects inside the fixture.
-  function Apply-MeowskyConsoleColor { param([string]$Color) $script:appliedColor = $Color }
-  function Get-MeowskyColorSignalPath { Join-Path $fixture 'color-signal.txt' }
-  meowsky color teal
-  Assert-Equal (Get-MeowskyProjectColor) 'teal' 'Saved color'
-  Assert-Equal (Get-MeowskyProjectConsoleColor) 'Cyan' 'Console color mapping'
-  Assert-Equal $script:appliedColor 'teal' 'Apply saved color'
-  Assert-Equal (Test-Path (Join-Path $env:LOCALAPPDATA 'Meowsky/project-colors.json')) $true 'Unchanged config path'
-  Assert-Equal (Test-Path (Get-MeowskyColorSignalPath)) $true 'Color signal'
-  Assert-Equal ((Capture { meowsky color }) -match 'Current project color: teal') $true 'Color listing'
-  meowsky color reset
-  Assert-Equal (Get-MeowskyProjectColor) '' 'Reset removes saved color'
-  Assert-Equal $script:appliedColor 'reset' 'Reset applies Gray'
-  meowsky color green
-  meowsky color default
-  Assert-Equal (Get-MeowskyProjectColor) '' 'Default removes saved color'
-  Assert-Equal (Get-MeowskyProjectConsoleColor) 'Green' 'Unsaved panel color preserved'
-  $script:refreshes = 0
-  $script:MeowskyStatusRefresh = { $script:refreshes++ }
-  $env:MEOWSKY_PANEL = 'status'
-  meowsky color red
-  Assert-Equal $script:refreshes 1 'Status refresh callback'
-  $env:MEOWSKY_PANEL = ''
+  # A pre-existing project override must neither be read nor rewritten.
+  $legacyDirectory = Join-Path $env:LOCALAPPDATA 'Meowsky'
+  New-Item -ItemType Directory -Path $legacyDirectory -Force | Out-Null
+  $legacyPath = Join-Path $legacyDirectory 'project-colors.json'
+  [IO.File]::WriteAllText($legacyPath, '{"legacy":"green"}')
+  $legacyBytes = [Convert]::ToBase64String([IO.File]::ReadAllBytes($legacyPath))
+  $script:themeResets = 0
+  function Reset-MeowskyTerminalColors { $script:themeResets++ }
+  foreach ($argument in @('', 'teal', 'reset', 'default')) {
+    Assert-Equal ((Capture { meowsky color $argument }) -match 'overrides are retired') $true 'Retired color command explains theme ownership'
+  }
+  Assert-Equal $script:themeResets 0 'Color compatibility command changes no console colors'
+  Assert-Equal ([Convert]::ToBase64String([IO.File]::ReadAllBytes($legacyPath))) $legacyBytes 'Legacy colors remain untouched'
+  foreach ($file in @('features/codex/codex.ps1', 'features/workspace/workspace.ps1', 'features/tree/tree.ps1', 'features/matrix/matrix.ps1')) {
+    Assert-Equal ((Get-Content -Raw (Join-Path $repo $file)) -match 'ForegroundColor|Apply-MeowskyConsoleColor|Get-MeowskyProjectConsoleColor|Apply-MeowskyProjectColor') $false "No palette override in $file"
+  }
 
   # Mock process boundaries, exercising feature dispatch and generated arguments.
   function Get-Command {
@@ -161,7 +166,7 @@ try {
   Assert-Equal $script:codexArgs[0] '-C' 'Codex working-directory flag'
   Assert-Equal $script:codexArgs[1] $project 'Codex default directory'
   Assert-Equal ($script:codexArgs[2] -match [regex]::Escape("Workspace root: $project")) $true 'Codex orientation substitution'
-  Assert-Equal $script:appliedColor 'cyan' 'Codex fixed cyan color'
+  Assert-Equal $script:themeResets 1 'Codex restores terminal theme defaults'
   meowsky codex $env:WORK_HOME
   Assert-Equal $script:codexArgs[1] $env:WORK_HOME 'Codex explicit directory'
   meowsky ./
@@ -177,6 +182,10 @@ try {
     }
   }
   Assert-Equal $encoded.Count 4 'Four panes'
+  foreach ($pane in $encoded) {
+    Assert-Equal ($pane -match 'Reset-MeowskyTerminalColors') $true 'Every pane restores terminal theme defaults'
+    Assert-Equal ($pane -match 'Apply-MeowskyConsoleColor|Apply-MeowskyProjectColor') $false 'No generated pane color override'
+  }
   Assert-Equal ($encoded[1] -match 'meowsky matrix') $true 'Matrix pane preserved'
   Assert-Equal ($encoded[2] -match 'Start-MeowskyStatusPanel') $true 'Status pane preserved'
   Assert-Equal ($encoded[3] -match 'Start-MeowskyTreePanel') $true 'Tree pane preserved'

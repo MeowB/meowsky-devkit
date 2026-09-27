@@ -4,7 +4,7 @@
 
 ## Feature contract
 
-Each PowerShell feature owns implementation, `help.txt` and `feature.psd1`. Manifest fields are `Name`, `Command`, `Aliases`, `EntryPoint`, `Handler`, `Help`, and `Description`. `Handler` names a function accepting `Target` and `WorkRoot`. Color also declares its `Completion` function.
+Each PowerShell feature owns implementation, `help.txt` and `feature.psd1`. Manifest fields are `Name`, `Command`, `Aliases`, `EntryPoint`, `Handler`, `Help`, and `Description`. `Handler` names a function accepting `Target` and `WorkRoot`. Color is an explanatory compatibility command; project color overrides are retired.
 
 Identity opts into two optional manifest flags: `SkipWorkRoot` bypasses work-root creation and passes no work root; `AcceptsArguments` forwards trailing CLI tokens in the handler's `Arguments` array. Features without those flags retain their existing dispatch behavior. `SkipWorkRoot` describes dispatch only; Identity may install a theme when explicitly requested without `--dry-run`.
 
@@ -20,14 +20,14 @@ Folder names do not create commands: tree remains `ptree`, workspace remains `.`
 | md | Pandoc preview | paths |
 | pdf | Viewer launch | paths |
 | codex | Launchers and primary/fallback prompts | paths, git, directory-tree, terminal |
-| color | Existing color command and completion | terminal |
+| color | Explain retirement of project color overrides | none |
 | identity | Semantic theme loading, validation, planning, Windows/Terminal/VS Code UI/syntax adapters, and help | feature-loader (help resource) |
 | matrix | Animation | terminal |
 | workspace | Layout and status banner | feature-loader, terminal, git |
 
-For a feature change, read that directory and the listed core files. Tree and Codex share enumeration but retain separate rendering. Terminal core owns color maps, persistence and signaling because several features use them. No generic configuration or event framework is introduced.
+For a feature change, read that directory and the listed core files. Tree and Codex share enumeration but retain separate rendering. Terminal core only restores terminal-default foreground/background with ANSI SGR 39/49. Theme definitions own colors. Runtime panels use standard ANSI roles from the active palette: green Matrix glyphs/header, blue folders, cyan project path, and green/yellow clean/dirty working-tree status. Each colored segment restores the default foreground; panels do not load project colors. No generic configuration or event framework is introduced.
 
-Workspace is the composition exception: it uses Codex context/launch functions, the tree panel and matrix dispatch. It checks those features before opening a window. Workspace registers a status-refresh scriptblock with terminal core; color calls that core hook without depending on workspace directly.
+Workspace is the composition exception: it uses Codex context/launch functions, the tree panel and matrix dispatch. It checks those features before opening a window. All workspace panes restore terminal defaults on startup. Tree and Matrix no longer poll project-color files. Files, tree connectors, and ordinary Git metadata retain the default foreground.
 
 Identity follows the same manifest and handler contract. `identity.ps1` handles CLI syntax, `themes.ps1` resolves/loads/validates JSON definitions, and `plan.ps1` detects targets and builds an ordered plan plus display output; `apply.ps1` executes the existing adapters sequentially, isolates target failures, and formats results. `adapters/windows-normal.ps1` selects normal/contrast Windows mode and owns normal personalization planning, scoped registry backups, and verified writes; `adapters/windows-native.ps1` isolates documented contrast-state/transition APIs and refresh broadcasts. `adapters/windows.ps1` retains Windows Contrast Themes unchanged. The single `--windows-mode normal|contrast` override affects Windows only; Terminal and VS Code consume the same semantic palette. `adapters/terminal.ps1` owns Terminal palette generation, discovery, and planning; `terminal-settings.ps1` owns its scheme/profile merge. `adapters/vscode.ps1` owns VS Code UI mappings, settings discovery, and planning; `adapters/vscode-syntax.ps1` owns semantic/TextMate generation and the narrow syntax merge. Both settings adapters reuse `settings-jsonc.ps1` for narrow source-span edits and `settings-file.ps1` for exact backups, concurrency checks, and atomic replacement. Theme loading/validation happens once per command; the internal validated flag avoids repeated renderer validation, while standalone renderers still validate by default. Windows installation consumes its prebuilt definition. Renderers are shared by previews and application; dry-run never calls a writer. UI colors, syntax colors, and visual preferences remain separate; future identities need only another definition. See [identity.md](identity.md) for mappings and safety. VS Code syntax highlighting is implemented; Neovim integration is not implemented.
 
@@ -35,7 +35,7 @@ Removing an ordinary feature directory removes its registered commands on a fres
 
 ## Installation boundaries
 
-Windows loads this checkout directly through the installed profile. `MEOWSKY_DEVKIT_HOME` still controls primary Codex template lookup. Configuration paths, temporary prompts and color signaling are unchanged.
+Windows loads this checkout directly through the installed profile. `MEOWSKY_DEVKIT_HOME` still controls primary Codex template lookup. Temporary prompts and configuration discovery paths are unchanged. Legacy project-color files are ignored and left untouched.
 
 Linux has a `shell/meowsky.sh` bootstrap and `.sh` implementations beside their features. Its installer copies those files to the existing runtime directory; the checkout is not needed at runtime. Linux retains its command subset and prompt. PowerShell manifests do not drive shell loading.
 
@@ -57,6 +57,12 @@ powershell -NoProfile -File tests/verify-windows-normal.ps1
 bash tests/verify-linux.sh
 ```
 
-Suites compare behavior with the original monoliths at the recorded pre-refactor Git revision. Override that baseline through PowerShell's `BaselineRevision` parameter or shell's `MEOWSKY_BASELINE_REVISION` variable if needed. Process boundaries are mocked: no GUI, installer, Codex session or live animation is started.
+Suites compare retained behavior with the original monoliths at the recorded pre-refactor Git revision, with explicit assertions for the intentional retirement of color overrides. Override that baseline through PowerShell's `BaselineRevision` parameter or shell's `MEOWSKY_BASELINE_REVISION` variable if needed. Process boundaries are mocked: no GUI, installer, Codex session or live animation is started.
 
-Manually verify Windows Terminal geometry, matrix resize/Ctrl+C, tree color refresh, status-pane color changes, actual Markdown/PDF previews and real Codex startup. apt, tmux and xdg-open integration requires Linux. Automated checks cover dispatch, output, persistence and launch scripts.
+Manually verify Windows Terminal geometry, matrix resize/Ctrl+C, theme colors and foreground restoration across all panes, actual Markdown/PDF previews and real Codex startup. apt, tmux and xdg-open integration requires Linux. Automated checks cover dispatch, output, persistence and launch scripts.
+
+Theme discovery supports flat `themes/<id>.json` and folder `themes/<id>/<id>.json` definitions, rejecting duplicate IDs across the two layouts. Wallpapers and icons beside a definition are visual references only; the runtime reads JSON alone.
+
+The optional `ansi` group owns a complete 16-color semantic palette independently of UI branding and syntax. The loader validates every slot. Terminal maps `magenta` to `purple`; VS Code maps the same values to its integrated-terminal ANSI keys. Version-1 themes without this group retain the previous fallback behavior.
+
+Optional `ui.border`, `ui.accentActive`, and `ui.onAccent` roles separate structural outlines, active indicators, and control labels. Windows contrast and VS Code adapters preserve legacy mappings when these roles are absent. Normal Windows accent still resolves through `windows.accent`; all palette values remain in theme JSON. Runtime pane accents use the active ANSI palette, with terminal defaults for ordinary text.

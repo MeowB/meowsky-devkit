@@ -194,7 +194,7 @@ function Invoke-MeowskyCodexFeature {
       $codexPrompt = Get-MeowskyCodexPrompt -Today $today -Root $root -Tree $promptTree -GitStatus $gitStatus
       $promptPath = New-MeowskyCodexPromptFile -Prompt $codexPrompt
 
-      Apply-MeowskyConsoleColor -Color cyan
+      Reset-MeowskyTerminalColors
       Clear-Host
       Start-Sleep -Milliseconds 250
       Invoke-MeowskyCodex -Root $root -PromptPath $promptPath

@@ -38,15 +38,29 @@ function Get-MeowskyTerminalScheme {
     name = $Theme.name
     background = $background; foreground = $foreground
     selectionBackground = $Theme.ui.selection; cursorColor = $Theme.ui.accentBright
-    black = $black; red = $Theme.ui.error; green = $Theme.ui.accent
-    yellow = $Theme.ui.warning
-    blue = Move-MeowskyTerminalHue -Hex $Theme.syntax.constant -Degrees 60
-    purple = Move-MeowskyTerminalHue -Hex $Theme.syntax.type -Degrees 160
-    cyan = $Theme.syntax.constant; white = $Theme.ui.text
-    brightBlack = $Theme.ui.muted; brightGreen = $Theme.ui.accentBright
   }
-  foreach ($name in @('red', 'yellow', 'blue', 'purple', 'cyan', 'white')) {
-    $scheme['bright' + [char]::ToUpperInvariant($name[0]) + $name.Substring(1)] = Get-MeowskyTerminalBrightColor $scheme[$name]
+  if ($Theme.PSObject.Properties['ansi']) {
+    foreach ($role in $Theme.ansi.PSObject.Properties) {
+      $key = switch -CaseSensitive ($role.Name) {
+        'magenta' { 'purple' }; 'brightMagenta' { 'brightPurple' }; default { $role.Name }
+      }
+      # Only standard ANSI slots are mapped; metadata cannot override scheme defaults.
+      if ($key -cin @('black', 'red', 'green', 'yellow', 'blue', 'purple', 'cyan', 'white',
+        'brightBlack', 'brightRed', 'brightGreen', 'brightYellow', 'brightBlue', 'brightPurple', 'brightCyan', 'brightWhite')) {
+        $scheme[$key] = $role.Value
+      }
+    }
+  } else {
+    # Legacy palettes keep their original derived behavior.
+    $scheme['black'] = $black; $scheme['red'] = $Theme.ui.error; $scheme['green'] = $Theme.ui.accent
+    $scheme['yellow'] = $Theme.ui.warning
+    $scheme['blue'] = Move-MeowskyTerminalHue -Hex $Theme.syntax.constant -Degrees 60
+    $scheme['purple'] = Move-MeowskyTerminalHue -Hex $Theme.syntax.type -Degrees 160
+    $scheme['cyan'] = $Theme.syntax.constant; $scheme['white'] = $Theme.ui.text
+    $scheme['brightBlack'] = $Theme.ui.muted; $scheme['brightGreen'] = $Theme.ui.accentBright
+    foreach ($name in @('red', 'yellow', 'blue', 'purple', 'cyan', 'white')) {
+      $scheme['bright' + [char]::ToUpperInvariant($name[0]) + $name.Substring(1)] = Get-MeowskyTerminalBrightColor $scheme[$name]
+    }
   }
   $cursors = @{ block = 'filledBox'; bar = 'bar'; underline = 'underscore' }
   [pscustomobject]@{ Scheme = $scheme; CursorShape = $cursors[$Theme.preferences.cursor.style] }
@@ -124,7 +138,7 @@ function Show-MeowskyTerminalPlan {
 
   "Terminal settings: $($Plan.Path)"
   "Terminal scheme: $($Plan.Definition.Scheme.name)"
-  "Would set profiles.defaults.colorScheme and cursorShape=$($Plan.Definition.CursorShape). Individual profile overrides remain unchanged."
+  "Would set profiles.defaults.colorScheme and cursorShape=$($Plan.Definition.CursorShape). Conflicting profile palette and cursor overrides are removed; other settings remain unchanged."
   foreach ($name in $Plan.Definition.Scheme.Keys) { "  ${name}: $($Plan.Definition.Scheme[$name])" }
   if ($Plan.Changed) { 'Would back up the original bytes beside settings.json, then apply targeted edits.' }
   else { 'Already matches; no write or new backup is needed.' }

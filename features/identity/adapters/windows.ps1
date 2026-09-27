@@ -27,6 +27,13 @@ function Get-MeowskyWindowsTheme {
     ButtonHilight = 'accentSoft'; ButtonLight = 'surfaceRaised'; ButtonAlternateFace = 'surface'
     InfoText = 'text'; InfoWindow = 'surface'
   }
+  if ($Theme.ui.PSObject.Properties['border']) {
+    $roles['WindowFrame'] = 'border'; $roles['InactiveBorder'] = 'border'
+  }
+  if ($Theme.ui.PSObject.Properties['accentActive']) {
+    $roles['ActiveBorder'] = 'accentActive'
+    $roles['HotTrackingColor'] = 'accentSoft'
+  }
   $colors = foreach ($key in $roles.Keys) {
     $hex = $Theme.ui.($roles[$key])
     $rgb = (0, 2, 4 | ForEach-Object { [Convert]::ToInt32($hex.Substring(1 + $_, 2), 16) }) -join ' '

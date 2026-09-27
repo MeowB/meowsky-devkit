@@ -6,11 +6,16 @@ function Resolve-MeowskyIdentityTheme {
   if ($Id -cnotmatch '\A[a-z][a-z0-9]*(?:-[a-z0-9]+)*\z') {
     throw 'Identity id must be a lowercase slug such as meo-matrix, not a file path.'
   }
-  $path = [IO.Path]::GetFullPath((Join-Path $ThemeDirectory "$Id.json"))
-  if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
-    throw "Identity '$Id' was not found. Expected theme file: $path"
+  $paths = @(
+    [IO.Path]::GetFullPath((Join-Path $ThemeDirectory "$Id.json"))
+    [IO.Path]::GetFullPath((Join-Path $ThemeDirectory "$Id/$Id.json"))
+  )
+  $found = @($paths | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf })
+  if ($found.Count -eq 0) {
+    throw "Identity '$Id' was not found. Expected theme file: $($paths -join ' or ')"
   }
-  $path
+  if ($found.Count -gt 1) { throw "Ambiguous identity '$Id': both flat and folder definitions exist." }
+  $found[0]
 }
 
 function Assert-MeowskyIdentityTheme {
@@ -28,7 +33,12 @@ function Assert-MeowskyIdentityTheme {
     ui = @('background', 'surface', 'surfaceRaised', 'text', 'muted', 'accent', 'accentBright', 'accentSoft', 'selection', 'warning', 'error')
     syntax = @('text', 'comment', 'keyword', 'function', 'type', 'string', 'number', 'constant', 'operator', 'error', 'warning')
   }
-  foreach ($group in @('ui', 'syntax')) {
+  # Explicit terminal semantics are optional for existing version-1 definitions.
+  if ($Theme.PSObject.Properties['ansi']) {
+    $roles['ansi'] = @('black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white',
+      'brightBlack', 'brightRed', 'brightGreen', 'brightYellow', 'brightBlue', 'brightMagenta', 'brightCyan', 'brightWhite')
+  }
+  foreach ($group in $roles.Keys) {
     if ($Theme.$group -isnot [pscustomobject]) { throw "Missing or invalid required semantic group: $group." }
     foreach ($role in $roles[$group]) {
       if (-not $Theme.$group.PSObject.Properties[$role] -or $null -eq $Theme.$group.$role) {
@@ -39,8 +49,8 @@ function Assert-MeowskyIdentityTheme {
       }
     }
   }
-  # Optional terminal-specific roles; older version-1 themes remain valid.
-  foreach ($role in @('terminalText', 'terminalBackground', 'terminalBlack')) {
+  # Optional UI refinements; older version-1 themes retain their adapter fallbacks.
+  foreach ($role in @('terminalText', 'terminalBackground', 'terminalBlack', 'border', 'accentActive', 'onAccent')) {
     if ($Theme.ui.PSObject.Properties[$role]) {
       if ($Theme.ui.$role -isnot [string] -or $Theme.ui.$role -notmatch '\A#[0-9a-fA-F]{6}\z') {
         throw "Invalid color for ui.$role; expected #RRGGBB."
@@ -92,7 +102,13 @@ function Read-MeowskyIdentityTheme {
 function Get-MeowskyIdentities {
   param([string]$ThemeDirectory = $script:MeowskyIdentityThemes)
 
-  foreach ($file in Get-ChildItem -LiteralPath $ThemeDirectory -Filter '*.json' -File -ErrorAction Stop | Sort-Object BaseName) {
-    Read-MeowskyIdentityTheme -Path $file.FullName
+  $ids = @(
+    Get-ChildItem -LiteralPath $ThemeDirectory -Filter '*.json' -File -ErrorAction Stop | ForEach-Object { $_.BaseName }
+    Get-ChildItem -LiteralPath $ThemeDirectory -Directory -ErrorAction Stop | Where-Object {
+      Test-Path -LiteralPath (Join-Path $_.FullName "$($_.Name).json") -PathType Leaf
+    } | ForEach-Object { $_.Name }
+  )
+  foreach ($id in $ids | Sort-Object -Unique) {
+    Read-MeowskyIdentityTheme -Path (Resolve-MeowskyIdentityTheme -Id $id -ThemeDirectory $ThemeDirectory)
   }
 }

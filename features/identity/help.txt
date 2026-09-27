@@ -2,7 +2,7 @@ meowsky identity
 Describe Identity, a coherent visual identity across the development environment.
 
 meowsky identity list
-Discover available identities from features/identity/themes/*.json.
+Discover available identities from features/identity/themes/<id>.json or themes/<id>/<id>.json.
 
 meowsky identity --help
 Show this help. -h and -Help also work through the root command.

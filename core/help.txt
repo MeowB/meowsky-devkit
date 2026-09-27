@@ -28,9 +28,9 @@ COMMANDS
                             current directory with Codex, tree, and status panes.
     meowsky codex [path]    Start Codex with the Meowsky orientation prompt in
                             the given directory; default is the current one.
-    meowsky color           List available colors and the current project color.
-    meowsky color <color>   Set the current project's terminal color.
-    meowsky color reset     Remove the project's saved color and use the default.
+    meowsky color           Explain retired project color overrides.
+    meowsky color <color>   Compatibility command; no colors are changed.
+    meowsky color reset     Compatibility command; saved colors are ignored.
     meowsky color default   Same as reset.
     meowsky identity        Describe the Identity theme system.
     meowsky identity list   Discover available identity theme definitions.
@@ -56,7 +56,7 @@ OPTIONS
 PATHS AND COLORS
     The work root is WORK_HOME if set, otherwise F:\dev if it exists,
     otherwise $HOME\work. File and Codex paths are checked as typed first,
-    then under the work root. Run 'meowsky color' to list color names.
+    then under the work root. Terminal colors come from the active identity theme.
 
 SEE ALSO
     ptree [level]           Standalone form of 'meowsky ptree [level]'.

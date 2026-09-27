@@ -30,7 +30,12 @@ function ptree {
       $item = $visibleItems[$i]
       $isLast = $omittedCount -eq 0 -and $i -eq $visibleItems.Count - 1
       $connector = if ($isLast) { '`-- ' } else { '|-- ' }
-      Write-Host "$Prefix$connector$($item.Name)"
+      if ($item.PSIsContainer) {
+        $escape = [char]27
+        Write-Host "$Prefix$connector${escape}[34m$($item.Name)${escape}[39m"
+      } else {
+        Write-Host "$Prefix$connector$($item.Name)"
+      }
 
       if ($item.PSIsContainer) {
         $childPrefix = if ($isLast) { "$Prefix    " } else { "$Prefix|   " }
@@ -53,42 +58,12 @@ function Start-MeowskyTreePanel {
     [int]$PollMilliseconds = 500
   )
 
-  $previousForeground = $Host.UI.RawUI.ForegroundColor
-  $signalPath = Get-MeowskyColorSignalPath
-  $lastSignalWrite = if (Test-Path -LiteralPath $signalPath) {
-    (Get-Item -LiteralPath $signalPath).LastWriteTimeUtc
-  } else {
-    [datetime]::MinValue
-  }
-
-  function Redraw-MeowskyTree {
-    $Host.UI.RawUI.ForegroundColor = Get-MeowskyProjectConsoleColor
-    Clear-Host
-    ptree $Level
-  }
-
-  try {
-    Redraw-MeowskyTree
-
-    while ($true) {
-      Start-Sleep -Milliseconds $PollMilliseconds
-
-      if (-not (Test-Path -LiteralPath $signalPath)) {
-        continue
-      }
-
-      $signalWrite = (Get-Item -LiteralPath $signalPath).LastWriteTimeUtc
-      if ($signalWrite -ne $lastSignalWrite) {
-        $lastSignalWrite = $signalWrite
-        Redraw-MeowskyTree
-      }
-    }
-  } finally {
-    try {
-      $Host.UI.RawUI.ForegroundColor = $previousForeground
-    } catch {
-      Write-Host ''
-    }
+  Reset-MeowskyTerminalColors
+  Clear-Host
+  ptree $Level
+  # Keep the pane open; terminal settings updates supply the colors directly.
+  while ($true) {
+    Start-Sleep -Milliseconds $PollMilliseconds
   }
 }
 

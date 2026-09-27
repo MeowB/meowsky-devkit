@@ -1,9 +1,7 @@
 function Start-MeowskyMatrix {
     $random = [Random]::new()
+    $escape = [char]27
     $glyphs = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz@#$%&*+-=<>[]{}'
-    $color = Get-MeowskyProjectConsoleColor
-    $nextColorRefresh = [datetime]::MinValue
-    $previousForeground = $Host.UI.RawUI.ForegroundColor
     $previousCursorVisible = $true
 
     try {
@@ -14,6 +12,7 @@ function Start-MeowskyMatrix {
     }
 
     try {
+      Reset-MeowskyTerminalColors
       Clear-Host
 
       while ($true) {
@@ -33,12 +32,6 @@ function Start-MeowskyMatrix {
         }
 
         while ($true) {
-          $now = [datetime]::UtcNow
-          if ($now -ge $nextColorRefresh) {
-            $color = Get-MeowskyProjectConsoleColor
-            $nextColorRefresh = $now.AddSeconds(1)
-          }
-
           $currentWidth = [Math]::Max(1, [Console]::WindowWidth)
           $currentHeight = [Math]::Max(1, [Console]::WindowHeight)
           if ($currentWidth -ne $width -or $currentHeight -ne $height) {
@@ -63,8 +56,7 @@ function Start-MeowskyMatrix {
             $y = $column.Y
             if ($y -ge 0 -and $y -lt $height) {
               [Console]::SetCursorPosition($x, $y)
-              $Host.UI.RawUI.ForegroundColor = $color
-              Write-Host $glyphs[$random.Next(0, $glyphs.Length)] -NoNewline
+              Write-Host "${escape}[32m$($glyphs[$random.Next(0, $glyphs.Length)])${escape}[39m" -NoNewline
             }
 
             $tail = $y - $column.Length
@@ -92,7 +84,7 @@ function Start-MeowskyMatrix {
       }
     } finally {
       try {
-        $Host.UI.RawUI.ForegroundColor = $previousForeground
+        Reset-MeowskyTerminalColors
         [Console]::CursorVisible = $previousCursorVisible
         Clear-Host
       } catch {
