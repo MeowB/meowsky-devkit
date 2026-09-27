@@ -4,11 +4,13 @@
 
 ## Feature contract
 
-Each PowerShell feature owns implementation, `help.txt` and `feature.psd1`. Manifest fields are `Name`, `Command`, `Aliases`, `EntryPoint`, `Handler`, `Help`, and `Description`. `Handler` names a function accepting `Target` and `WorkRoot`. Identity also declares its `Completion` function.
+Each PowerShell feature owns implementation, `help.txt` and `feature.psd1`. Manifest fields are `Name`, `Command`, `Aliases`, `EntryPoint`, `Handler`, `Help`, and `Description`. `Handler` names a function accepting `Target` and `WorkRoot`. Color also declares its `Completion` function.
+
+Identity opts into two optional manifest flags: `ReadOnly` bypasses work-root creation and passes no work root; `AcceptsArguments` forwards trailing CLI tokens in the handler's `Arguments` array. Features without those flags retain their existing dispatch behavior.
 
 The loader validates resource paths, handlers and duplicate commands. Registration is explicit in `core/feature-loader.ps1`; there is no auto-discovery. Loading defines functions; the handler executes the command.
 
-Folder names do not create commands: tree remains `ptree`, identity remains `color`, workspace remains `.` / `./`. Unknown actions still attempt directory navigation. Feature `-h` / `-Help` reads feature help; global help remains in `core/help.txt`.
+Folder names do not create commands: tree remains `ptree`, workspace remains `.` / `./`. Color owns `color`; Identity owns `identity`. Unknown actions still attempt directory navigation. Feature `-h` / `-Help` reads feature help; global help remains in `core/help.txt`. Identity also handles its positional `--help` through its feature handler.
 
 ## Ownership and dependencies
 
@@ -18,13 +20,16 @@ Folder names do not create commands: tree remains `ptree`, identity remains `col
 | md | Pandoc preview | paths |
 | pdf | Viewer launch | paths |
 | codex | Launchers and primary/fallback prompts | paths, git, directory-tree, terminal |
-| identity | Existing color command and completion | terminal |
+| color | Existing color command and completion | terminal |
+| identity | Semantic theme loading, validation, read-only planning, and help | feature-loader (help resource) |
 | matrix | Animation | terminal |
 | workspace | Layout and status banner | feature-loader, terminal, git |
 
 For a feature change, read that directory and the listed core files. Tree and Codex share enumeration but retain separate rendering. Terminal core owns color maps, persistence and signaling because several features use them. No generic configuration or event framework is introduced.
 
-Workspace is the composition exception: it uses Codex context/launch functions, the tree panel and matrix dispatch. It checks those features before opening a window. Workspace registers a status-refresh scriptblock with terminal core; identity calls that core hook without depending on workspace directly.
+Workspace is the composition exception: it uses Codex context/launch functions, the tree panel and matrix dispatch. It checks those features before opening a window. Workspace registers a status-refresh scriptblock with terminal core; color calls that core hook without depending on workspace directly.
+
+Identity follows the same manifest and handler contract. `identity.ps1` handles CLI syntax, `themes.ps1` resolves/loads/validates JSON definitions, and `plan.ps1` detects targets and produces a structured plan plus display output. UI colors, syntax colors, and visual preferences are separate semantic groups; future identities need only another definition. See [identity.md](identity.md) for the schema and planned integrations. Step 2 is read-only; no adapters or settings writes exist.
 
 Removing an ordinary feature directory removes its registered commands on a fresh profile load. Other ordinary features continue loading. Workspace reports a missing composed feature before starting. An unregistered action may still navigate to a matching directory. Start a fresh shell after removals: old functions can remain in an already-running shell.
 
@@ -40,6 +45,7 @@ Linux has a `shell/meowsky.sh` bootstrap and `.sh` implementations beside their 
 
 ```powershell
 powershell -NoProfile -File tests/verify-refactor.ps1
+powershell -NoProfile -File tests/verify-identity.ps1
 ```
 
 ```bash

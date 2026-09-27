@@ -1,7 +1,7 @@
 # Explicit registration, intentionally not filesystem auto-discovery.
 $script:MeowskyFeatures = @{}
 $script:MeowskyCommands = @{}
-$script:MeowskyFeatureOrder = @('codex', 'identity', 'matrix', 'tree', 'md', 'pdf', 'workspace')
+$script:MeowskyFeatureOrder = @('codex', 'color', 'identity', 'matrix', 'tree', 'md', 'pdf', 'workspace')
 foreach ($featureName in $script:MeowskyFeatureOrder) {
   $featureDirectory = Join-Path $script:MeowskyRoot "features/$featureName"
   if (-not (Test-Path -LiteralPath $featureDirectory)) { continue }

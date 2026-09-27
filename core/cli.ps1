@@ -17,9 +17,14 @@ function meowsky {
     }
     return
   }
-  $workRoot = Get-WorkRoot
+  # Read-only features must not create the work root as a dispatch side effect.
+  $workRoot = if (-not ($feature -and $feature.ReadOnly)) { Get-WorkRoot }
   if ($feature) {
-    & $feature.Handler -Target $Target -WorkRoot $workRoot
+    if ($feature.AcceptsArguments) {
+      & $feature.Handler -Target $Target -WorkRoot $workRoot -Arguments $args
+    } else {
+      & $feature.Handler -Target $Target -WorkRoot $workRoot
+    }
     return
   }
   if ($Action) {

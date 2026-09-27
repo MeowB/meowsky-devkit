@@ -1,6 +1,15 @@
-meowsky color [color]
-No argument lists colors and the current project color.
-reset / default remove the saved color and restore Gray.
-Run meowsky color to see all supported color names.
+meowsky identity
+Describe Identity, a coherent visual identity across the development environment.
 
-Use -h or -Help after the command to show this help (PowerShell).
+meowsky identity list
+Discover available identities from features/identity/themes/*.json.
+
+meowsky identity --help
+Show this help. -h and -Help also work through the root command.
+
+meowsky identity apply <id> --dry-run
+Load and validate a theme, detect Windows, Windows Terminal, and VS Code,
+and print a read-only application plan. --dry-run is required.
+
+Step 2 only: no saved active identity, settings changes, or adapters.
+Planned integrations: Windows, Windows Terminal, VS Code, and Neovim.

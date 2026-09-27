@@ -1,10 +1,11 @@
 @{
     Name = 'identity'
-    Command = 'color'
+    Command = 'identity'
     Aliases = @()
     EntryPoint = 'identity.ps1'
     Handler = 'Invoke-MeowskyIdentityFeature'
     Help = 'help.txt'
-    Description = 'Manage existing project terminal colors'
-    Completion = 'Complete-MeowskyIdentity'
+    Description = 'Explore semantic development environment identities'
+    ReadOnly = $true
+    AcceptsArguments = $true
 }

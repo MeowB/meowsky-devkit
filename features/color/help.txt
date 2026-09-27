@@ -1,0 +1,6 @@
+meowsky color [color]
+No argument lists colors and the current project color.
+reset / default remove the saved color and restore Gray.
+Run meowsky color to see all supported color names.
+
+Use -h or -Help after the command to show this help (PowerShell).

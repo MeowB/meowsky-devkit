@@ -40,8 +40,11 @@ try {
     Assert-Equal $parseErrors.Count 0 "Parse $($file.Name)"
   }
   . (Join-Path $repo 'powershell/profile.ps1')
-  Assert-Equal $script:MeowskyCommands.Count 9 'Registered commands and aliases'
-  foreach ($command in @('codex', 'color', 'matrix', 'ptree', 'md', 'markdown', 'pdf', '.', './')) {
+  Assert-Equal $script:MeowskyCommands.Count 10 'Registered commands and aliases'
+  Assert-Equal ($script:MeowskyCommands['identity'].ReadOnly) $true 'Identity read-only dispatch'
+  Assert-Equal (@($script:MeowskyCommands.Values | Where-Object { $_.ReadOnly }).Count) 1 'Other features retain work-root behavior'
+  Assert-Equal (@($script:MeowskyCommands.Values | Where-Object { $_.AcceptsArguments }).Count) 1 'Only Identity opts into extra arguments'
+  foreach ($command in @('codex', 'color', 'identity', 'matrix', 'ptree', 'md', 'markdown', 'pdf', '.', './')) {
     $manifest = $script:MeowskyCommands[$command]
     $expectedHelp = (Get-Content -Raw (Join-Path $manifest.Directory $manifest.Help)).TrimEnd()
     Assert-Equal ((meowsky $command -h).TrimEnd()) $expectedHelp "$command -h"
@@ -65,7 +68,9 @@ try {
   $baseline = (& git -C $repo show "${BaselineRevision}:powershell/profile.ps1") -join "`n"
   $baselineAst = [Management.Automation.Language.Parser]::ParseInput($baseline, [ref]$null, [ref]$null)
   $oldHelp = $baselineAst.Find({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Show-MeowskyHelp' }, $true).Extent.Text
-  Assert-Equal $globalHelp ((& { . ([scriptblock]::Create($oldHelp)); Show-MeowskyHelp }).TrimEnd()) 'Original global help preserved'
+  $legacyHelp = ($globalHelp -split "`r?`n" | Where-Object { $_ -notmatch '^\s+meowsky identity' }) -join "`n"
+  $expectedLegacyHelp = ((& { . ([scriptblock]::Create($oldHelp)); Show-MeowskyHelp }).TrimEnd()) -replace "`r`n", "`n"
+  Assert-Equal $legacyHelp $expectedLegacyHelp 'Original global help preserved alongside Identity'
   $oldTree = $baselineAst.Find({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'ptree' }, $true).Extent.Text
   foreach ($level in @(1, 2, 3, 15)) {
     $expected = Capture { . ([scriptblock]::Create($oldTree)); ptree $level }
@@ -205,7 +210,7 @@ Set-Alias dev Get-Date
 if ((Get-Alias dev).Definition -ne 'Get-Date') { throw 'Existing dev alias was overwritten.' }
 if ($script:MeowskyCommands.ContainsKey('md') -or $script:MeowskyCommands.ContainsKey('markdown')) { throw 'Removed feature still registered.' }
 if (-not (meowsky pdf -h).Contains('meowsky pdf')) { throw 'Unrelated feature failed.' }
-if ($script:MeowskyCommands.Count -ne 7) { throw 'Unexpected command count after feature removal.' }
+if ($script:MeowskyCommands.Count -ne 8) { throw 'Unexpected command count after feature removal.' }
 '@ | Set-Content -LiteralPath (Join-Path $isolatedRuntime 'verify.ps1') -Encoding UTF8
   & powershell.exe -NoProfile -File (Join-Path $isolatedRuntime 'verify.ps1')
   Assert-Equal $LASTEXITCODE 0 'Fresh-profile feature removal and existing alias preservation'
