@@ -1,0 +1,4 @@
+meowsky matrix
+Stop with Ctrl+C. Uses the current project color.
+
+Use -h or -Help after the command to show this help (PowerShell).

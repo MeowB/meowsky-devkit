@@ -1,0 +1,6 @@
+meowsky ptree [level]
+ptree [level]
+Default depth: 3. meowsky ptree requires a positive integer.
+Ignores build/dependency folders and displays at most 50 items per directory.
+
+Use -h or -Help after the command to show this help (PowerShell).

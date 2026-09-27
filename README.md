@@ -35,13 +35,24 @@ This setup is meant to feel like:
 .
 |-- README.md
 |-- docs/
+|   |-- architecture.md
 |   `-- new-pc-dev-setup.md
+|-- core/                   # shared runtime infrastructure and CLI
+|-- features/               # implementations, manifests and help
+|   |-- codex/
+|   |-- identity/
+|   |-- matrix/
+|   |-- md/
+|   |-- pdf/
+|   |-- tree/
+|   `-- workspace/
 |-- nvim/
-|   `-- init.lua
+|   `-- init.lua             # unchanged editor configuration
 |-- powershell/
 |   `-- profile.ps1
-|-- prompts/
-|   `-- codex-orientation.md
+|-- shell/
+|   `-- meowsky.sh           # Linux runtime bootstrap
+|-- tests/                  # behavior preservation checks
 `-- scripts/
     |-- install-windows.ps1
     `-- install-linux.sh
@@ -81,6 +92,8 @@ The full Linux workflow is documented in [docs/new-pc-dev-setup.md](docs/new-pc-
 
 Run `meowsky -h` for the complete command reference, including actions and arguments.
 
+PowerShell feature help is available with commands such as `meowsky ptree -h` or `meowsky codex -Help`. Each feature owns its help and manifest. See [docs/architecture.md](docs/architecture.md) for ownership, dependencies and verification.
+
 ```powershell
 meowsky
 ```
@@ -110,7 +123,7 @@ meowsky ptree 5
 
 When `meowsky ./` runs in any folder, it opens a fullscreen Windows Terminal layout with:
 
-- a Codex session started from [prompts/codex-orientation.md](prompts/codex-orientation.md)
+- a Codex session started from [features/codex/codex-orientation.md](features/codex/codex-orientation.md)
 - a shell at the project root
 - a tree view pane
 - a compact status pane
