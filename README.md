@@ -15,7 +15,7 @@ It is a small repo, but it does three concrete things:
 | Machine setup | Installs the core Windows tools this workflow expects: Neovim, Git, Node.js, tree-sitter, Zig, eza, and Pandoc |
 | GitHub CLI | Optional, only if you want terminal-first GitHub repo workflows |
 | Editor setup | Loads a personal Neovim config with web-focused plugins, LSPs, Treesitter, and completion |
-| Workspace flow | Adds `meowsky` to PowerShell so you can jump to the work root, open the fullscreen project layout, or start Codex directly |
+| Workspace flow | Adds `meowsky` to PowerShell so you can enter the workspace or dev district, open the fullscreen project layout, or start Codex directly |
 | Prompting | Keeps the Codex orientation prompt in a separate file so it can be reused and edited independently |
 | Preview helpers | Uses Pandoc to preview Markdown and the default PDF viewer for PDFs |
 | Linux support | Includes a lighter Ubuntu version using `tmux` |
@@ -71,6 +71,8 @@ Run the one-command bootstrap:
 
 It installs the core tools, copies the Neovim config, wires your PowerShell profile, and sets `MEOWSKY_DEVKIT_HOME` so the profile can find the Codex prompt file.
 
+Set the Windows user-level `WORK_HOME` to the absolute workspace path. On this machine it is `F:\meowsky`; the value is machine-specific and is not stored in this repository. Open a new terminal after setting it.
+
 The installer reuses tools that are already present. To explicitly check package upgrades too, run:
 
 ```powershell
@@ -99,9 +101,10 @@ PowerShell feature help is available with commands such as `meowsky ptree -h` or
 meowsky
 ```
 
-Go to the work root, open a project, then start the project layout:
+Enter the workspace or dev district, then open the project layout from the directory you want to work in:
 
 ```powershell
+meowsky dev
 meowsky my-app
 meowsky ./
 ```
@@ -133,7 +136,8 @@ When `meowsky ./` runs in any folder, it opens a fullscreen Windows Terminal lay
 
 | Command | What it does |
 | --- | --- |
-| `meowsky` | Change to the work root. |
+| `meowsky` | Ensure the workspace directories exist, then enter `WORK_HOME`. |
+| `meowsky dev` | Ensure the workspace directories exist, then enter `dev/`. |
 | `meowsky <directory>` | Change to a directory, checking the current location and then the work root. |
 | `meowsky .` or `meowsky ./` | Open the fullscreen Windows Terminal layout in the current directory. |
 | `meowsky codex [directory]` | Start Codex with the Meowsky orientation prompt; defaults to the current directory. |
@@ -155,7 +159,7 @@ When `meowsky ./` runs in any folder, it opens a fullscreen Windows Terminal lay
 | `meowsky pdf <file.pdf>` | Open a PDF in the default viewer. |
 | `meowsky -h`, `meowsky -Help`, `meowsky help`, or `meowsky --help` | Print the built-in command manual. |
 
-`ptree [level]` also works as a standalone command. `dev` is a compatibility alias for `meowsky` when available. The work root is `$env:WORK_HOME` if set, otherwise `F:\dev` if it exists, otherwise `$HOME\work`. Run `meowsky -h` for the terminal manual.
+`ptree [level]` also works as a standalone command. `dev` is a compatibility alias for `meowsky` when available. On Windows, `WORK_HOME` must be set to an absolute workspace path. Bare `meowsky` and `meowsky dev` create only missing `dev/`, `bach/`, and `launchpad/` directories under it; they do not create repositories or records. Linux retains its existing work-root behavior. Run `meowsky -h` for the terminal manual.
 
 ## Identity
 

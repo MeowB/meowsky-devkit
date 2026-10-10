@@ -1,18 +1,42 @@
+function Get-MeowskyWorkHomePath {
+    if (-not $env:WORK_HOME) {
+      throw 'WORK_HOME is not set. Set it to the absolute path of your Meowsky workspace.'
+    }
+    if ($env:WORK_HOME -notmatch '^(?:[A-Za-z]:[\\/]|[\\/]{2}[^\\/]+[\\/][^\\/]+(?:[\\/]|$))') {
+      throw 'WORK_HOME must be an absolute path.'
+    }
+    return [IO.Path]::GetFullPath($env:WORK_HOME)
+  }
+
 function Get-WorkRoot {
     param([switch]$ExistingOnly)
-    if ($env:WORK_HOME) {
-      $root = $env:WORK_HOME
-    } elseif (Test-Path -LiteralPath 'F:\dev') {
-      $root = 'F:\dev'
-    } else {
-      $root = Join-Path $HOME 'work'
+    if ($ExistingOnly -and -not $env:WORK_HOME) { return }
+    $root = Get-MeowskyWorkHomePath
+    if (Test-Path -LiteralPath $root) {
+      if (-not (Test-Path -LiteralPath $root -PathType Container)) {
+        throw "Expected a directory but found a file: $root"
+      }
+      return (Resolve-Path -LiteralPath $root).Path
     }
+    if ($ExistingOnly) { return }
+    New-Item -ItemType Directory -Path $root -Force | Out-Null
+    return (Resolve-Path -LiteralPath $root).Path
+  }
 
-    if ($ExistingOnly) {
-      if (Test-Path -LiteralPath $root) { return (Resolve-Path -LiteralPath $root).Path }
-      return
+function Ensure-MeowskyWorkspace {
+    $root = Get-MeowskyWorkHomePath
+    $directories = @($root) + @('dev', 'bach', 'launchpad' | ForEach-Object { Join-Path $root $_ })
+    foreach ($directory in $directories) {
+      if ((Test-Path -LiteralPath $directory) -and
+          -not (Test-Path -LiteralPath $directory -PathType Container)) {
+        throw "Expected a directory but found a file: $directory"
+      }
     }
-    New-Item -ItemType Directory -Force -Path $root | Out-Null
+    foreach ($directory in $directories) {
+      if (-not (Test-Path -LiteralPath $directory)) {
+        New-Item -ItemType Directory -Path $directory -Force | Out-Null
+      }
+    }
     return (Resolve-Path -LiteralPath $root).Path
   }
 

@@ -16,6 +16,14 @@ The installer verifies the expected tools, repairs Neovim runtime variables, cre
 
 `MEOWSKY_DEVKIT_HOME` points to this checkout. Keep the checkout available: the profile loads `core/` and `features/` directly. Open a new terminal after installation.
 
+Set the Windows user-level `WORK_HOME` to the absolute Meowsky workspace path. For this machine:
+
+```powershell
+[Environment]::SetEnvironmentVariable('WORK_HOME', 'F:\meowsky', 'User')
+```
+
+Open a new terminal so the setting is inherited. Use your own absolute path on another machine. The installer does not set `WORK_HOME` or create the workspace.
+
 For manual setup, the tool package list and Zig wrapper implementation are maintained in [scripts/install-windows.ps1](../scripts/install-windows.ps1). The wrappers live under `%LOCALAPPDATA%\nvim-tools` and remove incompatible compiler target arguments. Installing Zig alone does not create them.
 
 Copy `nvim/init.lua` to `%LOCALAPPDATA%\nvim\init.lua`, set `MEOWSKY_DEVKIT_HOME` to your checkout, and add its stable profile import to `$PROFILE`:
@@ -39,6 +47,7 @@ The usual Neovim executable directory is `C:\Program Files\Neovim\bin`. Markdown
 ```powershell
 meowsky -h
 meowsky
+meowsky dev
 meowsky my-app
 meowsky ./
 meowsky codex ./
@@ -50,7 +59,7 @@ meowsky md .\README.md
 meowsky pdf .\docs\spec.pdf
 ```
 
-The work root is `WORK_HOME`, otherwise `F:\dev` if it exists, otherwise `$HOME\work`. File and Codex paths are checked as typed, then under the work root. `meowsky .` and `./` always use the current directory.
+On Windows, `WORK_HOME` is required and must be an absolute path. Bare `meowsky` and `meowsky dev` ensure `WORK_HOME`, `dev/`, `bach/`, and `launchpad/` exist, creating only missing directories and refusing files at those paths. They do not initialize Git repositories or create personal records. File and Codex paths are checked as typed, then under `WORK_HOME`. `meowsky .` and `./` always use the current directory, even when `WORK_HOME` is unset.
 
 The fullscreen layout retains four panes: Codex, matrix animation, status, and tree. Stop the animation with `Ctrl+C` to use its shell. Status shows the project path and startup Git summary. The active Terminal palette supplies green Matrix glyphs and status header, blue folders, a cyan project path, and green/yellow clean/dirty working-tree status. Other text uses the default foreground; no project or Codex color override is applied. Tree ignores dependency/build directories and limits each directory to 50 displayed entries.
 

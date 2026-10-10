@@ -5,6 +5,7 @@ SYNOPSIS
     meowsky [-h]
     meowsky [help | --help]
     meowsky [<directory> | . | ./]
+    meowsky dev
     meowsky codex [<directory>]
     meowsky color [<color>]
     meowsky identity [list | --help]
@@ -21,7 +22,8 @@ SYNOPSIS
     meowsky pdf <file.pdf>
 
 COMMANDS
-    meowsky                 Change to the work root.
+    meowsky                 Ensure the workspace directories and enter WORK_HOME.
+    meowsky dev             Ensure the workspace directories and enter dev/.
     meowsky <directory>     Change to a directory, checking the current location
                             first and then the work root.
     meowsky . or ./         Open a fullscreen Windows Terminal layout in the
@@ -54,9 +56,12 @@ OPTIONS
     help, --help            Alternate help commands.
 
 PATHS AND COLORS
-    The work root is WORK_HOME if set, otherwise F:\dev if it exists,
-    otherwise $HOME\work. File and Codex paths are checked as typed first,
-    then under the work root. Terminal colors come from the active identity theme.
+    WORK_HOME must be an absolute path to the Meowsky workspace.
+    Bare meowsky and meowsky dev create only missing workspace,
+    dev/, bach/, and launchpad/ directories; files at those paths cause an error.
+    File and Codex paths are checked as typed first, then under WORK_HOME.
+    meowsky . and ./ use the current directory. Terminal colors come from the
+    active identity theme.
 
 SEE ALSO
     ptree [level]           Standalone form of 'meowsky ptree [level]'.

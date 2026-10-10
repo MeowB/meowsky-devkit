@@ -17,6 +17,11 @@ function meowsky {
     }
     return
   }
+  if (-not $Action -or $Action -eq 'dev') {
+    $workspaceRoot = Ensure-MeowskyWorkspace
+    Set-Location $(if ($Action) { Join-Path $workspaceRoot 'dev' } else { $workspaceRoot })
+    return
+  }
   # Features independent of project navigation must not create the work root.
   $workRoot = if (-not ($feature -and $feature.SkipWorkRoot)) { Get-WorkRoot }
   if ($feature) {
@@ -39,5 +44,4 @@ function meowsky {
     }
     throw "Path was not found: $Action"
   }
-  Set-Location $workRoot
 }

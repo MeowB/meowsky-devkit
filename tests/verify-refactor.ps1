@@ -56,7 +56,8 @@ try {
   }
   Assert-Equal $script:MeowskyCommands.Count 10 'Registered commands and aliases'
   Assert-Equal ($script:MeowskyCommands['identity'].SkipWorkRoot) $true 'Identity skips work-root dispatch'
-  Assert-Equal (@($script:MeowskyCommands.Values | Where-Object { $_.SkipWorkRoot }).Count) 1 'Other features retain work-root behavior'
+  Assert-Equal ($script:MeowskyCommands['.'].SkipWorkRoot) $true 'Current-directory workspace skips work-root dispatch'
+  Assert-Equal (@($script:MeowskyCommands.Values | Where-Object { $_.SkipWorkRoot }).Count) 3 'Identity and workspace aliases skip work-root dispatch'
   Assert-Equal (@($script:MeowskyCommands.Values | Where-Object { $_.AcceptsArguments }).Count) 1 'Only Identity opts into extra arguments'
   foreach ($command in @('codex', 'color', 'identity', 'matrix', 'ptree', 'md', 'markdown', 'pdf', '.', './')) {
     $manifest = $script:MeowskyCommands[$command]
@@ -68,8 +69,43 @@ try {
   foreach ($flag in @('-h', '-Help', '-ShowHelp', '-help', 'help', '--help')) {
     Assert-Equal ((Invoke-Expression "meowsky $flag").TrimEnd()) $globalHelp "Global $flag"
   }
+  New-Item -ItemType Directory -Path (Join-Path $env:WORK_HOME 'dev') | Out-Null
+  Set-Content -LiteralPath (Join-Path $env:WORK_HOME 'dev/keep.txt') -Value 'existing'
   meowsky
-  Assert-Equal (Get-Location).Path $env:WORK_HOME 'Default navigation'
+  Assert-Equal (Get-Location).Path $env:WORK_HOME 'Workspace navigation'
+  foreach ($district in @('dev', 'bach', 'launchpad')) {
+    Assert-Equal (Test-Path -LiteralPath (Join-Path $env:WORK_HOME $district) -PathType Container) $true "$district directory exists"
+    Assert-Equal (Test-Path -LiteralPath (Join-Path $env:WORK_HOME "$district/.git")) $false "$district Git repository not initialized"
+    Assert-Equal (Test-Path -LiteralPath (Join-Path $env:WORK_HOME "$district/current.md")) $false "$district personal state not created"
+  }
+  Assert-Equal (Test-Path -LiteralPath (Join-Path $env:WORK_HOME '.git')) $false 'Workspace Git repository not initialized'
+  Assert-Equal (Test-Path -LiteralPath (Join-Path $env:WORK_HOME 'AGENTS.md')) $false 'Workspace instructions not invented'
+  meowsky dev
+  Assert-Equal (Get-Location).Path (Join-Path $env:WORK_HOME 'dev') 'Dev district navigation'
+  meowsky
+  Assert-Equal (Get-Content -Raw -LiteralPath (Join-Path $env:WORK_HOME 'dev/keep.txt')) "existing`r`n" 'Existing district content preserved on repeat'
+  $conflictRoot = Join-Path $fixture 'conflict-work'
+  New-Item -ItemType Directory -Path $conflictRoot | Out-Null
+  Set-Content -LiteralPath (Join-Path $conflictRoot 'bach') -Value 'original'
+  $env:WORK_HOME = $conflictRoot
+  Assert-Throws { meowsky } "Expected a directory but found a file: $conflictRoot\bach"
+  Assert-Equal (Get-Content -Raw -LiteralPath (Join-Path $conflictRoot 'bach')) "original`r`n" 'Conflicting file preserved'
+  Assert-Equal (Test-Path -LiteralPath (Join-Path $conflictRoot 'dev')) $false 'Conflict checked before creating directories'
+  Assert-Equal (Test-Path -LiteralPath (Join-Path $conflictRoot 'launchpad')) $false 'No partial district setup on conflict'
+  $fileRoot = Join-Path $fixture 'file-work'
+  Set-Content -LiteralPath $fileRoot -Value 'original'
+  $env:WORK_HOME = $fileRoot
+  Assert-Throws { meowsky dev } "Expected a directory but found a file: $fileRoot"
+  Assert-Equal (Get-Content -Raw -LiteralPath $fileRoot) "original`r`n" 'Conflicting workspace file preserved'
+  $env:WORK_HOME = ''
+  Assert-Throws { meowsky } 'WORK_HOME is not set. Set it to the absolute path of your Meowsky workspace.'
+  $env:WORK_HOME = 'relative-work'
+  Assert-Throws { meowsky } 'WORK_HOME must be an absolute path.'
+  $env:WORK_HOME = 'F:relative-work'
+  Assert-Throws { meowsky } 'WORK_HOME must be an absolute path.'
+  $env:WORK_HOME = '\relative-work'
+  Assert-Throws { meowsky } 'WORK_HOME must be an absolute path.'
+  $env:WORK_HOME = Join-Path $fixture 'work'
   meowsky project
   $project = (Get-Location).Path
   Assert-Equal $project (Join-Path $env:WORK_HOME 'project') 'Project navigation'
@@ -84,7 +120,7 @@ try {
   $oldHelp = $baselineAst.Find({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Show-MeowskyHelp' }, $true).Extent.Text
   $legacyHelp = ($globalHelp -split "`r?`n" | Where-Object { $_ -notmatch '^\s+meowsky identity' }) -join "`n"
   $expectedLegacyHelp = ((& { . ([scriptblock]::Create($oldHelp)); Show-MeowskyHelp }).TrimEnd()) -replace "`r`n", "`n"
-  $filter = { $_ -notmatch '^\s+meowsky color|^\s+then under the work root' }
+  $filter = { $_ -notmatch '^\s+meowsky color|^\s+meowsky dev|^\s+meowsky\s+(Change to the work root|Ensure the workspace)|^\s+The work root is|^\s+otherwise \$HOME\\work|^\s+then under the work root|^\s+WORK_HOME must|^\s+Bare meowsky|^\s+dev/, bach/, and launchpad/|^\s+File and Codex paths|^\s+meowsky \. and ./ use|^\s+active identity theme' }
   Assert-Equal (($legacyHelp -split "`n" | Where-Object $filter) -join "`n") (($expectedLegacyHelp -split "`n" | Where-Object $filter) -join "`n") 'Global help preserved except retired colors and Identity'
   $oldTree = $baselineAst.Find({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'ptree' }, $true).Extent.Text
   foreach ($level in @(1, 2, 3, 15)) {
@@ -192,6 +228,15 @@ try {
   $promptPathEncoded = [regex]::Match($encoded[0], "FromBase64String\('([^']+)'\)").Groups[1].Value
   $promptPath = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String($promptPathEncoded))
   Remove-Item -LiteralPath $promptPath
+  $env:WORK_HOME = ''
+  meowsky ./
+  Assert-Equal ($script:terminalArgs -contains $project) $true 'Current-directory workspace works without WORK_HOME'
+  $commandIndex = [Array]::IndexOf($script:terminalArgs, '-EncodedCommand')
+  $decoded = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String($script:terminalArgs[$commandIndex+1]))
+  $promptPathEncoded = [regex]::Match($decoded, "FromBase64String\('([^']+)'\)").Groups[1].Value
+  $promptPath = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String($promptPathEncoded))
+  Remove-Item -LiteralPath $promptPath
+  $env:WORK_HOME = Join-Path $fixture 'work'
   meowsky .
   $commandIndex = [Array]::IndexOf($script:terminalArgs, '-EncodedCommand')
   $decoded = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String($script:terminalArgs[$commandIndex+1]))
