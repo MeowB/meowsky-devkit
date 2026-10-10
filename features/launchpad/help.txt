@@ -8,3 +8,4 @@ DESCRIPTION
     Ensure the Meowsky workspace directories exist, then open the Windows
     Terminal environment in WORK_HOME\launchpad with income-specific startup
     context. The agent reads current.md if it exists; no state is created.
+    See docs/district-continuity.md for optional user-maintained records.

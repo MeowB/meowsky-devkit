@@ -118,7 +118,7 @@ meowsky bach
 meowsky launchpad
 ```
 
-These commands read district-specific startup guidance. They ask the agent to read `current.md` if present; they do not create personal records. PDFs and Word documents in a district's `references/` are original sources, not working files.
+These commands read district-specific startup guidance. They ask the agent to read `current.md` if present; they do not create personal records. PDFs and Word documents in a district's `references/` are original sources, not working files. See [district continuity](docs/district-continuity.md) for the optional state, session, and manual capsule convention.
 
 Start Codex directly with the custom orientation prompt:
 
