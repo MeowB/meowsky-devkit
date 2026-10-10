@@ -48,6 +48,8 @@ The usual Neovim executable directory is `C:\Program Files\Neovim\bin`. Markdown
 meowsky -h
 meowsky
 meowsky dev
+meowsky bach
+meowsky launchpad
 meowsky my-app
 meowsky ./
 meowsky codex ./
@@ -60,6 +62,8 @@ meowsky pdf .\docs\spec.pdf
 ```
 
 On Windows, `WORK_HOME` is required and must be an absolute path. Bare `meowsky` and `meowsky dev` ensure `WORK_HOME`, `dev/`, `bach/`, and `launchpad/` exist, creating only missing directories and refusing files at those paths. They do not initialize Git repositories or create personal records. File and Codex paths are checked as typed, then under `WORK_HOME`. `meowsky .` and `./` always use the current directory, even when `WORK_HOME` is unset.
+
+`meowsky bach` and `meowsky launchpad` open the same Windows Terminal layout in their respective districts with distinct startup prompts. Each prompt directs the agent to read that district's `current.md` first if it exists, then retrieve only relevant older records. Missing state is reported, not fabricated. Original PDFs and Word documents in `references/` may be read but must not be changed without an explicit request. The agent may draft communication, but only the user communicates with people. These launch commands do not initialize Git repositories or configure remotes.
 
 The fullscreen layout retains four panes: Codex, matrix animation, status, and tree. Stop the animation with `Ctrl+C` to use its shell. Status shows the project path and startup Git summary. The active Terminal palette supplies green Matrix glyphs and status header, blue folders, a cyan project path, and green/yellow clean/dirty working-tree status. Other text uses the default foreground; no project or Codex color override is applied. Tree ignores dependency/build directories and limits each directory to 50 displayed entries.
 

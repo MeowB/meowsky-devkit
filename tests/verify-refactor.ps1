@@ -54,12 +54,12 @@ try {
       Assert-Equal $inputColors.$name ([string][char]27 + '[' + $expectedInputColors[$name] + 'm') "PowerShell input $name follows ANSI palette"
     }
   }
-  Assert-Equal $script:MeowskyCommands.Count 10 'Registered commands and aliases'
+  Assert-Equal $script:MeowskyCommands.Count 12 'Registered commands and aliases'
   Assert-Equal ($script:MeowskyCommands['identity'].SkipWorkRoot) $true 'Identity skips work-root dispatch'
   Assert-Equal ($script:MeowskyCommands['.'].SkipWorkRoot) $true 'Current-directory workspace skips work-root dispatch'
-  Assert-Equal (@($script:MeowskyCommands.Values | Where-Object { $_.SkipWorkRoot }).Count) 3 'Identity and workspace aliases skip work-root dispatch'
+  Assert-Equal (@($script:MeowskyCommands.Values | Where-Object { $_.SkipWorkRoot }).Count) 5 'Identity, workspace, and districts skip work-root dispatch'
   Assert-Equal (@($script:MeowskyCommands.Values | Where-Object { $_.AcceptsArguments }).Count) 1 'Only Identity opts into extra arguments'
-  foreach ($command in @('codex', 'color', 'identity', 'matrix', 'ptree', 'md', 'markdown', 'pdf', '.', './')) {
+  foreach ($command in @('codex', 'color', 'identity', 'matrix', 'ptree', 'md', 'markdown', 'pdf', '.', './', 'bach', 'launchpad')) {
     $manifest = $script:MeowskyCommands[$command]
     $expectedHelp = (Get-Content -Raw (Join-Path $manifest.Directory $manifest.Help)).TrimEnd()
     Assert-Equal ((meowsky $command -h).TrimEnd()) $expectedHelp "$command -h"
@@ -120,7 +120,7 @@ try {
   $oldHelp = $baselineAst.Find({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Show-MeowskyHelp' }, $true).Extent.Text
   $legacyHelp = ($globalHelp -split "`r?`n" | Where-Object { $_ -notmatch '^\s+meowsky identity' }) -join "`n"
   $expectedLegacyHelp = ((& { . ([scriptblock]::Create($oldHelp)); Show-MeowskyHelp }).TrimEnd()) -replace "`r`n", "`n"
-  $filter = { $_ -notmatch '^\s+meowsky color|^\s+meowsky dev|^\s+meowsky\s+(Change to the work root|Ensure the workspace)|^\s+The work root is|^\s+otherwise \$HOME\\work|^\s+then under the work root|^\s+WORK_HOME must|^\s+Bare meowsky|^\s+dev/, bach/, and launchpad/|^\s+File and Codex paths|^\s+meowsky \. and ./ use|^\s+active identity theme' }
+  $filter = { $_ -notmatch '^\s+meowsky color|^\s+meowsky (dev|bach|launchpad)|^\s+meowsky\s+(Change to the work root|Ensure the workspace)|^\s+The work root is|^\s+otherwise \$HOME\\work|^\s+then under the work root|^\s+WORK_HOME must|^\s+Bare meowsky|^\s+dev/, bach/, and launchpad/|^\s+File and Codex paths|^\s+meowsky \. and ./ use|^\s+active identity theme' }
   Assert-Equal (($legacyHelp -split "`n" | Where-Object $filter) -join "`n") (($expectedLegacyHelp -split "`n" | Where-Object $filter) -join "`n") 'Global help preserved except retired colors and Identity'
   $oldTree = $baselineAst.Find({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'ptree' }, $true).Extent.Text
   foreach ($level in @(1, 2, 3, 15)) {
@@ -227,7 +227,37 @@ try {
   Assert-Equal ($encoded[3] -match 'Start-MeowskyTreePanel') $true 'Tree pane preserved'
   $promptPathEncoded = [regex]::Match($encoded[0], "FromBase64String\('([^']+)'\)").Groups[1].Value
   $promptPath = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String($promptPathEncoded))
+  $workspacePrompt = Get-Content -Raw -LiteralPath $promptPath
+  Assert-Equal ($workspacePrompt -match 'Inspect `README.md` first') $true 'Current-directory development orientation preserved'
   Remove-Item -LiteralPath $promptPath
+  Assert-Throws { meowsky bach unexpected } 'Usage: meowsky bach'
+  Assert-Throws { meowsky launchpad unexpected } 'Usage: meowsky launchpad'
+  foreach ($district in @('bach', 'launchpad')) {
+    Set-Location $project
+    meowsky $district
+    $districtRoot = Join-Path $env:WORK_HOME $district
+    Assert-Equal (Get-Location).Path $districtRoot "$district working directory"
+    $paneRoots = @()
+    for ($i = 0; $i -lt $script:terminalArgs.Count; $i++) {
+      if ($script:terminalArgs[$i] -eq '-d') { $paneRoots += $script:terminalArgs[$i + 1] }
+    }
+    Assert-Equal $paneRoots.Count 4 "$district pane count"
+    Assert-Equal (($paneRoots | Where-Object { $_ -ne $districtRoot }).Count) 0 "$district pane directories"
+    $commandIndex = [Array]::IndexOf($script:terminalArgs, '-EncodedCommand')
+    $decoded = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String($script:terminalArgs[$commandIndex + 1]))
+    $promptPathEncoded = [regex]::Match($decoded, "FromBase64String\('([^']+)'\)").Groups[1].Value
+    $promptPath = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String($promptPathEncoded))
+    $districtPrompt = Get-Content -Raw -LiteralPath $promptPath
+    Assert-Equal ($districtPrompt -match [regex]::Escape("$districtRoot\current.md")) $true "$district current state path"
+    Assert-Equal ($districtPrompt -match 'read it first') $true "$district current state precedence"
+    Assert-Equal ($districtPrompt -match 'If it is missing, say that no current state has been written') $true "$district missing state handling"
+    Assert-Equal ($districtPrompt -match 'references/') $true "$district original references rule"
+    Assert-Equal ($districtPrompt -match 'Approval of a draft does not authorize sending it') $true "$district human communication rule"
+    Assert-Equal ($districtPrompt -match 'Do not create a capsule') $true "$district manual capsules rule"
+    Assert-Equal (Test-Path -LiteralPath (Join-Path $districtRoot 'current.md')) $false "$district state remains absent"
+    Remove-Item -LiteralPath $promptPath
+  }
+  Set-Location $project
   $env:WORK_HOME = ''
   meowsky ./
   Assert-Equal ($script:terminalArgs -contains $project) $true 'Current-directory workspace works without WORK_HOME'
@@ -264,7 +294,7 @@ Set-Alias dev Get-Date
 if ((Get-Alias dev).Definition -ne 'Get-Date') { throw 'Existing dev alias was overwritten.' }
 if ($script:MeowskyCommands.ContainsKey('md') -or $script:MeowskyCommands.ContainsKey('markdown')) { throw 'Removed feature still registered.' }
 if (-not (meowsky pdf -h).Contains('meowsky pdf')) { throw 'Unrelated feature failed.' }
-if ($script:MeowskyCommands.Count -ne 8) { throw 'Unexpected command count after feature removal.' }
+if ($script:MeowskyCommands.Count -ne 10) { throw 'Unexpected command count after feature removal.' }
 '@ | Set-Content -LiteralPath (Join-Path $isolatedRuntime 'verify.ps1') -Encoding UTF8
   & powershell.exe -NoProfile -File (Join-Path $isolatedRuntime 'verify.ps1')
   Assert-Equal $LASTEXITCODE 0 'Fresh-profile feature removal and existing alias preservation'

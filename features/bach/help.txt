@@ -1,0 +1,10 @@
+NAME
+    meowsky bach - open the bachelor workspace
+
+SYNOPSIS
+    meowsky bach
+
+DESCRIPTION
+    Ensure the Meowsky workspace directories exist, then open the Windows
+    Terminal environment in WORK_HOME\bach with bachelor-specific startup
+    context. The agent reads current.md if it exists; no state is created.

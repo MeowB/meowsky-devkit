@@ -39,9 +39,11 @@ This setup is meant to feel like:
 |   `-- new-pc-dev-setup.md
 |-- core/                   # shared runtime infrastructure and CLI
 |-- features/               # implementations, manifests and help
+|   |-- bach/
 |   |-- codex/
 |   |-- color/
 |   |-- identity/
+|   |-- launchpad/
 |   |-- matrix/
 |   |-- md/
 |   |-- pdf/
@@ -109,6 +111,15 @@ meowsky my-app
 meowsky ./
 ```
 
+Open the bachelor or income exploration environment in its own district:
+
+```powershell
+meowsky bach
+meowsky launchpad
+```
+
+These commands read district-specific startup guidance. They ask the agent to read `current.md` if present; they do not create personal records. PDFs and Word documents in a district's `references/` are original sources, not working files.
+
 Start Codex directly with the custom orientation prompt:
 
 ```powershell
@@ -138,6 +149,8 @@ When `meowsky ./` runs in any folder, it opens a fullscreen Windows Terminal lay
 | --- | --- |
 | `meowsky` | Ensure the workspace directories exist, then enter `WORK_HOME`. |
 | `meowsky dev` | Ensure the workspace directories exist, then enter `dev/`. |
+| `meowsky bach` | Open the Windows Terminal environment in `bach/` with bachelor context. |
+| `meowsky launchpad` | Open the Windows Terminal environment in `launchpad/` with income context. |
 | `meowsky <directory>` | Change to a directory, checking the current location and then the work root. |
 | `meowsky .` or `meowsky ./` | Open the fullscreen Windows Terminal layout in the current directory. |
 | `meowsky codex [directory]` | Start Codex with the Meowsky orientation prompt; defaults to the current directory. |

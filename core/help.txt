@@ -6,6 +6,8 @@ SYNOPSIS
     meowsky [help | --help]
     meowsky [<directory> | . | ./]
     meowsky dev
+    meowsky bach
+    meowsky launchpad
     meowsky codex [<directory>]
     meowsky color [<color>]
     meowsky identity [list | --help]
@@ -24,6 +26,8 @@ SYNOPSIS
 COMMANDS
     meowsky                 Ensure the workspace directories and enter WORK_HOME.
     meowsky dev             Ensure the workspace directories and enter dev/.
+    meowsky bach            Open the environment in bach/ with bachelor context.
+    meowsky launchpad       Open the environment in launchpad/ with income context.
     meowsky <directory>     Change to a directory, checking the current location
                             first and then the work root.
     meowsky . or ./         Open a fullscreen Windows Terminal layout in the

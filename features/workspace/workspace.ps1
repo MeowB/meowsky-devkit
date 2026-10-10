@@ -1,7 +1,39 @@
 function Invoke-MeowskyWorkspaceFeature {
   param([string]$Target, [string]$WorkRoot)
+  $root = (Get-Location).Path
+  $today = Get-Date -Format 'yyyy-MM-dd'
+  $promptTree = Get-MeowskyPromptTree -Root $root
+  $gitStatus = Get-MeowskyGitSummary -Root $root
+  $codexPrompt = Get-MeowskyCodexPrompt -Today $today -Root $root -Tree $promptTree -GitStatus $gitStatus
+  Start-MeowskyWorkspaceLayout -Root $root -Prompt $codexPrompt -GitStatus $gitStatus
+}
+
+function Invoke-MeowskyDistrictWorkspace {
+  param(
+    [Parameter(Mandatory = $true)][ValidateSet('bach', 'launchpad')][string]$District,
+    [Parameter(Mandatory = $true)][string]$TemplatePath
+  )
+  $workRoot = Ensure-MeowskyWorkspace
+  $root = Join-Path $workRoot $District
+  $today = Get-Date -Format 'yyyy-MM-dd'
+  $promptTree = Get-MeowskyPromptTree -Root $root
+  $gitStatus = Get-MeowskyGitSummary -Root $root
+  $codexPrompt = (Get-Content -Raw -LiteralPath $TemplatePath).
+    Replace('$today', $today).
+    Replace('$root', $root).
+    Replace('$tree', $promptTree).
+    Replace('$gitStatus', $gitStatus)
+  Start-MeowskyWorkspaceLayout -Root $root -Prompt $codexPrompt -GitStatus $gitStatus
+}
+
+function Start-MeowskyWorkspaceLayout {
+  param(
+    [Parameter(Mandatory = $true)][string]$Root,
+    [Parameter(Mandatory = $true)][string]$Prompt,
+    [Parameter(Mandatory = $true)][string]$GitStatus
+  )
   Assert-MeowskyFeatures -Names @('codex', 'tree', 'matrix')
-    $root = (Get-Location).Path
+    $root = $Root
 
     $wt = (Get-Command wt.exe -ErrorAction SilentlyContinue).Source
 
@@ -9,11 +41,8 @@ function Invoke-MeowskyWorkspaceFeature {
       throw 'Windows Terminal (wt.exe) was not found.'
     }
 
-    $today = Get-Date -Format 'yyyy-MM-dd'
-    $promptTree = Get-MeowskyPromptTree -Root $root
-    $gitStatus = Get-MeowskyGitSummary -Root $root
-    $codexPrompt = Get-MeowskyCodexPrompt -Today $today -Root $root -Tree $promptTree -GitStatus $gitStatus
-    $promptPath = New-MeowskyCodexPromptFile -Prompt $codexPrompt
+    $gitStatus = $GitStatus
+    $promptPath = New-MeowskyCodexPromptFile -Prompt $Prompt
 
     $promptPathEncoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($promptPath))
     $gitStatusEncoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($gitStatus))
