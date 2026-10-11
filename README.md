@@ -149,7 +149,7 @@ When `meowsky ./` runs in any folder, it opens a fullscreen Windows Terminal lay
 | --- | --- |
 | `meowsky` | Ensure the workspace directories exist, then enter `WORK_HOME`. |
 | `meowsky dev` | Ensure the workspace directories exist, then enter `dev/`. |
-| `meowsky bach` | Open the Windows Terminal environment in `bach/` with bachelor context. |
+| `meowsky bach` | Open one Windows Terminal tab in `WORK_HOME\bach` with Codex left (70%), interactive PowerShell right (30%), and bachelor context instructing Codex to read `current.md` first if present. |
 | `meowsky launchpad` | Open the Windows Terminal environment in `launchpad/` with income context. |
 | `meowsky <directory>` | Change to a directory, checking the current location and then the work root. |
 | `meowsky .` or `meowsky ./` | Open the fullscreen Windows Terminal layout in the current directory. |

@@ -11,7 +11,8 @@ function Invoke-MeowskyWorkspaceFeature {
 function Invoke-MeowskyDistrictWorkspace {
   param(
     [Parameter(Mandatory = $true)][ValidateSet('bach', 'launchpad')][string]$District,
-    [Parameter(Mandatory = $true)][string]$TemplatePath
+    [Parameter(Mandatory = $true)][string]$TemplatePath,
+    [ValidateSet('Development', 'Bachelor')][string]$Layout = 'Development'
   )
   $workRoot = Ensure-MeowskyWorkspace
   $root = Join-Path $workRoot $District
@@ -23,16 +24,21 @@ function Invoke-MeowskyDistrictWorkspace {
     Replace('$root', $root).
     Replace('$tree', $promptTree).
     Replace('$gitStatus', $gitStatus)
-  Start-MeowskyWorkspaceLayout -Root $root -Prompt $codexPrompt -GitStatus $gitStatus
+  Start-MeowskyWorkspaceLayout -Root $root -Prompt $codexPrompt -GitStatus $gitStatus -Layout $Layout
 }
 
 function Start-MeowskyWorkspaceLayout {
   param(
     [Parameter(Mandatory = $true)][string]$Root,
     [Parameter(Mandatory = $true)][string]$Prompt,
-    [Parameter(Mandatory = $true)][string]$GitStatus
+    [Parameter(Mandatory = $true)][string]$GitStatus,
+    [ValidateSet('Development', 'Bachelor')][string]$Layout = 'Development'
   )
-  Assert-MeowskyFeatures -Names @('codex', 'tree', 'matrix')
+  if ($Layout -eq 'Bachelor') {
+    Assert-MeowskyFeatures -Names @('codex')
+  } else {
+    Assert-MeowskyFeatures -Names @('codex', 'tree', 'matrix')
+  }
     $root = $Root
 
     $wt = (Get-Command wt.exe -ErrorAction SilentlyContinue).Source
@@ -45,9 +51,7 @@ function Start-MeowskyWorkspaceLayout {
     $promptPath = New-MeowskyCodexPromptFile -Prompt $Prompt
 
     $promptPathEncoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($promptPath))
-    $gitStatusEncoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($gitStatus))
     $profilePrelude = "`$WarningPreference = 'SilentlyContinue'`r`n. `$PROFILE`r`nReset-MeowskyTerminalColors`r`n`$WarningPreference = 'Continue'"
-    $idleScript = "$profilePrelude`r`nmeowsky matrix`r`n"
 $codexScript = @"
 $profilePrelude
 Clear-Host
@@ -59,34 +63,47 @@ if (Resolve-MeowskyCodexCommand) {
   Write-Host ''
 }
 "@
-    $treeScript = "$profilePrelude`r`nStart-MeowskyTreePanel`r`n"
-    $meowskyScript = @(
-      $profilePrelude,
-      "`$gitStatus = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('$gitStatusEncoded'))",
-      "`$env:MEOWSKY_PANEL = 'status'",
-      "`$env:MEOWSKY_GIT_STATUS = `$gitStatus",
-      "Start-MeowskyStatusPanel -GitStatus `$gitStatus"
-    ) -join "`r`n"
-
     $codexEncoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($codexScript))
-    $idleEncoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($idleScript))
-    $treeEncoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($treeScript))
-    $meowskyEncoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($meowskyScript))
-
-    Set-Location $root
-    Write-Host "Opening Meowsky layout for $root"
-
     $wtArgs = @(
       '--fullscreen',
       '-w', '-1',
-      'new-tab', '-d', $root, 'powershell.exe', '-NoLogo', '-NoExit', '-EncodedCommand', $codexEncoded, ';',
-      'split-pane', '-V', '--size', '0.70', '-d', $root, 'powershell.exe', '-NoLogo', '-NoExit', '-EncodedCommand', $idleEncoded, ';',
-      'split-pane', '-H', '--size', '0.22', '-d', $root, 'powershell.exe', '-NoLogo', '-NoExit', '-EncodedCommand', $meowskyEncoded, ';',
-      'move-focus', 'up', ';',
-      'split-pane', '-V', '--size', '0.33', '-d', $root, 'powershell.exe', '-NoLogo', '-NoExit', '-EncodedCommand', $treeEncoded, ';',
-      'move-focus', 'left', ';',
-      'move-focus', 'left'
+      'new-tab', '-d', $root, 'powershell.exe', '-NoLogo', '-NoExit', '-EncodedCommand', $codexEncoded, ';'
     )
+
+    if ($Layout -eq 'Bachelor') {
+      $shellEncoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($profilePrelude))
+      $wtArgs += @(
+        'split-pane', '-V', '--size', '0.30', '-d', $root, 'powershell.exe', '-NoLogo', '-NoExit', '-EncodedCommand', $shellEncoded, ';',
+        'move-focus', 'left'
+      )
+    } else {
+      $gitStatusEncoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($gitStatus))
+      $idleScript = "$profilePrelude`r`nmeowsky matrix`r`n"
+      $treeScript = "$profilePrelude`r`nStart-MeowskyTreePanel`r`n"
+      $meowskyScript = @(
+        $profilePrelude,
+        "`$gitStatus = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('$gitStatusEncoded'))",
+        "`$env:MEOWSKY_PANEL = 'status'",
+        "`$env:MEOWSKY_GIT_STATUS = `$gitStatus",
+        "Start-MeowskyStatusPanel -GitStatus `$gitStatus"
+      ) -join "`r`n"
+
+      $idleEncoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($idleScript))
+      $treeEncoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($treeScript))
+      $meowskyEncoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($meowskyScript))
+
+      $wtArgs += @(
+        'split-pane', '-V', '--size', '0.70', '-d', $root, 'powershell.exe', '-NoLogo', '-NoExit', '-EncodedCommand', $idleEncoded, ';',
+        'split-pane', '-H', '--size', '0.22', '-d', $root, 'powershell.exe', '-NoLogo', '-NoExit', '-EncodedCommand', $meowskyEncoded, ';',
+        'move-focus', 'up', ';',
+        'split-pane', '-V', '--size', '0.33', '-d', $root, 'powershell.exe', '-NoLogo', '-NoExit', '-EncodedCommand', $treeEncoded, ';',
+        'move-focus', 'left', ';',
+        'move-focus', 'left'
+      )
+    }
+
+    Set-Location $root
+    Write-Host "Opening Meowsky layout for $root"
 
     & $wt @wtArgs
 }

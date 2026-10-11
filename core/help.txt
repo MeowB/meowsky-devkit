@@ -26,7 +26,7 @@ SYNOPSIS
 COMMANDS
     meowsky                 Ensure the workspace directories and enter WORK_HOME.
     meowsky dev             Ensure the workspace directories and enter dev/.
-    meowsky bach            Open the environment in bach/ with bachelor context.
+    meowsky bach            Open Codex (70%) and PowerShell (30%) in WORK_HOME\bach.
     meowsky launchpad       Open the environment in launchpad/ with income context.
     meowsky <directory>     Change to a directory, checking the current location
                             first and then the work root.

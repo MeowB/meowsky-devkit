@@ -225,6 +225,19 @@ try {
   Assert-Equal ($encoded[1] -match 'meowsky matrix') $true 'Matrix pane preserved'
   Assert-Equal ($encoded[2] -match 'Start-MeowskyStatusPanel') $true 'Status pane preserved'
   Assert-Equal ($encoded[3] -match 'Start-MeowskyTreePanel') $true 'Tree pane preserved'
+  $developmentPanes = $encoded
+  $developmentArgs = @($script:terminalArgs)
+  for ($i = 0; $i -lt $developmentArgs.Count; $i++) {
+    if ($developmentArgs[$i] -eq '-d') { $developmentArgs[$i + 1] = '<root>' }
+    if ($developmentArgs[$i] -eq '-EncodedCommand') { $developmentArgs[$i + 1] = '<script>' }
+  }
+  Assert-Equal (@($script:terminalArgs | Where-Object { $_ -eq 'new-tab' }).Count) 1 'Development single tab'
+  Assert-Equal (@($script:terminalArgs | Where-Object { $_ -eq 'split-pane' }).Count) 3 'Development three splits'
+  for ($i = 0; $i -lt $script:terminalArgs.Count; $i++) {
+    if ($script:terminalArgs[$i] -eq '-d') {
+      Assert-Equal $script:terminalArgs[$i + 1] $project 'Development pane directory'
+    }
+  }
   $promptPathEncoded = [regex]::Match($encoded[0], "FromBase64String\('([^']+)'\)").Groups[1].Value
   $promptPath = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String($promptPathEncoded))
   $workspacePrompt = Get-Content -Raw -LiteralPath $promptPath
@@ -232,22 +245,66 @@ try {
   Remove-Item -LiteralPath $promptPath
   Assert-Throws { meowsky bach unexpected } 'Usage: meowsky bach'
   Assert-Throws { meowsky launchpad unexpected } 'Usage: meowsky launchpad'
+  $env:WORK_HOME = $conflictRoot
+  Assert-Throws { meowsky bach } "Expected a directory but found a file: $conflictRoot\bach"
+  Assert-Equal (Get-Content -Raw -LiteralPath (Join-Path $conflictRoot 'bach')) "original`r`n" 'Bachelor conflicting file preserved'
+  Assert-Equal (Test-Path -LiteralPath (Join-Path $conflictRoot 'dev')) $false 'Bachelor conflict creates no directories'
+  $env:WORK_HOME = Join-Path $fixture 'work'
   foreach ($district in @('bach', 'launchpad')) {
     Set-Location $project
     meowsky $district
     $districtRoot = Join-Path $env:WORK_HOME $district
     Assert-Equal (Get-Location).Path $districtRoot "$district working directory"
     $paneRoots = @()
+    $districtPanes = @()
     for ($i = 0; $i -lt $script:terminalArgs.Count; $i++) {
       if ($script:terminalArgs[$i] -eq '-d') { $paneRoots += $script:terminalArgs[$i + 1] }
+      if ($script:terminalArgs[$i] -eq '-EncodedCommand') {
+        $pane = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String($script:terminalArgs[$i + 1]))
+        $districtPanes += $pane
+        $errors = $null
+        [void][Management.Automation.Language.Parser]::ParseInput($pane, [ref]$null, [ref]$errors)
+        Assert-Equal $errors.Count 0 "$district pane script syntax"
+      }
     }
-    Assert-Equal $paneRoots.Count 4 "$district pane count"
+    $expectedPaneCount = if ($district -eq 'bach') { 2 } else { 4 }
+    Assert-Equal $paneRoots.Count $expectedPaneCount "$district pane count"
+    Assert-Equal $districtPanes.Count $expectedPaneCount "$district pane scripts"
     Assert-Equal (($paneRoots | Where-Object { $_ -ne $districtRoot }).Count) 0 "$district pane directories"
+    $districtArgs = @($script:terminalArgs)
+    for ($i = 0; $i -lt $districtArgs.Count; $i++) {
+      if ($districtArgs[$i] -eq '-d') { $districtArgs[$i + 1] = '<root>' }
+      if ($districtArgs[$i] -eq '-EncodedCommand') { $districtArgs[$i + 1] = '<script>' }
+    }
+    if ($district -eq 'bach') {
+      $expectedArgs = @(
+        '--fullscreen', '-w', '-1',
+        'new-tab', '-d', '<root>', 'powershell.exe', '-NoLogo', '-NoExit', '-EncodedCommand', '<script>', ';',
+        'split-pane', '-V', '--size', '0.30', '-d', '<root>', 'powershell.exe', '-NoLogo', '-NoExit', '-EncodedCommand', '<script>', ';',
+        'move-focus', 'left'
+      )
+      Assert-Equal ($districtArgs -join ',') ($expectedArgs -join ',') 'Bachelor one tab, two interactive panes, 70/30 split and Codex focus'
+      $expectedShell = "`$WarningPreference = 'SilentlyContinue'`r`n. `$PROFILE`r`nReset-MeowskyTerminalColors`r`n`$WarningPreference = 'Continue'"
+      Assert-Equal $districtPanes[1] $expectedShell 'Bachelor shell only loads profile and restores terminal defaults'
+      $normalizedCodex = $districtPanes[0] -replace "FromBase64String\('[^']+'\)", "FromBase64String('<prompt>')"
+      $normalizedDevelopmentCodex = $developmentPanes[0] -replace "FromBase64String\('[^']+'\)", "FromBase64String('<prompt>')"
+      Assert-Equal $normalizedCodex $normalizedDevelopmentCodex 'Bachelor shares Codex startup without additional editor, server, or panel commands'
+    } else {
+      Assert-Equal ($districtArgs -join ',') ($developmentArgs -join ',') 'Launchpad preserves development layout arguments'
+      Assert-Equal ($districtPanes[1..3] -join "`n") ($developmentPanes[1..3] -join "`n") 'Launchpad preserves development panel scripts'
+    }
     $commandIndex = [Array]::IndexOf($script:terminalArgs, '-EncodedCommand')
     $decoded = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String($script:terminalArgs[$commandIndex + 1]))
     $promptPathEncoded = [regex]::Match($decoded, "FromBase64String\('([^']+)'\)").Groups[1].Value
     $promptPath = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String($promptPathEncoded))
     $districtPrompt = Get-Content -Raw -LiteralPath $promptPath
+    $expectedPrompt = (Get-Content -Raw -LiteralPath (Join-Path $repo "features/$district/startup.md")).
+      Replace('$today', (Get-Date -Format 'yyyy-MM-dd')).
+      Replace('$root', $districtRoot).
+      Replace('$tree', (Get-MeowskyPromptTree -Root $districtRoot)).
+      Replace('$gitStatus', 'Git fixture')
+    Assert-Equal $districtPrompt $expectedPrompt "$district complete startup context preserved"
+    Assert-Equal ($decoded -match 'Invoke-MeowskyCodex -Root \. -PromptPath \$promptPath') $true "$district passes prompt file to Codex"
     Assert-Equal ($districtPrompt -match [regex]::Escape("$districtRoot\current.md")) $true "$district current state path"
     Assert-Equal ($districtPrompt -match 'read it first') $true "$district current state precedence"
     Assert-Equal ($districtPrompt -match 'If it is missing, say that no current state has been written') $true "$district missing state handling"
@@ -255,6 +312,7 @@ try {
     Assert-Equal ($districtPrompt -match 'Approval of a draft does not authorize sending it') $true "$district human communication rule"
     Assert-Equal ($districtPrompt -match 'Do not create a capsule') $true "$district manual capsules rule"
     Assert-Equal (Test-Path -LiteralPath (Join-Path $districtRoot 'current.md')) $false "$district state remains absent"
+    Assert-Equal (Test-Path -LiteralPath (Join-Path $districtRoot '.git')) $false "$district launch does not initialize Git"
     Remove-Item -LiteralPath $promptPath
   }
   Set-Location $project
