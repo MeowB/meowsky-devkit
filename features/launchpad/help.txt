@@ -6,6 +6,9 @@ SYNOPSIS
 
 DESCRIPTION
     Ensure the Meowsky workspace directories exist, then open the Windows
-    Terminal environment in WORK_HOME\launchpad with income-specific startup
-    context. The agent reads current.md if it exists; no state is created.
+    Terminal tab in WORK_HOME\launchpad with Codex on the left (70%) and an
+    interactive PowerShell on the right (30%). Both panes start in launchpad/.
+    Codex receives income-specific startup context and reads current.md first
+    if it exists; no state is created. The shell is available for ordinary
+    commands and file access.
     See docs/district-continuity.md for optional user-maintained records.

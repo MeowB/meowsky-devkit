@@ -12,7 +12,7 @@ function Invoke-MeowskyDistrictWorkspace {
   param(
     [Parameter(Mandatory = $true)][ValidateSet('bach', 'launchpad')][string]$District,
     [Parameter(Mandatory = $true)][string]$TemplatePath,
-    [ValidateSet('Development', 'Bachelor')][string]$Layout = 'Development'
+    [ValidateSet('Development', 'TwoPane')][string]$Layout = 'Development'
   )
   $workRoot = Ensure-MeowskyWorkspace
   $root = Join-Path $workRoot $District
@@ -32,9 +32,9 @@ function Start-MeowskyWorkspaceLayout {
     [Parameter(Mandatory = $true)][string]$Root,
     [Parameter(Mandatory = $true)][string]$Prompt,
     [Parameter(Mandatory = $true)][string]$GitStatus,
-    [ValidateSet('Development', 'Bachelor')][string]$Layout = 'Development'
+    [ValidateSet('Development', 'TwoPane')][string]$Layout = 'Development'
   )
-  if ($Layout -eq 'Bachelor') {
+  if ($Layout -eq 'TwoPane') {
     Assert-MeowskyFeatures -Names @('codex')
   } else {
     Assert-MeowskyFeatures -Names @('codex', 'tree', 'matrix')
@@ -70,7 +70,7 @@ if (Resolve-MeowskyCodexCommand) {
       'new-tab', '-d', $root, 'powershell.exe', '-NoLogo', '-NoExit', '-EncodedCommand', $codexEncoded, ';'
     )
 
-    if ($Layout -eq 'Bachelor') {
+    if ($Layout -eq 'TwoPane') {
       $shellEncoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($profilePrelude))
       $wtArgs += @(
         'split-pane', '-V', '--size', '0.30', '-d', $root, 'powershell.exe', '-NoLogo', '-NoExit', '-EncodedCommand', $shellEncoded, ';',

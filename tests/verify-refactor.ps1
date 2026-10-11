@@ -249,6 +249,13 @@ try {
   Assert-Throws { meowsky bach } "Expected a directory but found a file: $conflictRoot\bach"
   Assert-Equal (Get-Content -Raw -LiteralPath (Join-Path $conflictRoot 'bach')) "original`r`n" 'Bachelor conflicting file preserved'
   Assert-Equal (Test-Path -LiteralPath (Join-Path $conflictRoot 'dev')) $false 'Bachelor conflict creates no directories'
+  $launchpadConflictRoot = Join-Path $fixture 'launchpad-conflict-work'
+  New-Item -ItemType Directory -Path $launchpadConflictRoot | Out-Null
+  Set-Content -LiteralPath (Join-Path $launchpadConflictRoot 'launchpad') -Value 'original'
+  $env:WORK_HOME = $launchpadConflictRoot
+  Assert-Throws { meowsky launchpad } "Expected a directory but found a file: $launchpadConflictRoot\launchpad"
+  Assert-Equal (Get-Content -Raw -LiteralPath (Join-Path $launchpadConflictRoot 'launchpad')) "original`r`n" 'Launchpad conflicting file preserved'
+  Assert-Equal (Test-Path -LiteralPath (Join-Path $launchpadConflictRoot 'dev')) $false 'Launchpad conflict creates no directories'
   $env:WORK_HOME = Join-Path $fixture 'work'
   foreach ($district in @('bach', 'launchpad')) {
     Set-Location $project
@@ -267,32 +274,26 @@ try {
         Assert-Equal $errors.Count 0 "$district pane script syntax"
       }
     }
-    $expectedPaneCount = if ($district -eq 'bach') { 2 } else { 4 }
-    Assert-Equal $paneRoots.Count $expectedPaneCount "$district pane count"
-    Assert-Equal $districtPanes.Count $expectedPaneCount "$district pane scripts"
+    Assert-Equal $paneRoots.Count 2 "$district pane count"
+    Assert-Equal $districtPanes.Count 2 "$district pane scripts"
     Assert-Equal (($paneRoots | Where-Object { $_ -ne $districtRoot }).Count) 0 "$district pane directories"
     $districtArgs = @($script:terminalArgs)
     for ($i = 0; $i -lt $districtArgs.Count; $i++) {
       if ($districtArgs[$i] -eq '-d') { $districtArgs[$i + 1] = '<root>' }
       if ($districtArgs[$i] -eq '-EncodedCommand') { $districtArgs[$i + 1] = '<script>' }
     }
-    if ($district -eq 'bach') {
-      $expectedArgs = @(
-        '--fullscreen', '-w', '-1',
-        'new-tab', '-d', '<root>', 'powershell.exe', '-NoLogo', '-NoExit', '-EncodedCommand', '<script>', ';',
-        'split-pane', '-V', '--size', '0.30', '-d', '<root>', 'powershell.exe', '-NoLogo', '-NoExit', '-EncodedCommand', '<script>', ';',
-        'move-focus', 'left'
-      )
-      Assert-Equal ($districtArgs -join ',') ($expectedArgs -join ',') 'Bachelor one tab, two interactive panes, 70/30 split and Codex focus'
-      $expectedShell = "`$WarningPreference = 'SilentlyContinue'`r`n. `$PROFILE`r`nReset-MeowskyTerminalColors`r`n`$WarningPreference = 'Continue'"
-      Assert-Equal $districtPanes[1] $expectedShell 'Bachelor shell only loads profile and restores terminal defaults'
-      $normalizedCodex = $districtPanes[0] -replace "FromBase64String\('[^']+'\)", "FromBase64String('<prompt>')"
-      $normalizedDevelopmentCodex = $developmentPanes[0] -replace "FromBase64String\('[^']+'\)", "FromBase64String('<prompt>')"
-      Assert-Equal $normalizedCodex $normalizedDevelopmentCodex 'Bachelor shares Codex startup without additional editor, server, or panel commands'
-    } else {
-      Assert-Equal ($districtArgs -join ',') ($developmentArgs -join ',') 'Launchpad preserves development layout arguments'
-      Assert-Equal ($districtPanes[1..3] -join "`n") ($developmentPanes[1..3] -join "`n") 'Launchpad preserves development panel scripts'
-    }
+    $expectedArgs = @(
+      '--fullscreen', '-w', '-1',
+      'new-tab', '-d', '<root>', 'powershell.exe', '-NoLogo', '-NoExit', '-EncodedCommand', '<script>', ';',
+      'split-pane', '-V', '--size', '0.30', '-d', '<root>', 'powershell.exe', '-NoLogo', '-NoExit', '-EncodedCommand', '<script>', ';',
+      'move-focus', 'left'
+    )
+    Assert-Equal ($districtArgs -join ',') ($expectedArgs -join ',') "$district one tab, two panes, 70/30 split and Codex focus"
+    $expectedShell = "`$WarningPreference = 'SilentlyContinue'`r`n. `$PROFILE`r`nReset-MeowskyTerminalColors`r`n`$WarningPreference = 'Continue'"
+    Assert-Equal $districtPanes[1] $expectedShell "$district shell only loads profile and restores terminal defaults"
+    $normalizedCodex = $districtPanes[0] -replace "FromBase64String\('[^']+'\)", "FromBase64String('<prompt>')"
+    $normalizedDevelopmentCodex = $developmentPanes[0] -replace "FromBase64String\('[^']+'\)", "FromBase64String('<prompt>')"
+    Assert-Equal $normalizedCodex $normalizedDevelopmentCodex "$district shares Codex startup without additional editor, server, or panel commands"
     $commandIndex = [Array]::IndexOf($script:terminalArgs, '-EncodedCommand')
     $decoded = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String($script:terminalArgs[$commandIndex + 1]))
     $promptPathEncoded = [regex]::Match($decoded, "FromBase64String\('([^']+)'\)").Groups[1].Value
@@ -304,6 +305,11 @@ try {
       Replace('$tree', (Get-MeowskyPromptTree -Root $districtRoot)).
       Replace('$gitStatus', 'Git fixture')
     Assert-Equal $districtPrompt $expectedPrompt "$district complete startup context preserved"
+    if ($district -eq 'launchpad') {
+      Assert-Equal ($districtPrompt -match '^# Launchpad workspace') $true 'Launchpad context selected'
+      Assert-Equal ($districtPrompt -match 'This district explores and tests sustainable ways to earn a living') $true 'Launchpad income context selected'
+      Assert-Equal ($districtPrompt -match '^# Bachelor workspace|Inspect `README.md` first') $false 'Launchpad excludes bachelor and development context'
+    }
     Assert-Equal ($decoded -match 'Invoke-MeowskyCodex -Root \. -PromptPath \$promptPath') $true "$district passes prompt file to Codex"
     Assert-Equal ($districtPrompt -match [regex]::Escape("$districtRoot\current.md")) $true "$district current state path"
     Assert-Equal ($districtPrompt -match 'read it first') $true "$district current state precedence"

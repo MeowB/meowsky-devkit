@@ -27,7 +27,7 @@ COMMANDS
     meowsky                 Ensure the workspace directories and enter WORK_HOME.
     meowsky dev             Ensure the workspace directories and enter dev/.
     meowsky bach            Open Codex (70%) and PowerShell (30%) in WORK_HOME\bach.
-    meowsky launchpad       Open the environment in launchpad/ with income context.
+    meowsky launchpad       Open Codex (70%) and PowerShell (30%) in WORK_HOME\launchpad.
     meowsky <directory>     Change to a directory, checking the current location
                             first and then the work root.
     meowsky . or ./         Open a fullscreen Windows Terminal layout in the
