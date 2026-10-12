@@ -7,10 +7,8 @@
   function Get-WorkRoot {
     if ($env:WORK_HOME) {
       $root = $env:WORK_HOME
-    } elseif (Test-Path -LiteralPath 'F:\dev') {
-      $root = 'F:\dev'
     } else {
-      $root = Join-Path $HOME 'work'
+      $root = 'C:\meowsky'
     }
 
     New-Item -ItemType Directory -Force -Path $root | Out-Null
@@ -277,10 +275,8 @@ $meowskyCompleter = {
   function Get-MeowskyCompletionRoot {
     if ($env:WORK_HOME) {
       $root = $env:WORK_HOME
-    } elseif (Test-Path -LiteralPath 'F:\dev') {
-      $root = 'F:\dev'
     } else {
-      $root = Join-Path $HOME 'work'
+      $root = 'C:\meowsky'
     }
 
     if (Test-Path -LiteralPath $root) {
