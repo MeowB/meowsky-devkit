@@ -1,0 +1,6 @@
+meowsky color [color]
+Project color overrides are retired. This compatibility command changes no settings.
+Saved project colors are ignored; all panels use the active terminal theme.
+Use meowsky identity apply <id> --target terminal to apply theme colors.
+
+Use -h or -Help after the command to show this help (PowerShell).

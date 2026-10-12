@@ -1,0 +1,8 @@
+// Inspect variables, mixins, directives and nested selectors.
+$spacing: 4px;
+@mixin inset($amount) { padding: $amount; }
+.item {
+  @include inset($spacing);
+  font-family: "Example", sans-serif;
+  &:hover { opacity: 0.8; }
+}

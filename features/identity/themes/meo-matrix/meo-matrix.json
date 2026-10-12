@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "id": "meo-matrix",
+  "name": "Meo Matrix",
+  "ui": {
+    "background": "#000000",
+    "surface": "#080C09",
+    "surfaceRaised": "#111A14",
+    "text": "#78C98A",
+    "terminalText": "#39FF14",
+    "terminalBackground": "#000000",
+    "terminalBlack": "#1A2720",
+    "muted": "#738078",
+    "accent": "#265934",
+    "accentBright": "#58CB70",
+    "accentSoft": "#78AA82",
+    "selection": "#233C2B",
+    "warning": "#CE9F4D",
+    "error": "#D46666",
+    "border": "#1A2720",
+    "accentActive": "#34784A",
+    "onAccent": "#E8EEE9"
+  },
+  "syntax": {
+    "text": "#E8FFE8",
+    "comment": "#8AA890",
+    "keyword": "#39FF14",
+    "function": "#00E5FF",
+    "type": "#66B3FF",
+    "string": "#FFE45C",
+    "number": "#FFB454",
+    "constant": "#FF79E6",
+    "operator": "#C7F9CC",
+    "error": "#FF7070",
+    "warning": "#FFE45C"
+  },
+  "windows": {
+    "mode": "normal",
+    "systemTheme": "dark",
+    "appTheme": "dark",
+    "accent": "ui.accent",
+    "transparency": true
+  },
+  "preferences": {
+    "cursor": {
+      "style": "block"
+    }
+  },
+  "ansi": {
+    "black": "#1A2720",
+    "red": "#E84848",
+    "green": "#39FF14",
+    "yellow": "#E6C52F",
+    "blue": "#408CFF",
+    "magenta": "#E05CFF",
+    "cyan": "#00CFE8",
+    "white": "#8FFFA0",
+    "brightBlack": "#738078",
+    "brightRed": "#FF7070",
+    "brightGreen": "#4AFF64",
+    "brightYellow": "#FFE45C",
+    "brightBlue": "#79B0FF",
+    "brightMagenta": "#FF79E6",
+    "brightCyan": "#00E5FF",
+    "brightWhite": "#C7F9CC"
+  }
+}

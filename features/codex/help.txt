@@ -1,0 +1,4 @@
+meowsky codex [directory]
+Defaults to the current directory. Paths are checked as typed, then under the work root.
+
+Use -h or -Help after the command to show this help (PowerShell).

@@ -1,0 +1,72 @@
+NAME
+    meowsky - navigate projects and start the Meowsky workspace
+
+SYNOPSIS
+    meowsky [-h]
+    meowsky [help | --help]
+    meowsky [<directory> | . | ./]
+    meowsky dev
+    meowsky bach
+    meowsky launchpad
+    meowsky codex [<directory>]
+    meowsky color [<color>]
+    meowsky identity [list | --help]
+    meowsky identity apply <id>
+    meowsky identity apply <id> --dry-run
+    meowsky identity apply <id> --target windows [--dry-run]
+    meowsky identity apply <id> --windows-mode normal|contrast [--dry-run]
+    meowsky identity apply <id> --target terminal [--dry-run]
+    meowsky identity apply <id> --target vscode [--dry-run]
+    meowsky matrix
+    meowsky ptree [<level>]
+    meowsky md <file.md>
+    meowsky markdown <file.md>
+    meowsky pdf <file.pdf>
+
+COMMANDS
+    meowsky                 Ensure the workspace directories and enter WORK_HOME.
+    meowsky dev             Ensure the workspace directories and enter dev/.
+    meowsky bach            Open Codex (70%) and PowerShell (30%) in WORK_HOME\bach.
+    meowsky launchpad       Open Codex (70%) and PowerShell (30%) in WORK_HOME\launchpad.
+    meowsky <directory>     Change to a directory, checking the current location
+                            first and then the work root.
+    meowsky . or ./         Open a fullscreen Windows Terminal layout in the
+                            current directory with Codex, tree, and status panes.
+    meowsky codex [path]    Start Codex with the Meowsky orientation prompt in
+                            the given directory; default is the current one.
+    meowsky color           Explain retired project color overrides.
+    meowsky color <color>   Compatibility command; no colors are changed.
+    meowsky color reset     Compatibility command; saved colors are ignored.
+    meowsky color default   Same as reset.
+    meowsky identity        Describe the Identity theme system.
+    meowsky identity list   Discover available identity theme definitions.
+    meowsky identity --help Show Identity help; no settings are applied.
+    meowsky identity apply <id>  Apply detected Windows, Terminal, and VS Code adapters.
+    meowsky identity apply <id> --dry-run  Validate and preview an identity plan.
+    meowsky identity apply <id> --target windows  Apply configured Windows mode (Meo Matrix: normal).
+    meowsky identity apply <id> --windows-mode contrast  Install contrast theme; activate manually.
+    meowsky identity apply <id> --target terminal  Merge a Terminal scheme/defaults with backup.
+    meowsky identity apply <id> --target vscode  Merge VS Code UI colors/cursors with backup.
+    meowsky matrix          Run the animated matrix display; press Ctrl+C to stop.
+    meowsky ptree [level]   Print the current directory tree to the given depth;
+                            default is 3 levels. Level must be a positive integer.
+    meowsky md <file>       Render Markdown to temporary HTML with Pandoc and
+                            open it in the default browser.
+    meowsky markdown <file> Same as md.
+    meowsky pdf <file>      Open a PDF in the default viewer.
+
+OPTIONS
+    -h, -Help               Show this help page and exit.
+    help, --help            Alternate help commands.
+
+PATHS AND COLORS
+    WORK_HOME must be an absolute path; when unset, Windows uses C:\meowsky.
+    Bare meowsky and meowsky dev create only missing workspace,
+    dev/, bach/, and launchpad/ directories; files at those paths cause an error.
+    File and Codex paths are checked as typed first, then under WORK_HOME.
+    meowsky . and ./ use the current directory. Terminal colors come from the
+    active identity theme.
+
+SEE ALSO
+    ptree [level]           Standalone form of 'meowsky ptree [level]'.
+    dev                     Compatibility alias for meowsky, if available.

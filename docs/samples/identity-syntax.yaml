@@ -1,0 +1,10 @@
+# Inspect mapping keys, anchors, values and scalar types.
+defaults: &defaults
+  name: "Matrix"
+  count: 4
+  enabled: true
+item:
+  <<: *defaults
+  optional: null
+  description: |
+    A readable multiline string.

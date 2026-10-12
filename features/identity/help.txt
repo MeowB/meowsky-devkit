@@ -1,0 +1,68 @@
+meowsky identity
+Describe Identity, a coherent visual identity across the development environment.
+
+meowsky identity list
+Discover available identities from features/identity/themes/<id>.json or themes/<id>/<id>.json.
+
+meowsky identity --help
+Show this help. -h and -Help also work through the root command.
+
+meowsky identity apply <id> --dry-run
+Load and validate a theme, detect Windows, Windows Terminal, and VS Code,
+and preview every detected adapter in Windows, Terminal, VS Code order.
+No files, directories, backups, or application settings are written.
+Planning errors are displayed per target; other previews continue.
+
+meowsky identity apply <id>
+Apply detected adapters in Windows, Windows Terminal, VS Code order.
+VS Code includes both UI and syntax. Missing applications are skipped.
+Load/validate once; plan all targets before any writes. Continue after a target
+planning/application failure, print all results, then raise overall failure.
+Windows uses the identity's configured mode (normal for Meo Matrix).
+--windows-mode normal|contrast overrides Windows only; other targets stay independent.
+Settings adapters preserve unrelated configuration and create exact backups
+before changed writes. Identical settings/themes remain untouched.
+No cross-target rollback or persistent active-identity state is implemented.
+
+meowsky identity apply <id> --target windows [--dry-run]
+Apply normal Windows personalization: system/app theme, semantic accent, transparency.
+Back up the eight owned registry values before changes; preserve unrelated settings.
+Disable active contrast through the Windows API, or report a manual action if unavailable.
+Repeated application leaves matching values untouched and creates no new backup.
+--dry-run reports mode, registry values, contrast transition, and backup directory without writes.
+
+meowsky identity apply <id> --windows-mode contrast [--target windows] [--dry-run]
+Retain the existing named Windows Contrast Theme installation, without automatic activation.
+Activate manually: Settings > Accessibility > Contrast themes > <theme name> > Apply.
+Normal mode preserves normal application colors; contrast can suppress application colors/images.
+Normal mode cannot force arbitrary global backgrounds, text, buttons, or selections.
+Neither Windows mode changes Terminal or VS Code palette mappings.
+
+meowsky identity apply <id> --target terminal [--dry-run]
+Discover Windows Terminal settings, add/update the named semantic ANSI scheme,
+and set profiles.defaults.colorScheme and cursorShape. Preserve individual profiles,
+other schemes, comments, layouts, and unrelated settings. Back up original bytes first.
+--dry-run shows the actual settings path, palette, cursor, and changes without writes.
+Repeated application creates no write or new backup when settings already match.
+If multiple settings files exist, run in the desired Terminal with WT_SETTINGS_DIR
+set to its settings directory; no file is chosen arbitrarily.
+
+meowsky identity apply <id> --target vscode [--dry-run]
+Discover VS Code User settings, merge Identity-owned UI and syntax colors,
+enable semantic highlighting, and set cursor styles. Back up original bytes first.
+Set window.activeBorder to ui.selection, window.inactiveBorder to ui.muted,
+and window.border to default. Restart VS Code if its native border mode changes.
+Preserve comments, other colors, scoped overrides, the selected base theme,
+unrelated token rules/style properties,
+fonts, extensions, keybindings, and unrelated preferences.
+--dry-run shows the resolved path and every owned property without writes.
+Repeated application creates no write or new backup when settings already match.
+For multiple installations/profiles or custom user-data locations, open
+Preferences: Open User Settings (JSON) and set MEOWSKY_VSCODE_SETTINGS_PATH
+to that file's absolute path. Missing/ambiguous files fail without writing.
+Scoped/workspace/remote overrides retain precedence and may affect appearance.
+
+Identity composes Windows, Terminal, and VS Code UI/syntax adapters.
+Syntax uses semantic selectors plus named TextMate fallbacks from the theme JSON.
+Errors/warnings use diagnostic colors; language providers determine symbol detail.
+Inspect docs/samples/ for all 14 requested languages. Neovim is not implemented.

@@ -1,0 +1,347 @@
+# Dependency-free Identity behavior checks; no settings or external applications are used.
+$ErrorActionPreference = 'Stop'
+$repo = Split-Path $PSScriptRoot -Parent
+$fixture = Join-Path ([IO.Path]::GetTempPath()) ('meowsky-identity-tests-' + [guid]::NewGuid().ToString('N'))
+$originalWorkHome = $env:WORK_HOME
+$originalLocalAppData = $env:LOCALAPPDATA
+$originalLocation = (Get-Location).Path
+$checks = 0
+
+function Assert-Equal($Actual, $Expected, [string]$Label) {
+  if ([string]$Actual -cne [string]$Expected) { throw "$Label failed. Expected '$Expected', received '$Actual'." }
+  $script:checks++
+}
+
+function Assert-InvalidTheme([string]$Pattern) {
+  $message = ''
+  try { $null = Get-MeowskyIdentities -ThemeDirectory $themeDirectory } catch { $message = $_.Exception.Message }
+  Assert-Equal ($message -like $Pattern) $true 'Invalid theme reports filename and reason'
+}
+
+function Assert-Error([scriptblock]$Action, [string]$Pattern) {
+  $message = ''
+  try { $null = & $Action } catch { $message = $_.Exception.Message }
+  Assert-Equal ($message -like $Pattern) $true "Expected error: $Pattern"
+}
+
+function Get-ContrastRatio([string]$Foreground, [string]$Background) {
+  $luminance = foreach ($hex in @($Foreground, $Background)) {
+    $channels = @(0, 2, 4 | ForEach-Object {
+      $value = [Convert]::ToInt32($hex.Substring(1 + $_, 2), 16) / 255.0
+      if ($value -le 0.04045) { $value / 12.92 } else { [Math]::Pow(($value + 0.055) / 1.055, 2.4) }
+    })
+    0.2126 * $channels[0] + 0.7152 * $channels[1] + 0.0722 * $channels[2]
+  }
+  ([Math]::Max($luminance[0], $luminance[1]) + 0.05) / ([Math]::Min($luminance[0], $luminance[1]) + 0.05)
+}
+
+try {
+  $themeDirectory = Join-Path $fixture 'themes'
+  New-Item -ItemType Directory -Path $themeDirectory -Force | Out-Null
+  $env:WORK_HOME = Join-Path $fixture 'work'
+  $env:LOCALAPPDATA = Join-Path $fixture 'config'
+  Set-Location $fixture
+  . (Join-Path $repo 'powershell/profile.ps1')
+
+  Assert-Equal $script:MeowskyCommands['identity'].Handler 'Invoke-MeowskyIdentityFeature' 'Identity dispatch'
+  Assert-Equal $script:MeowskyCommands['color'].Handler 'Invoke-MeowskyColorFeature' 'Separate color dispatch'
+  Assert-Equal ((meowsky identity) -join "`n" -match 'coherent visual identity') $true 'Bare command describes Identity'
+  Assert-Equal ((meowsky identity list) -join "`n") 'meo-matrix - Meo Matrix' 'List finds first theme from another directory'
+  Assert-Equal ((meowsky IDENTITY LIST) -join "`n") 'meo-matrix - Meo Matrix' 'Case-insensitive dispatch'
+  $help = (Get-Content -Raw -LiteralPath (Join-Path $repo 'features/identity/help.txt')).TrimEnd()
+  Assert-Equal ((meowsky identity --help).TrimEnd()) $help 'Positional help'
+  Assert-Equal ((meowsky identity -h).TrimEnd()) $help 'Root short help'
+  Assert-Equal ((meowsky identity -Help).TrimEnd()) $help 'Root named help'
+  $message = ''
+  try { meowsky identity apply } catch { $message = $_.Exception.Message }
+  Assert-Equal ($message -like 'Specify an identity ID.*') $true 'Apply without arguments rejected'
+  $planOutput = (meowsky identity apply meo-matrix --dry-run) -join "`n"
+  Assert-Equal ($planOutput -match 'Identity dry-run: meo-matrix \(Meo Matrix\)') $true 'Selected identity in plan'
+  Assert-Equal ($planOutput.Contains((Join-Path $repo 'features/identity/themes/meo-matrix/meo-matrix.json'))) $true 'Resolved theme file in plan'
+  foreach ($name in @('Windows:', 'Windows Terminal:', 'VS Code:', '#000000', '#265934', 'Cursor preference: block', 'No changes were made.')) {
+    Assert-Equal ($planOutput.Contains($name)) $true "Plan shows $name"
+  }
+  Assert-Equal (Test-Path -LiteralPath $env:WORK_HOME) $false 'Dry-run does not create absent work root'
+  Assert-Error { meowsky identity apply missing-identity --dry-run } "Identity 'missing-identity' was not found.*"
+  Assert-Error { meowsky identity apply ../meo-matrix --dry-run } '*lowercase slug*'
+  Assert-Error { meowsky identity apply missing-identity } "Identity 'missing-identity' was not found.*"
+  Assert-Error { meowsky identity apply meo-matrix --force } "Unknown argument '--force'.*"
+  Assert-Error { meowsky identity apply meo-matrix --dry-run extra } "Unknown argument 'extra'.*"
+  Assert-Error { meowsky identity apply meo-matrix --target nvim --dry-run } 'Only --target windows, terminal, or vscode is supported*'
+  Assert-Error { meowsky identity apply meo-matrix --target } 'Only --target windows, terminal, or vscode is supported*'
+  Assert-Error { meowsky identity apply meo-matrix --target windows --windows-mode contrast --target windows } 'Only --target windows, terminal, or vscode is supported*'
+  Assert-Error { meowsky identity apply meo-matrix --dry-run --dry-run } 'Duplicate --dry-run*'
+  $windowsPreview = (meowsky identity apply meo-matrix --target windows --windows-mode contrast --dry-run) -join "`n"
+  Assert-Equal ($windowsPreview.Contains('meowsky-meo-matrix.theme')) $true 'Dry-run shows destination'
+  Assert-Equal ($windowsPreview.Contains('ui.background -> Window = 0 0 0')) $true 'Dry-run shows Windows mapping'
+  Assert-Equal ($windowsPreview.Contains('Settings > Accessibility > Contrast themes > Meo Matrix > Apply')) $true 'Dry-run shows manual activation'
+  Assert-Equal ($windowsPreview.Contains('No changes were made.')) $true 'Targeted dry-run remains read-only'
+  Assert-Equal ((meowsky identity apply meo-matrix --dry-run --target windows --windows-mode contrast) -join "`n") $windowsPreview 'Flag order is flexible'
+  Assert-Error { meowsky identity list extra } 'Usage: meowsky identity*'
+  Assert-Error { meowsky identity unsupported } 'Usage: meowsky identity*'
+  Assert-Equal (Test-Path -LiteralPath $env:LOCALAPPDATA) $false 'Identity commands do not create config'
+  Assert-Equal (Get-Location).Path $fixture 'Identity commands preserve working directory'
+
+  $theme = @(Get-MeowskyIdentities)[0]
+  Assert-Equal $theme.schemaVersion 1 'Schema version'
+  Assert-Equal $theme.id 'meo-matrix' 'Identity id'
+  Assert-Equal $theme.name 'Meo Matrix' 'Display name'
+  Assert-Equal $theme.preferences.cursor.style 'block' 'Block cursor preference'
+  $expectedUi = @{
+    background = '#000000'; surface = '#080C09'; surfaceRaised = '#111A14'
+    text = '#78C98A'; muted = '#738078'; accent = '#265934'
+    accentBright = '#58CB70'; accentSoft = '#78AA82'; selection = '#233C2B'
+    warning = '#CE9F4D'; error = '#D46666'
+  }
+  $expectedSyntax = @{
+    text = '#E8FFE8'; comment = '#8AA890'; keyword = '#39FF14'
+    function = '#00E5FF'; type = '#66B3FF'; string = '#FFE45C'
+    number = '#FFB454'; constant = '#FF79E6'; operator = '#C7F9CC'
+    error = '#FF7070'; warning = '#FFE45C'
+  }
+  foreach ($role in $expectedUi.Keys) { Assert-Equal $theme.ui.$role $expectedUi[$role] "UI $role" }
+  Assert-Equal $theme.ui.terminalText '#39FF14' 'Terminal text semantic role'
+  Assert-Equal $theme.ui.terminalBackground '#000000' 'Terminal background semantic role'
+  Assert-Equal $theme.ui.terminalBlack '#1A2720' 'ANSI black semantic role'
+  foreach ($role in $expectedSyntax.Keys) { Assert-Equal $theme.syntax.$role $expectedSyntax[$role] "Syntax $role" }
+  Assert-Equal ((Get-ContrastRatio $theme.ui.terminalText $theme.ui.terminalBackground) -ge 7) $true 'Ordinary terminal text has strong contrast'
+  Assert-Equal ((Get-ContrastRatio $theme.ui.text $theme.ui.selection) -ge 4.5) $true 'Selected text remains readable'
+  foreach ($background in @($theme.ui.accent, $theme.ui.accentActive)) {
+    Assert-Equal ((Get-ContrastRatio $theme.ui.onAccent $background) -ge 4.5) $true 'Accent labels remain readable at rest and hover'
+  }
+  foreach ($role in $expectedSyntax.Keys) {
+    Assert-Equal ((Get-ContrastRatio $theme.syntax.$role $theme.ui.background) -ge 4.5) $true "Syntax $role remains readable"
+  }
+  foreach ($role in @('border', 'accentActive', 'onAccent')) {
+    foreach ($value in @($null, '#123', 'green', 123456)) {
+      $bad = $theme | ConvertTo-Json -Depth 8 | ConvertFrom-Json
+      $bad.ui.$role = $value
+      Assert-Error { Assert-MeowskyIdentityTheme $bad $bad.id } "*ui.$role*"
+    }
+  }
+
+  # Redirect discovery only inside this process; repository themes remain untouched.
+  $script:MeowskyIdentityThemes = $themeDirectory
+  Assert-Equal (meowsky identity list) 'No identities found.' 'Empty theme directory'
+  Copy-Item -LiteralPath (Join-Path $repo 'features/identity/themes/meo-matrix/meo-matrix.json') -Destination $themeDirectory
+  $folder = Join-Path $themeDirectory 'meo-matrix'
+  New-Item -ItemType Directory -Path $folder | Out-Null
+  Copy-Item (Join-Path $themeDirectory 'meo-matrix.json') (Join-Path $folder 'meo-matrix.json')
+  Assert-Error { Resolve-MeowskyIdentityTheme meo-matrix } '*Ambiguous identity*'
+  Assert-Error { Get-MeowskyIdentities } '*Ambiguous identity*'
+  Remove-Item -LiteralPath (Join-Path $themeDirectory 'meo-matrix.json')
+  Assert-Equal (Resolve-MeowskyIdentityTheme meo-matrix) (Join-Path $folder 'meo-matrix.json') 'Folder definition resolves'
+  Set-Content (Join-Path $folder 'reference.json') '{invalid reference, never loaded}'
+  Assert-Equal ((Get-MeowskyIdentities).id) 'meo-matrix' 'Only named definition loads; adjacent references ignored'
+  $second = Get-Content -Raw -LiteralPath (Join-Path $folder 'meo-matrix.json') | ConvertFrom-Json
+  $second.id = 'meo-evil'
+  $second.name = 'Meo Evil (test fixture)'
+  $second.preferences.cursor.style = 'bar'
+  $secondPath = Join-Path $themeDirectory 'meo-evil.json'
+  $validSecond = $second | ConvertTo-Json -Depth 8
+  foreach ($property in $second.ansi.PSObject.Properties) {
+    $bad = $validSecond | ConvertFrom-Json
+    $bad.ansi.PSObject.Properties.Remove($property.Name)
+    Assert-Error { Assert-MeowskyIdentityTheme $bad $bad.id } "*Missing required semantic value: ansi.$($property.Name)*"
+    foreach ($value in @('green', $null, '#123', 123456, "#123456`n")) {
+      $bad = $validSecond | ConvertFrom-Json
+      $bad.ansi.($property.Name) = $value
+      Assert-Error { Assert-MeowskyIdentityTheme $bad $bad.id } "*ansi.$($property.Name)*"
+    }
+  }
+  foreach ($value in @($null, 'green', @())) {
+    $bad = $validSecond | ConvertFrom-Json
+    $bad.ansi = $value
+    Assert-Error { Assert-MeowskyIdentityTheme $bad $bad.id } '*semantic group: ansi*'
+  }
+  $legacyAnsi = $validSecond | ConvertFrom-Json
+  $legacyAnsi.PSObject.Properties.Remove('ansi')
+  Assert-MeowskyIdentityTheme $legacyAnsi $legacyAnsi.id
+  Assert-Equal ((Get-MeowskyTerminalScheme $legacyAnsi).Scheme.green) $legacyAnsi.ui.accent 'Legacy ANSI fallback remains available'
+  Set-Content -LiteralPath $secondPath -Value $validSecond
+  Assert-Equal ((Get-MeowskyIdentities).id -join ',') 'meo-evil,meo-matrix' 'Second definition discovered and sorted'
+  Assert-Equal ((meowsky identity list) -join "`n") "meo-evil - Meo Evil (test fixture)`nmeo-matrix - Meo Matrix" 'CLI lists both definitions'
+  Assert-Equal ((meowsky identity apply meo-evil --dry-run) -join "`n" -match 'Cursor preference: bar') $true 'Second identity can be planned'
+
+  $second.ui.accent = 'green'
+  $second | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $secondPath
+  Assert-InvalidTheme "Invalid identity theme 'meo-evil.json': *ui.accent*"
+  Assert-Error { meowsky identity apply meo-evil --dry-run } "Invalid identity theme 'meo-evil.json': *Invalid color*ui.accent*"
+  # Loading a selected theme does not depend on other definitions being valid.
+  Assert-Equal ((meowsky identity apply meo-matrix --dry-run) -join "`n" -match 'No changes were made') $true 'Unrelated invalid theme does not block selection'
+  $second = $validSecond | ConvertFrom-Json
+  $second.syntax.PSObject.Properties.Remove('comment')
+  $second | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $secondPath
+  Assert-InvalidTheme "Invalid identity theme 'meo-evil.json': *syntax.comment*"
+  Assert-Error { meowsky identity apply meo-evil --dry-run } "Invalid identity theme 'meo-evil.json': *Missing required semantic value*syntax.comment*"
+  $second = $validSecond | ConvertFrom-Json
+  $second.preferences.cursor.style = 'invalid'
+  $second | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $secondPath
+  Assert-InvalidTheme "Invalid identity theme 'meo-evil.json': *cursor.style*"
+  $second = $validSecond | ConvertFrom-Json
+  $second.id = 'different-name'
+  $second | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $secondPath
+  Assert-InvalidTheme "Invalid identity theme 'meo-evil.json': *filename*"
+  $second = $validSecond | ConvertFrom-Json
+  $second.schemaVersion = 2
+  $second | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $secondPath
+  Assert-InvalidTheme "Invalid identity theme 'meo-evil.json': *schemaVersion*"
+  $second = $validSecond | ConvertFrom-Json
+  $second.schemaVersion = '1'
+  $second | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $secondPath
+  Assert-InvalidTheme "Invalid identity theme 'meo-evil.json': *numeric schemaVersion*"
+  $second = $validSecond | ConvertFrom-Json
+  $second.name = ''
+  $second | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $secondPath
+  Assert-InvalidTheme "Invalid identity theme 'meo-evil.json': *metadata: name*"
+  foreach ($role in @('terminalText', 'terminalBackground', 'terminalBlack')) {
+    foreach ($value in @('green', $null, '#123', '#12345678', 123456, "#265934`n")) {
+      $second = $validSecond | ConvertFrom-Json
+      $second.ui.$role = $value
+      $second | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $secondPath
+      Assert-InvalidTheme "Invalid identity theme 'meo-evil.json': *ui.$role*"
+    }
+  }
+  $second = $validSecond | ConvertFrom-Json
+  $second.ui.PSObject.Properties.Remove('terminalText')
+  $second.ui.PSObject.Properties.Remove('terminalBackground')
+  $second.ui.PSObject.Properties.Remove('terminalBlack')
+  $second | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $secondPath
+  Assert-Equal (@(Get-MeowskyIdentities).Count) 2 'Older themes without terminal-specific roles remain valid'
+  foreach ($value in @('#123', '#12345678', '#GG0000', '', 123456, "#000000`n", ' #000000')) {
+    $second = $validSecond | ConvertFrom-Json
+    $second.ui.background = $value
+    $second | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $secondPath
+    Assert-InvalidTheme "Invalid identity theme 'meo-evil.json': *Invalid color*ui.background*"
+  }
+  foreach ($value in @('[]', 'null', '{}')) {
+    Set-Content -LiteralPath $secondPath -Value $value
+    Assert-InvalidTheme "Invalid identity theme 'meo-evil.json': *"
+  }
+  Set-Content -LiteralPath $secondPath -Value '{broken json'
+  Assert-Error { meowsky identity apply meo-evil --dry-run } "Malformed JSON in identity theme 'meo-evil.json': *"
+
+  # Isolate read-only detection from installed applications on the test machine.
+  $plan = New-MeowskyIdentityPlan -Id 'meo-matrix'
+  & {
+    $script:detectedCommands = @{}
+    $script:detectedFiles = @()
+    $script:detectedPackage = $null
+    function Get-Command {
+      param($Name, $CommandType, $ErrorAction)
+      $script:detectedCommands[$Name]
+    }
+    function Test-Path {
+      param($LiteralPath, $PathType)
+      $LiteralPath -in $script:detectedFiles
+    }
+    function Get-AppxPackage {
+      param($Name, $ErrorAction)
+      $script:detectedPackage
+    }
+    $targets = @(Get-MeowskyIdentityTargets -OnWindows $true)
+    Assert-Equal ($targets.Available -join ',') 'True,False,False' 'Missing applications do not fail detection'
+    Assert-Equal (@(Get-MeowskyIdentityTargets -OnWindows $false).Available -join ',') 'False,False,False' 'Non-Windows detection'
+    $script:detectedCommands['wt.exe'] = [pscustomobject]@{ Source = 'fixture/wt.exe' }
+    $script:detectedCommands['code'] = [pscustomobject]@{ Source = 'fixture/code.cmd' }
+    $targets = @(Get-MeowskyIdentityTargets -OnWindows $true)
+    Assert-Equal ($targets.Available -join ',') 'True,True,True' 'PATH applications detected'
+    Assert-Equal $targets[1].Evidence 'fixture/wt.exe' 'Terminal detection evidence'
+    Assert-Equal $targets[2].Evidence 'fixture/code.cmd' 'VS Code detection evidence'
+    $script:detectedCommands = @{ 'WindowsTerminal.exe' = [pscustomobject]@{ Source = 'fixture/WindowsTerminal.exe' }; 'code-insiders' = [pscustomobject]@{ Source = 'fixture/code-insiders.cmd' } }
+    $targets = @(Get-MeowskyIdentityTargets -OnWindows $true)
+    Assert-Equal $targets[1].Evidence 'fixture/WindowsTerminal.exe' 'Portable Terminal executable detection'
+    Assert-Equal $targets[2].Evidence 'fixture/code-insiders.cmd' 'VS Code Insiders PATH detection'
+    Assert-Equal (@(Get-MeowskyIdentityTargets -OnWindows $false).Available -join ',') 'False,False,False' 'Windows adapters unavailable on another OS even with a code command'
+    $script:detectedCommands = @{ 'Get-AppxPackage' = $true }
+    $script:detectedPackage = [pscustomobject]@{ PackageFullName = 'Microsoft.WindowsTerminal_fixture' }
+    $codePath = Join-Path $env:LOCALAPPDATA 'Programs/Microsoft VS Code/Code.exe'
+    $script:detectedFiles = @($codePath)
+    $targets = @(Get-MeowskyIdentityTargets -OnWindows $true)
+    Assert-Equal $targets[1].Evidence 'Microsoft.WindowsTerminal_fixture' 'Terminal package fallback'
+    Assert-Equal $targets[2].Evidence $codePath 'VS Code user installation fallback'
+    $script:detectedCommands = @{}
+    $script:detectedFiles = @()
+    $plan.Targets = @(Get-MeowskyIdentityTargets -OnWindows $true)
+    Assert-Equal $plan.DryRun $true 'Structured read-only plan'
+    Assert-Equal ((Show-MeowskyIdentityPlan -Plan $plan) -join "`n" -match 'not detected; skipped') $true 'Missing targets shown as skipped'
+  }
+  Assert-Equal (Test-Path -LiteralPath $env:WORK_HOME) $false 'All Identity cases leave absent work root absent'
+  Assert-Equal (Test-Path -LiteralPath $env:LOCALAPPDATA) $false 'All Identity cases leave configuration absent'
+
+  # The adapter uses the redirected LOCALAPPDATA fixture, never the actual user's themes.
+  $definition = Get-MeowskyWindowsTheme -Theme $theme
+  $expectedMapping = @{
+    Window = '0 0 0'; WindowText = '120 201 138'; HotTrackingColor = '120 170 130'
+    GrayText = '115 128 120'; HilightText = '120 201 138'; Hilight = '35 60 43'
+    ButtonText = '120 201 138'; ButtonFace = '8 12 9'
+    WindowFrame = '26 39 32'; ActiveBorder = '52 120 74'; InactiveBorder = '26 39 32'
+  }
+  foreach ($key in $expectedMapping.Keys) {
+    Assert-Equal (($definition.Colors | Where-Object { $_.Key -eq $key }).Rgb) $expectedMapping[$key] "Windows mapping $key"
+  }
+  foreach ($section in @('[Theme]', '[Control Panel\Colors]', '[Control Panel\Desktop]', '[VisualStyles]', '[MasterThemeSelector]', 'DisplayName=Meo Matrix', 'HighContrast=1', 'MTSM=RJSPBS')) {
+    Assert-Equal ($definition.Content.Contains($section)) $true "Theme contains $section"
+  }
+  $other = $validSecond | ConvertFrom-Json
+  $other.ui.background = '#112233'
+  Assert-Equal (((Get-MeowskyWindowsTheme -Theme $other).Colors | Where-Object { $_.Key -eq 'Window' }).Rgb) '17 34 51' 'Renderer uses each identity palette'
+  foreach ($role in @('border', 'accentActive', 'onAccent')) { $other.ui.PSObject.Properties.Remove($role) }
+  $other.ui.selection = '#102030'
+  $other.ui.accent = '#A1B2C3'
+  $otherDefinition = Get-MeowskyWindowsTheme -Theme $other
+  foreach ($key in @('WindowFrame', 'ActiveBorder')) {
+    Assert-Equal (($otherDefinition.Colors | Where-Object { $_.Key -eq $key }).Rgb) '16 32 48' "Windows $key uses semantic selection independently of accent"
+  }
+  Assert-Equal (($otherDefinition.Colors | Where-Object { $_.Key -eq 'HotTrackingColor' }).Rgb) '161 178 195' 'Hyperlinks keep the identity accent'
+  $other.name = "Bad`n[Injected]"
+  Assert-Error { Get-MeowskyWindowsTheme -Theme $other } 'Windows theme name must be plain text*'
+
+  if ([Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT) {
+    $installOutput = (meowsky identity apply meo-matrix --target windows --windows-mode contrast) -join "`n"
+    Assert-Equal ($installOutput -match 'Windows\s+applied; manual activation') $true 'CLI installs selected theme'
+    Assert-Equal ($installOutput.Contains('Activate manually:')) $true 'Installation does not activate'
+    Assert-Equal ([IO.File]::ReadAllText($definition.Path)) $definition.Content 'Installed content matches preview'
+    $bytes = [IO.File]::ReadAllBytes($definition.Path)
+    Assert-Equal (($bytes[0..1] -join ',')) '255,254' 'Theme uses UTF-16LE with BOM'
+    $timestamp = (Get-Item -LiteralPath $definition.Path).LastWriteTimeUtc.Ticks
+    Assert-Equal (Install-MeowskyWindowsTheme -Theme $theme).Status 'Unchanged' 'Repeated installation is idempotent'
+    Assert-Equal (Get-Item -LiteralPath $definition.Path).LastWriteTimeUtc.Ticks $timestamp 'Idempotent installation preserves timestamp'
+    $changed = $theme | ConvertTo-Json -Depth 8 | ConvertFrom-Json
+    $changed.ui.accentSoft = '#112233'
+    Assert-Equal (Install-MeowskyWindowsTheme -Theme $changed).Status 'Updated' 'Owned theme can be updated'
+    Assert-Equal ([IO.File]::ReadAllText($definition.Path).Contains('HotTrackingColor=17 34 51')) $true 'Update uses changed semantic value'
+    $locked = [IO.File]::Open($definition.Path, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::None)
+    try {
+      Assert-Error { Install-MeowskyWindowsTheme -Theme $theme } '*Could not install Windows theme*'
+    } finally { $locked.Dispose() }
+    Assert-Equal ([IO.File]::ReadAllText($definition.Path).Contains('HotTrackingColor=17 34 51')) $true 'Failed installation preserves previous theme'
+    $other = $validSecond | ConvertFrom-Json
+    $otherDefinition = Get-MeowskyWindowsTheme -Theme $other
+    [IO.File]::WriteAllText($otherDefinition.Path, 'Unrelated user theme')
+    Assert-Error { Install-MeowskyWindowsTheme -Theme $other } '*unrelated theme*not be overwritten*'
+    Assert-Equal ([IO.File]::ReadAllText($otherDefinition.Path)) 'Unrelated user theme' 'Filename collision leaves unrelated file intact'
+    $blocked = $theme | ConvertTo-Json -Depth 8 | ConvertFrom-Json
+    $blocked.id = 'directory-collision'
+    $blockedDefinition = Get-MeowskyWindowsTheme -Theme $blocked
+    New-Item -ItemType Directory -Path $blockedDefinition.Path | Out-Null
+    Assert-Error { Install-MeowskyWindowsTheme -Theme $blocked } '*destination is a directory*'
+    Assert-Equal (Test-Path -LiteralPath $blockedDefinition.Path -PathType Container) $true 'Directory collision preserved'
+    Assert-Equal (@(Get-ChildItem -LiteralPath (Split-Path $definition.Path -Parent) -Filter '*.tmp' -Force).Count) 0 'No staging files remain'
+    Assert-Equal (Test-Path -LiteralPath $env:WORK_HOME) $false 'Installation does not create work root'
+    $before = [IO.File]::ReadAllText($definition.Path)
+    $null = meowsky identity apply meo-matrix --target windows --windows-mode contrast --dry-run
+    Assert-Equal ([IO.File]::ReadAllText($definition.Path)) $before 'Dry-run does not rewrite an existing theme'
+  } else {
+    Assert-Error { Install-MeowskyWindowsTheme -Theme $theme } '*requires Windows*'
+    Assert-Equal (Test-Path -LiteralPath $env:LOCALAPPDATA) $false 'Non-Windows installation leaves config absent'
+  }
+  Write-Host "PASS: $checks Identity checks."
+} finally {
+  Set-Location $originalLocation
+  $env:WORK_HOME = $originalWorkHome
+  $env:LOCALAPPDATA = $originalLocalAppData
+  if ((Split-Path $fixture -Parent) -eq ([IO.Path]::GetTempPath()).TrimEnd('\')) {
+    Remove-Item -LiteralPath $fixture -Recurse -Force -ErrorAction SilentlyContinue
+  }
+}

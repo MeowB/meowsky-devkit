@@ -1,5 +1,4 @@
 -- Basic editor defaults
-vim.g.mapleader = ' '
 vim.opt.number = true
 vim.opt.relativenumber = true
 vim.opt.termguicolors = true
@@ -24,6 +23,8 @@ vim.opt.clipboard = 'unnamedplus'
 vim.opt.expandtab = true
 vim.opt.shiftwidth = 2
 vim.opt.tabstop = 2
+vim.opt.fileformats = { 'unix', 'dos' }
+vim.opt.fileformat = 'unix'
 vim.opt.smartindent = true
 vim.opt.ignorecase = true
 vim.opt.smartcase = true
@@ -96,6 +97,13 @@ require('lazy').setup({
     event = 'InsertEnter',
     config = function()
       require('nvim-autopairs').setup({})
+    end,
+  },
+  {
+    'windwp/nvim-ts-autotag',
+    event = 'InsertEnter',
+    config = function()
+      require('nvim-ts-autotag').setup({})
     end,
   },
 }, {
@@ -199,24 +207,6 @@ cmp.setup({
       luasnip.lsp_expand(args.body)
     end,
   },
-  mapping = cmp.mapping.preset.insert({
-    ['<C-Space>'] = cmp.mapping.complete(),
-    ['<C-BS>'] = cmp.mapping(function(fallback)
-      if cmp.visible() then
-        cmp.close()
-      end
-      vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes('<C-w>', true, false, true), 'n', false)
-    end, { 'i' }),
-    ['<C-H>'] = cmp.mapping(function(fallback)
-      if cmp.visible() then
-        cmp.close()
-      end
-      vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes('<C-w>', true, false, true), 'n', false)
-    end, { 'i' }),
-    ['<CR>'] = cmp.mapping.confirm({ select = true }),
-    ['<Tab>'] = cmp.mapping.select_next_item(),
-    ['<S-Tab>'] = cmp.mapping.select_prev_item(),
-  }),
   sources = cmp.config.sources({
     { name = 'nvim_lsp' },
     { name = 'alias_path' },
@@ -246,68 +236,3 @@ vim.diagnostic.config({
   underline = true,
   update_in_insert = false,
 })
-
-vim.keymap.set('n', 'gd', vim.lsp.buf.definition, { desc = 'Go to definition' })
-vim.keymap.set('n', 'K', vim.lsp.buf.hover, { desc = 'Hover docs' })
-vim.keymap.set('n', '<leader>rn', vim.lsp.buf.rename, { desc = 'Rename symbol' })
-vim.keymap.set('n', '<leader>ca', vim.lsp.buf.code_action, { desc = 'Code action' })
-vim.keymap.set('n', '<leader>f', function()
-  vim.lsp.buf.format({ async = true })
-end, { desc = 'Format file' })
--- VS Code-style Shift+Arrow selection.
-vim.keymap.set('n', '<S-Left>', 'vh', { noremap = true, desc = 'Select left' })
-vim.keymap.set('n', '<S-Right>', 'vl', { noremap = true, desc = 'Select right' })
-vim.keymap.set('n', '<S-Up>', 'Vk', { noremap = true, desc = 'Select line up' })
-vim.keymap.set('n', '<S-Down>', 'Vj', { noremap = true, desc = 'Select line down' })
-
-vim.keymap.set('i', '<S-Left>', '<Esc>vhi', { noremap = true, desc = 'Select left' })
-vim.keymap.set('i', '<S-Right>', '<Esc>vli', { noremap = true, desc = 'Select right' })
-vim.keymap.set('i', '<S-Up>', '<Esc>Vki', { noremap = true, desc = 'Select line up' })
-vim.keymap.set('i', '<S-Down>', '<Esc>Vji', { noremap = true, desc = 'Select line down' })
-
-vim.keymap.set('v', '<S-Left>', 'h', { noremap = true, desc = 'Extend selection left' })
-vim.keymap.set('v', '<S-Right>', 'l', { noremap = true, desc = 'Extend selection right' })
-vim.keymap.set('v', '<S-Up>', 'k', { noremap = true, desc = 'Extend selection up' })
-vim.keymap.set('v', '<S-Down>', 'j', { noremap = true, desc = 'Extend selection down' })
--- VS Code-style Ctrl+Shift+Arrow selection.
-vim.keymap.set('n', '<C-S-Left>', 'vb', { noremap = true, desc = 'Select word left' })
-vim.keymap.set('n', '<C-S-Right>', 've', { noremap = true, desc = 'Select word right' })
-vim.keymap.set('n', '<C-S-Up>', 'V{', { noremap = true, desc = 'Select block up' })
-vim.keymap.set('n', '<C-S-Down>', 'V}', { noremap = true, desc = 'Select block down' })
-
-vim.keymap.set('i', '<C-S-Left>', '<Esc>vb', { noremap = true, desc = 'Select word left' })
-vim.keymap.set('i', '<C-S-Right>', '<Esc>ve', { noremap = true, desc = 'Select word right' })
-vim.keymap.set('i', '<C-S-Up>', '<Esc>V{', { noremap = true, desc = 'Select block up' })
-vim.keymap.set('i', '<C-S-Down>', '<Esc>V}', { noremap = true, desc = 'Select block down' })
-
-vim.keymap.set('v', '<C-S-Left>', 'b', { noremap = true, desc = 'Extend selection word left' })
-vim.keymap.set('v', '<C-S-Right>', 'e', { noremap = true, desc = 'Extend selection word right' })
-vim.keymap.set('v', '<C-S-Up>', '{', { noremap = true, desc = 'Extend selection block up' })
-vim.keymap.set('v', '<C-S-Down>', '}', { noremap = true, desc = 'Extend selection block down' })
-
--- VS Code-style selected-block indentation.
-vim.keymap.set('v', '<Tab>', '>gv', { noremap = true, silent = true, desc = 'Indent selection' })
-vim.keymap.set('v', '<S-Tab>', '<gv', { noremap = true, silent = true, desc = 'Outdent selection' })
--- VS Code-style Alt+Arrow line movement.
-vim.keymap.set('n', '<A-Up>', ':move .-2<CR>==', { silent = true, desc = 'Move line up' })
-vim.keymap.set('n', '<A-Down>', ':move .+1<CR>==', { silent = true, desc = 'Move line down' })
-vim.keymap.set('i', '<A-Up>', '<Esc>:move .-2<CR>==gi', { silent = true, desc = 'Move line up' })
-vim.keymap.set('i', '<A-Down>', '<Esc>:move .+1<CR>==gi', { silent = true, desc = 'Move line down' })
-vim.keymap.set('v', '<A-Up>', ":move '<-2<CR>gv=gv", { silent = true, desc = 'Move selection up' })
-vim.keymap.set('v', '<A-Down>', ":move '>+1<CR>gv=gv", { silent = true, desc = 'Move selection down' })
--- VS Code-style Shift+Home/End selection.
-vim.keymap.set('n', '<S-Home>', 'v^', { noremap = true, desc = 'Select to first nonblank' })
-vim.keymap.set('n', '<S-End>', 'v$', { noremap = true, desc = 'Select to end of line' })
-vim.keymap.set('n', '<C-S-Home>', 'vgg', { noremap = true, desc = 'Select to top of file' })
-vim.keymap.set('n', '<C-S-End>', 'vG', { noremap = true, desc = 'Select to bottom of file' })
-
-vim.keymap.set('i', '<S-Home>', '<Esc>v^', { noremap = true, desc = 'Select to first nonblank' })
-vim.keymap.set('i', '<S-End>', '<Esc>v$', { noremap = true, desc = 'Select to end of line' })
-vim.keymap.set('i', '<C-S-Home>', '<Esc>vgg', { noremap = true, desc = 'Select to top of file' })
-vim.keymap.set('i', '<C-S-End>', '<Esc>vG', { noremap = true, desc = 'Select to bottom of file' })
-
-vim.keymap.set('v', '<S-Home>', '^', { noremap = true, desc = 'Extend selection to first nonblank' })
-vim.keymap.set('v', '<S-End>', '$', { noremap = true, desc = 'Extend selection to end of line' })
-vim.keymap.set('v', '<C-S-Home>', 'gg', { noremap = true, desc = 'Extend selection to top of file' })
-vim.keymap.set('v', '<C-S-End>', 'G', { noremap = true, desc = 'Extend selection to bottom of file' })
-
