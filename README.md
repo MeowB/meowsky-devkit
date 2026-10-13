@@ -177,7 +177,7 @@ When `meowsky ./` runs in any folder, it opens a fullscreen Windows Terminal lay
 | `meowsky pdf <file.pdf>` | Open a PDF in the default viewer. |
 | `meowsky -h`, `meowsky -Help`, `meowsky help`, or `meowsky --help` | Print the built-in command manual. |
 
-`ptree [level]` also works as a standalone command. `dev` is a compatibility alias for `meowsky` when available. On Windows, the workspace defaults to `C:\meowsky`; an optional `WORK_HOME` override must be an absolute path. Bare `meowsky` and `meowsky dev` create only missing `dev/`, `bach/`, and `launchpad/` directories under it; they do not create repositories or records. Linux retains its existing work-root behavior. Run `meowsky -h` for the terminal manual.
+`ptree [level]` also works as a standalone command. On Windows, the workspace defaults to `C:\meowsky`; an optional `WORK_HOME` override must be an absolute path. Bare `meowsky` and `meowsky dev` create only missing `dev/`, `bach/`, and `launchpad/` directories under it; they do not create repositories or records. Linux retains its existing work-root behavior. Run `meowsky -h` for the terminal manual.
 
 ## Identity
 

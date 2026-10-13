@@ -122,8 +122,9 @@ try {
   $oldHelp = $baselineAst.Find({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Show-MeowskyHelp' }, $true).Extent.Text
   $legacyHelp = ($globalHelp -split "`r?`n" | Where-Object { $_ -notmatch '^\s+meowsky identity' }) -join "`n"
   $expectedLegacyHelp = ((& { . ([scriptblock]::Create($oldHelp)); Show-MeowskyHelp }).TrimEnd()) -replace "`r`n", "`n"
-  $filter = { $_ -notmatch '^\s+meowsky color|^\s+meowsky (dev|bach|launchpad)|^\s+meowsky\s+(Change to the work root|Ensure the workspace)|^\s+The work root is|^\s+otherwise \$HOME\\work|^\s+then under the work root|^\s+WORK_HOME must|^\s+Bare meowsky|^\s+dev/, bach/, and launchpad/|^\s+File and Codex paths|^\s+meowsky \. and ./ use|^\s+active identity theme' }
+  $filter = { $_ -notmatch '^\s+meowsky color|^\s+meowsky (dev|bach|launchpad)|^\s+meowsky\s+(Change to the work root|Ensure the workspace)|^\s+The work root is|^\s+otherwise \$HOME\\work|^\s+then under the work root|^\s+WORK_HOME must|^\s+Bare meowsky|^\s+dev/, bach/, and launchpad/|^\s+File and Codex paths|^\s+meowsky \. and ./ use|^\s+active identity theme|^\s+dev\s+Compatibility alias' }
   Assert-Equal (($legacyHelp -split "`n" | Where-Object $filter) -join "`n") (($expectedLegacyHelp -split "`n" | Where-Object $filter) -join "`n") 'Global help preserved except retired colors and Identity'
+  Assert-Equal ($globalHelp -match '(?m)^\s+dev\s+Compatibility alias') $false 'Removed standalone dev alias absent from help'
   $oldTree = $baselineAst.Find({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'ptree' }, $true).Extent.Text
   foreach ($level in @(1, 2, 3, 15)) {
     $expected = Capture { . ([scriptblock]::Create($oldTree)); ptree $level }
@@ -150,7 +151,6 @@ try {
     $oldFunction = $baselineAst.Find({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $name }, $true).Extent.Text
     Assert-Equal ((Get-Command $name).ScriptBlock.ToString().Trim()) (([scriptblock]::Create($oldFunction)).Ast.Find({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] }, $true).Body.ToString().Trim('{}').Trim()) "Preserved $name implementation"
   }
-  Assert-Equal ((Get-Alias dev).Definition) 'meowsky' 'Compatibility alias'
   $completion = [Management.Automation.CommandCompletion]::CompleteInput('meowsky co', 10, $null)
   Assert-Equal (($completion.CompletionMatches.CompletionText | Sort-Object) -join ',') 'codex,color' 'Command completion'
   # A pre-existing project override must neither be read nor rewritten.
@@ -362,15 +362,19 @@ try {
   }
   @'
 $ErrorActionPreference = 'Stop'
-Set-Alias dev Get-Date
+Remove-Item Alias:dev -ErrorAction Ignore
+$Error.Clear()
 . (Join-Path $PSScriptRoot 'powershell/profile.ps1')
-if ((Get-Alias dev).Definition -ne 'Get-Date') { throw 'Existing dev alias was overwritten.' }
+if (Get-Alias dev -ErrorAction Ignore) { throw 'Removed dev alias was created.' }
+if ($Error.Count -gt 0) { throw "PowerShell profile reported an error: $($Error[0])" }
+meowsky dev
+if ((Get-Location).Path -ne (Join-Path $env:WORK_HOME 'dev')) { throw 'meowsky dev did not enter dev/.' }
 if ($script:MeowskyCommands.ContainsKey('md') -or $script:MeowskyCommands.ContainsKey('markdown')) { throw 'Removed feature still registered.' }
 if (-not (meowsky pdf -h).Contains('meowsky pdf')) { throw 'Unrelated feature failed.' }
 if ($script:MeowskyCommands.Count -ne 10) { throw 'Unexpected command count after feature removal.' }
 '@ | Set-Content -LiteralPath (Join-Path $isolatedRuntime 'verify.ps1') -Encoding UTF8
   & powershell.exe -NoProfile -File (Join-Path $isolatedRuntime 'verify.ps1')
-  Assert-Equal $LASTEXITCODE 0 'Fresh-profile feature removal and existing alias preservation'
+  Assert-Equal $LASTEXITCODE 0 'Fresh-profile feature removal without standalone dev alias'
   Write-Host "PASS: $checks regression checks."
 } finally {
   Set-Location $originalLocation

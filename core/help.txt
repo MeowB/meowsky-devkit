@@ -69,4 +69,3 @@ PATHS AND COLORS
 
 SEE ALSO
     ptree [level]           Standalone form of 'meowsky ptree [level]'.
-    dev                     Compatibility alias for meowsky, if available.

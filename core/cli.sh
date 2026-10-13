@@ -46,5 +46,3 @@ meowsky() {
 
   cd "$work_root" || return
 }
-
-alias dev='meowsky'

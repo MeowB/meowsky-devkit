@@ -22,6 +22,3 @@ if (Get-Module -ListAvailable -Name PSReadLine) {
     Error = "${meowskyEscape}[91m"
   }
 }
-if (-not (Get-Alias dev -ErrorAction SilentlyContinue)) {
-  Set-Alias dev meowsky
-}

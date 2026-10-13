@@ -41,7 +41,5 @@ $meowskyTargetCompleter = {
     & $feature.Completion $commandName $parameterName $wordToComplete $commandAst $fakeBoundParameters
   }
 }
-foreach ($commandName in @('meowsky', 'dev')) {
-  Register-ArgumentCompleter -CommandName $commandName -ParameterName Action -ScriptBlock $meowskyCompleter
-  Register-ArgumentCompleter -CommandName $commandName -ParameterName Target -ScriptBlock $meowskyTargetCompleter
-}
+Register-ArgumentCompleter -CommandName meowsky -ParameterName Action -ScriptBlock $meowskyCompleter
+Register-ArgumentCompleter -CommandName meowsky -ParameterName Target -ScriptBlock $meowskyTargetCompleter
