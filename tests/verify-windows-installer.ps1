@@ -1,7 +1,7 @@
 # Installer state transitions use only temporary profiles and mocked environment scopes.
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path $PSScriptRoot -Parent
-. (Join-Path $repo 'scripts/windows-installer-core.ps1')
+. (Join-Path $repo 'scripts/installer/windows-functions.ps1')
 $fixture = Join-Path ([IO.Path]::GetTempPath()) ('meowsky-installer-tests-' + [guid]::NewGuid().ToString('N'))
 $checks = 0
 

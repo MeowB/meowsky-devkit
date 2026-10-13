@@ -6,7 +6,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
-. (Join-Path $PSScriptRoot 'windows-installer-core.ps1')
+. (Join-Path $PSScriptRoot 'installer/windows-functions.ps1')
 
 $tools = Join-Path $env:LOCALAPPDATA 'nvim-tools'
 New-Item -ItemType Directory -Force $tools | Out-Null

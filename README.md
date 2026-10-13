@@ -58,7 +58,9 @@ This setup is meant to feel like:
 |   `-- meowsky.sh           # Linux runtime bootstrap
 |-- tests/                  # behavior preservation checks
 `-- scripts/
-    |-- install-windows.ps1
+    |-- install-windows.ps1          # Windows setup entry point
+    |-- installer/
+    |   `-- windows-functions.ps1 # Windows installer support functions
     `-- install-linux.sh
 ```
 
