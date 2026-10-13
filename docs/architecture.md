@@ -45,7 +45,7 @@ Windows loads this checkout directly through the installed profile. `MEOWSKY_DEV
 
 Linux has a `shell/meowsky.sh` bootstrap and `.sh` implementations beside their features. Its installer copies those files to the existing runtime directory and installs global Codex instructions without replacing an existing file; the checkout is not needed at runtime. Linux retains its command subset and context-only prompt. PowerShell manifests do not drive shell loading.
 
-`nvim/init.lua` and the Windows installer are unchanged in this milestone. Neovim ownership can move in a separate structural change. Zig wrappers currently serve Treesitter; no C/C++ feature is introduced.
+`nvim/init.lua` owns shared editor setup. `nvim/lua/meowsky/c.lua` owns C-only build, run, navigation, and GDB commands. The Windows installer copies both files, reuses a healthy MinGW-w64 GCC/GDB pair or installs MSYS2 UCRT64, and adds clangd and the C Treesitter parser. Zig wrappers still serve Treesitter. See [C development](c-development.md) for the learning workflow.
 
 ## Verification
 

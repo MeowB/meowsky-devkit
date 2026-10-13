@@ -294,6 +294,87 @@ function Install-WinGetPackage {
   return $true
 }
 
+function Test-CCompilerPair {
+  param([Parameter(Mandatory)][string]$Directory)
+
+  $gcc = Join-Path $Directory 'gcc.exe'
+  $gdb = Join-Path $Directory 'gdb.exe'
+  if (-not (Test-Path -LiteralPath $gcc -PathType Leaf) -or
+      -not (Test-Path -LiteralPath $gdb -PathType Leaf)) {
+    return $false
+  }
+
+  try {
+    $target = & $gcc -dumpmachine 2>$null | Select-Object -First 1
+    if ($LASTEXITCODE -ne 0 -or $target -notmatch 'mingw') { return $false }
+    & $gdb --version 2>$null | Out-Null
+    return $LASTEXITCODE -eq 0
+  } catch {
+    return $false
+  }
+}
+
+function Add-CCompilerToPath {
+  param([Parameter(Mandatory)][string]$Directory)
+
+  $directory = (Resolve-Path -LiteralPath $Directory).Path.TrimEnd('\')
+  foreach ($scope in @('Process', 'User')) {
+    $current = [Environment]::GetEnvironmentVariable('Path', $scope)
+    $entries = @($current -split ';' | Where-Object { $_.Trim() })
+    $entriesToCheck = @($entries)
+    if ($scope -eq 'User') {
+      $entriesToCheck += @([Environment]::GetEnvironmentVariable('Path', 'Machine') -split ';')
+    }
+    $present = @($entriesToCheck | Where-Object {
+      $_.Trim().Replace('/', '\').TrimEnd('\') -ieq $directory
+    }).Count -gt 0
+    if (-not $present) {
+      [Environment]::SetEnvironmentVariable('Path', (($entries + $directory) -join ';'), $scope)
+    }
+  }
+}
+
+function Initialize-CCompiler {
+  $gccCommand = Get-Command gcc.exe -ErrorAction SilentlyContinue
+  $gdbCommand = Get-Command gdb.exe -ErrorAction SilentlyContinue
+  if ($gccCommand -or $gdbCommand) {
+    if (-not $gccCommand -or -not $gdbCommand -or
+        (Split-Path -Parent $gccCommand.Source) -ine (Split-Path -Parent $gdbCommand.Source) -or
+        -not (Test-CCompilerPair -Directory (Split-Path -Parent $gccCommand.Source))) {
+      throw 'GCC/GDB on PATH are incomplete, mismatched, or unhealthy. Resolve the existing toolchain before installing another. See docs/c-development.md.'
+    }
+    Write-Host "Using existing GCC/GDB at $(Split-Path -Parent $gccCommand.Source)"
+    return
+  }
+
+  $ucrtBin = 'C:\msys64\ucrt64\bin'
+  if (-not (Test-CCompilerPair -Directory $ucrtBin)) {
+    $msysBash = 'C:\msys64\usr\bin\bash.exe'
+    if (-not (Test-Path -LiteralPath $msysBash -PathType Leaf)) {
+      Install-WinGetPackage -Id 'MSYS2.MSYS2' -Commands @($msysBash) | Out-Null
+    }
+    if (-not (Test-Path -LiteralPath $msysBash -PathType Leaf)) {
+      throw 'MSYS2 was not found at C:\msys64 after installation. Install it there or put one healthy MinGW-w64 GCC/GDB pair on PATH.'
+    }
+    # MSYS2 is a rolling release; finish core updates before installing new packages.
+    for ($pass = 1; $pass -le 2; $pass++) {
+      Invoke-QuietNativeCommand `
+        -Label "msys2-update-$pass" `
+        -FilePath $msysBash `
+        -Arguments @('-lc', 'pacman -Suy --noconfirm') | Out-Null
+    }
+    Invoke-QuietNativeCommand `
+      -Label 'msys2-ucrt64-gcc-gdb' `
+      -FilePath $msysBash `
+      -Arguments @('-lc', 'pacman -S --needed --noconfirm mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-gdb') | Out-Null
+  }
+  if (-not (Test-CCompilerPair -Directory $ucrtBin)) {
+    throw 'MSYS2 UCRT64 GCC/GDB did not pass verification. Check the installer log and docs/c-development.md.'
+  }
+  Add-CCompilerToPath -Directory $ucrtBin
+  Write-Host "Using MSYS2 UCRT64 GCC/GDB at $ucrtBin"
+}
+
 function Get-ZigPath {
   $path = (Get-Command zig.exe -ErrorAction SilentlyContinue).Source
   if ($path) {
@@ -390,6 +471,7 @@ $packages = @(
 )
 
 $masonPackages = @(
+  'clangd',
   'typescript-language-server',
   'eslint-lsp',
   'html-lsp',
@@ -400,6 +482,7 @@ $masonPackages = @(
 )
 
 $treesitterParsers = @(
+  'c',
   'lua',
   'vim',
   'vimdoc',
@@ -449,6 +532,10 @@ Invoke-MeowskyStep 'Install or verify Windows packages' {
     Write-Host "[$packageIndex/$($packages.Count)] $($package.Id)"
     Install-WinGetPackage -Id $package.Id -Commands $package.Commands | Out-Null
   }
+}
+
+Invoke-MeowskyStep 'Install or verify C compiler and debugger' {
+  Initialize-CCompiler
 }
 
 Invoke-MeowskyStep 'Repair Neovim runtime environment' {
@@ -529,6 +616,9 @@ Invoke-MeowskyStep 'Install Neovim config' {
   $nvimConfigDir = Join-Path $env:LOCALAPPDATA 'nvim'
   New-Item -ItemType Directory -Force $nvimConfigDir | Out-Null
   Copy-Item -LiteralPath (Join-Path $repoRoot 'nvim\init.lua') -Destination (Join-Path $nvimConfigDir 'init.lua') -Force
+  $cModuleDir = Join-Path $nvimConfigDir 'lua\meowsky'
+  New-Item -ItemType Directory -Force $cModuleDir | Out-Null
+  Copy-Item -LiteralPath (Join-Path $repoRoot 'nvim\lua\meowsky\c.lua') -Destination (Join-Path $cModuleDir 'c.lua') -Force
   Write-Host "Copied init.lua to $nvimConfigDir"
 }
 

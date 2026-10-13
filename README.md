@@ -1,6 +1,6 @@
 # Meowsky
 
-Personal Windows-first devkit for web work, scripting, and fast project starts.
+Personal Windows-first devkit for web work, C programming, scripting, and fast project starts.
 
 It is a small repo, but it does three concrete things:
 
@@ -12,9 +12,9 @@ It is a small repo, but it does three concrete things:
 
 | Area | Behavior |
 | --- | --- |
-| Machine setup | Installs the core Windows tools this workflow expects: Neovim, Git, Node.js, tree-sitter, Zig, eza, and Pandoc |
+| Machine setup | Installs the core Windows tools this workflow expects: Neovim, Git, Node.js, tree-sitter, Zig, GCC/GDB, eza, and Pandoc |
 | GitHub CLI | Optional, only if you want terminal-first GitHub repo workflows |
-| Editor setup | Loads a personal Neovim config with web-focused plugins, LSPs, Treesitter, and completion |
+| Editor setup | Loads a personal Neovim config with web and C language support, LSPs, Treesitter, and completion |
 | Workspace flow | Adds `meowsky` to PowerShell so you can enter the workspace or dev district, open the fullscreen project layout, or start Codex directly |
 | Codex instructions | Installs durable behavioral rules once in Codex's global `AGENTS.md`; project `AGENTS.md` files add local guidance, while the launch prompt supplies session context |
 | Preview helpers | Uses Pandoc to preview Markdown and the default PDF viewer for PDFs |
@@ -50,7 +50,8 @@ This setup is meant to feel like:
 |   |-- tree/
 |   `-- workspace/
 |-- nvim/
-|   `-- init.lua             # unchanged editor configuration
+|   |-- init.lua             # editor configuration
+|   `-- lua/meowsky/c.lua    # C build, run, navigation, and GDB commands
 |-- powershell/
 |   `-- profile.ps1
 |-- shell/
@@ -82,6 +83,8 @@ The installer reuses tools that are already present. To explicitly check package
 ```
 
 The longer manual setup is still documented in [docs/new-pc-dev-setup.md](docs/new-pc-dev-setup.md) if you want to see each piece separately.
+
+For C exercises and small multi-file programs, see [docs/c-development.md](docs/c-development.md).
 
 ### Linux
 

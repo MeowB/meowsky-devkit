@@ -67,11 +67,11 @@ require('lazy').setup({
       })
 
       if vim.fn.executable('tree-sitter') == 1 then
-        treesitter.install({ 'lua', 'vim', 'vimdoc', 'javascript', 'typescript', 'tsx', 'json', 'html', 'css', 'prisma' })
+        treesitter.install({ 'c', 'lua', 'vim', 'vimdoc', 'javascript', 'typescript', 'tsx', 'json', 'html', 'css', 'prisma' })
       end
 
       vim.api.nvim_create_autocmd('FileType', {
-        pattern = { 'lua', 'vim', 'javascript', 'typescript', 'typescriptreact', 'json', 'html', 'css', 'prisma' },
+        pattern = { 'c', 'lua', 'vim', 'javascript', 'typescript', 'typescriptreact', 'json', 'html', 'css', 'prisma' },
         callback = function()
           pcall(vim.treesitter.start)
           if vim.treesitter.highlighter.active[vim.api.nvim_get_current_buf()] then
@@ -224,8 +224,19 @@ vim.lsp.config('*', {
   capabilities = capabilities,
 })
 
+local clangd_config = {
+  filetypes = { 'c' },
+  init_options = { fallbackFlags = { '-std=c11' } },
+}
+local gcc_path = vim.fn.exepath('gcc')
+if gcc_path ~= '' then
+  -- Permit clangd to query the selected MinGW compiler when a project names it.
+  clangd_config.cmd = { 'clangd', '--query-driver=' .. gcc_path }
+end
+vim.lsp.config('clangd', clangd_config)
+
 require('mason-lspconfig').setup({
-  ensure_installed = { 'ts_ls', 'eslint', 'html', 'cssls', 'jsonls', 'lua_ls', 'prismals' },
+  ensure_installed = { 'clangd', 'ts_ls', 'eslint', 'html', 'cssls', 'jsonls', 'lua_ls', 'prismals' },
   automatic_enable = true,
 })
 
@@ -236,3 +247,7 @@ vim.diagnostic.config({
   underline = true,
   update_in_insert = false,
 })
+
+if vim.fn.has('win32') == 1 then
+  require('meowsky.c').setup()
+end
