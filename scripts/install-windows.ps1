@@ -1,11 +1,12 @@
 param(
-  [switch]$Upgrade
+  [switch]$Upgrade,
+  [string]$Msys2Root
 )
 
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
-[Environment]::SetEnvironmentVariable('MEOWSKY_DEVKIT_HOME', $repoRoot, 'User')
+. (Join-Path $PSScriptRoot 'windows-installer-core.ps1')
 
 $tools = Join-Path $env:LOCALAPPDATA 'nvim-tools'
 New-Item -ItemType Directory -Force $tools | Out-Null
@@ -71,7 +72,7 @@ function Invoke-QuietNativeCommand {
     [string]$Label,
     [Parameter(Mandatory)]
     [string]$FilePath,
-    [Parameter(Mandatory)]
+    [Parameter(Mandatory)][AllowEmptyCollection()]
     [string[]]$Arguments,
     [int[]]$SuccessExitCodes = @(0)
   )
@@ -150,41 +151,6 @@ function Repair-NeovimRuntimeEnvironment {
   }
 }
 
-function Repair-PowerShellProfile {
-  param(
-    [Parameter(Mandatory)]
-    [string]$Path
-  )
-
-  if (-not (Test-Path -LiteralPath $Path)) {
-    return
-  }
-
-  $content = Get-Content -Raw -LiteralPath $Path
-  $updated = $content
-
-  $updated = [regex]::Replace(
-    $updated,
-    '(?m)^\s*Set-PSReadLineOption\s+-PredictionSource\s+\S+\s*\r?\n?',
-    ''
-  )
-  $updated = [regex]::Replace(
-    $updated,
-    '(?m)^\s*Set-PSReadLineOption\s+-PredictionViewStyle\s+\S+\s*\r?\n?',
-    ''
-  )
-  $updated = [regex]::Replace(
-    $updated,
-    '(?ms)^\s*Set-PSReadLineOption\s+-Colors\s+@\{.*?^\s*\}\s*\r?\n?',
-    ''
-  )
-
-  if ($updated -ne $content) {
-    Set-Content -Encoding UTF8 -LiteralPath $Path -Value $updated
-    Write-Host "Removed unsupported PSReadLine options from $Path"
-  }
-}
-
 function Get-FirstExistingCommand {
   param(
     [Parameter(Mandatory)]
@@ -198,6 +164,36 @@ function Get-FirstExistingCommand {
     }
   }
 
+  return $null
+}
+
+function Find-MeowskyPackageCommand {
+  param([Parameter(Mandatory)][hashtable]$Package)
+  $found = Get-FirstExistingCommand -Names $Package.Commands
+  if ($found) { return $found }
+  $known = switch ($Package.Id) {
+    'Neovim.Neovim' { @((Join-Path $env:ProgramFiles 'Neovim\bin\nvim.exe'), (Join-Path $env:LOCALAPPDATA 'Programs\Neovim\bin\nvim.exe')) }
+    'Git.Git' {
+      Join-Path $env:ProgramFiles 'Git\cmd\git.exe'
+      if (${env:ProgramFiles(x86)}) { Join-Path ${env:ProgramFiles(x86)} 'Git\cmd\git.exe' }
+    }
+    'OpenJS.NodeJS.LTS' { @((Join-Path $env:ProgramFiles 'nodejs\node.exe'), (Join-Path $env:LOCALAPPDATA 'Programs\nodejs\node.exe')) }
+    'JohnMacFarlane.Pandoc' { @((Join-Path $env:ProgramFiles 'Pandoc\pandoc.exe'), (Join-Path $env:LOCALAPPDATA 'Pandoc\pandoc.exe')) }
+    default { @() }
+  }
+  foreach ($candidate in $known) {
+    if (Test-Path -LiteralPath $candidate -PathType Leaf) { return $candidate }
+  }
+  $wingetPackages = Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Packages'
+  if (Test-Path -LiteralPath $wingetPackages -PathType Container) {
+    foreach ($folder in (Get-ChildItem -LiteralPath $wingetPackages -Directory -Filter "$($Package.Id)*" -ErrorAction SilentlyContinue)) {
+      foreach ($name in $Package.Commands) {
+        $candidate = Get-ChildItem -LiteralPath $folder.FullName -Recurse -File -Filter $name -ErrorAction SilentlyContinue |
+          Select-Object -First 1 -ExpandProperty FullName
+        if ($candidate) { return $candidate }
+      }
+    }
+  }
   return $null
 }
 
@@ -314,27 +310,10 @@ function Test-CCompilerPair {
   }
 }
 
-function Add-CCompilerToPath {
-  param([Parameter(Mandatory)][string]$Directory)
-
-  $directory = (Resolve-Path -LiteralPath $Directory).Path.TrimEnd('\')
-  foreach ($scope in @('Process', 'User')) {
-    $current = [Environment]::GetEnvironmentVariable('Path', $scope)
-    $entries = @($current -split ';' | Where-Object { $_.Trim() })
-    $entriesToCheck = @($entries)
-    if ($scope -eq 'User') {
-      $entriesToCheck += @([Environment]::GetEnvironmentVariable('Path', 'Machine') -split ';')
-    }
-    $present = @($entriesToCheck | Where-Object {
-      $_.Trim().Replace('/', '\').TrimEnd('\') -ieq $directory
-    }).Count -gt 0
-    if (-not $present) {
-      [Environment]::SetEnvironmentVariable('Path', (($entries + $directory) -join ';'), $scope)
-    }
-  }
-}
-
 function Initialize-CCompiler {
+  if ($Msys2Root -and -not [IO.Path]::IsPathRooted($Msys2Root)) {
+    throw "-Msys2Root must be an absolute directory: $Msys2Root"
+  }
   $gccCommand = Get-Command gcc.exe -ErrorAction SilentlyContinue
   $gdbCommand = Get-Command gdb.exe -ErrorAction SilentlyContinue
   if ($gccCommand -or $gdbCommand) {
@@ -343,19 +322,27 @@ function Initialize-CCompiler {
         -not (Test-CCompilerPair -Directory (Split-Path -Parent $gccCommand.Source))) {
       throw 'GCC/GDB on PATH are incomplete, mismatched, or unhealthy. Resolve the existing toolchain before installing another. See docs/c-development.md.'
     }
-    Write-Host "Using existing GCC/GDB at $(Split-Path -Parent $gccCommand.Source)"
+    $selectedBin = Split-Path -Parent $gccCommand.Source
+    Ensure-MeowskyPersistentPath -Directory $selectedBin | Out-Null
+    $script:cCompilerBin = $selectedBin
+    Write-Host "Using existing GCC/GDB at $selectedBin"
     return
   }
 
-  $ucrtBin = 'C:\msys64\ucrt64\bin'
-  if (-not (Test-CCompilerPair -Directory $ucrtBin)) {
-    $msysBash = 'C:\msys64\usr\bin\bash.exe'
-    if (-not (Test-Path -LiteralPath $msysBash -PathType Leaf)) {
-      Install-WinGetPackage -Id 'MSYS2.MSYS2' -Commands @($msysBash) | Out-Null
+  $roots = if ($Msys2Root) { @($Msys2Root) } else { @(Get-MeowskyMsys2Roots) }
+  $selectedRoot = $roots | Where-Object { Test-CCompilerPair -Directory (Join-Path $_ 'ucrt64\bin') } | Select-Object -First 1
+  if (-not $selectedRoot) {
+    $selectedRoot = $roots | Where-Object { Test-Path -LiteralPath (Join-Path $_ 'usr\bin\bash.exe') -PathType Leaf } | Select-Object -First 1
+    if (-not $selectedRoot) {
+      if ($Msys2Root) { throw "MSYS2 was not found under -Msys2Root $Msys2Root" }
+      Install-WinGetPackage -Id 'MSYS2.MSYS2' -Commands @('msys2.exe') | Out-Null
+      $roots = @(Get-MeowskyMsys2Roots)
+      $selectedRoot = $roots | Where-Object { Test-Path -LiteralPath (Join-Path $_ 'usr\bin\bash.exe') -PathType Leaf } | Select-Object -First 1
     }
-    if (-not (Test-Path -LiteralPath $msysBash -PathType Leaf)) {
-      throw 'MSYS2 was not found at C:\msys64 after installation. Install it there or put one healthy MinGW-w64 GCC/GDB pair on PATH.'
+    if (-not $selectedRoot) {
+      throw 'MSYS2 UCRT64 was not found. Set -Msys2Root to the MSYS2 installation directory and rerun.'
     }
+    $msysBash = Join-Path $selectedRoot 'usr\bin\bash.exe'
     # MSYS2 is a rolling release; finish core updates before installing new packages.
     for ($pass = 1; $pass -le 2; $pass++) {
       Invoke-QuietNativeCommand `
@@ -368,10 +355,12 @@ function Initialize-CCompiler {
       -FilePath $msysBash `
       -Arguments @('-lc', 'pacman -S --needed --noconfirm mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-gdb') | Out-Null
   }
+  $ucrtBin = Join-Path $selectedRoot 'ucrt64\bin'
   if (-not (Test-CCompilerPair -Directory $ucrtBin)) {
     throw 'MSYS2 UCRT64 GCC/GDB did not pass verification. Check the installer log and docs/c-development.md.'
   }
-  Add-CCompilerToPath -Directory $ucrtBin
+  Ensure-MeowskyPersistentPath -Directory $ucrtBin | Out-Null
+  $script:cCompilerBin = $ucrtBin
   Write-Host "Using MSYS2 UCRT64 GCC/GDB at $ucrtBin"
 }
 
@@ -519,7 +508,18 @@ function Test-TreesitterParserInstalled {
   )
 }
 
+Invoke-MeowskyStep 'Set DevKit checkout location' {
+  [Environment]::SetEnvironmentVariable('MEOWSKY_DEVKIT_HOME', $repoRoot, 'User')
+  $env:MEOWSKY_DEVKIT_HOME = $repoRoot
+  if ([Environment]::GetEnvironmentVariable('MEOWSKY_DEVKIT_HOME', 'User') -ne $repoRoot) {
+    throw 'MEOWSKY_DEVKIT_HOME did not persist for a new terminal.'
+  }
+}
+
 Invoke-MeowskyStep 'Install or verify Windows packages' {
+  if (-not (Get-Command winget.exe -ErrorAction SilentlyContinue)) {
+    throw 'Windows Package Manager (winget.exe) is required. Install App Installer, then rerun Meowsky setup.'
+  }
   if ($Upgrade) {
     Write-Host 'Upgrade checks are enabled.'
   } else {
@@ -531,6 +531,12 @@ Invoke-MeowskyStep 'Install or verify Windows packages' {
     $packageIndex++
     Write-Host "[$packageIndex/$($packages.Count)] $($package.Id)"
     Install-WinGetPackage -Id $package.Id -Commands $package.Commands | Out-Null
+  }
+  Sync-MeowskyProcessPath
+  foreach ($package in $packages) {
+    $commandPath = Find-MeowskyPackageCommand -Package $package
+    if (-not $commandPath) { throw "$($package.Id) is installed but its command is unavailable after PATH refresh." }
+    Ensure-MeowskyPersistentPath -Directory (Split-Path $commandPath -Parent) | Out-Null
   }
 }
 
@@ -553,9 +559,22 @@ Invoke-MeowskyStep 'Resolve Zig compiler' {
 }
 
 Invoke-MeowskyStep 'Check Codex CLI' {
-  if (Get-Command codex -ErrorAction SilentlyContinue) {
-    Write-Host "Found Codex CLI: $((Get-Command codex).Source)"
+  $codex = Get-FirstExistingCommand -Names @('codex.cmd', 'codex.exe', 'codex.ps1')
+  if (-not $codex) {
+    $npm = Get-FirstExistingCommand -Names @('npm.cmd', 'npm.exe')
+    if (-not $npm) { throw 'Codex is missing and npm is unavailable. Check the Node.js installation.' }
+    Invoke-QuietNativeCommand -Label 'npm-install-codex' -FilePath $npm -Arguments @('install', '-g', '@openai/codex@latest') | Out-Null
+    $prefixOutput = & $npm prefix -g
+    if ($LASTEXITCODE -ne 0 -or -not $prefixOutput) { throw 'Could not determine the global npm command directory.' }
+    $prefix = ($prefixOutput | Select-Object -First 1).Trim()
+    Ensure-MeowskyPersistentPath -Directory $prefix | Out-Null
+    $codex = Get-FirstExistingCommand -Names @('codex.cmd', 'codex.exe', 'codex.ps1')
   }
+  if (-not $codex) { throw 'Codex CLI is still unavailable after installation.' }
+  Ensure-MeowskyPersistentPath -Directory (Split-Path $codex -Parent) | Out-Null
+  Invoke-QuietNativeCommand -Label 'codex-version' -FilePath $codex -Arguments @('--version') | Out-Null
+  $script:codexCommand = $codex
+  Write-Host "Using Codex CLI: $codex"
 }
 
 Invoke-MeowskyStep 'Install Codex global instructions' {
@@ -614,36 +633,24 @@ Set-Content -Encoding ASCII "$tools\c++.cmd" "@powershell -NoProfile -ExecutionP
 
 Invoke-MeowskyStep 'Install Neovim config' {
   $nvimConfigDir = Join-Path $env:LOCALAPPDATA 'nvim'
-  New-Item -ItemType Directory -Force $nvimConfigDir | Out-Null
-  Copy-Item -LiteralPath (Join-Path $repoRoot 'nvim\init.lua') -Destination (Join-Path $nvimConfigDir 'init.lua') -Force
-  $cModuleDir = Join-Path $nvimConfigDir 'lua\meowsky'
-  New-Item -ItemType Directory -Force $cModuleDir | Out-Null
-  Copy-Item -LiteralPath (Join-Path $repoRoot 'nvim\lua\meowsky\c.lua') -Destination (Join-Path $cModuleDir 'c.lua') -Force
-  Write-Host "Copied init.lua to $nvimConfigDir"
+  Install-MeowskyNvimConfiguration -RepoRoot $repoRoot -ConfigRoot $nvimConfigDir
 }
 
 Invoke-MeowskyStep 'Update PowerShell profile' {
-  $profilePath = $PROFILE
-  $profileDir = Split-Path -Parent $profilePath
-  New-Item -ItemType Directory -Force $profileDir | Out-Null
-  Repair-PowerShellProfile -Path $profilePath
-
-  $importLine = ". `"$repoRoot\powershell\profile.ps1`""
-  $profileContent = if (Test-Path -LiteralPath $profilePath) { Get-Content -Raw -LiteralPath $profilePath } else { '' }
-  if ($profileContent -notmatch [regex]::Escape($importLine)) {
-    Add-Content -LiteralPath $profilePath -Value "`r`n# Meowsky Devkit`r`n$importLine`r`n"
-    Write-Host "Added Meowsky import to $profilePath"
-  } else {
-    Write-Host "PowerShell profile already imports Meowsky devkit."
+  $profilePaths = @(Get-MeowskyProfilePaths)
+  if ($profilePaths.Count -eq 0) { throw 'No supported PowerShell executable was found.' }
+  foreach ($profilePath in $profilePaths) {
+    Install-MeowskyProfileImport -Path $profilePath -RepoRoot $repoRoot
   }
 }
 
 Invoke-MeowskyStep 'Sync Neovim plugins with lazy.nvim' {
   Write-Host 'This can take a few minutes on a fresh install.'
+  $lazyCommand = if ($Upgrade) { '+Lazy! sync' } else { '+Lazy! install' }
   Invoke-QuietNativeCommand `
     -Label 'nvim-lazy-sync' `
     -FilePath 'nvim' `
-    -Arguments @('--headless', '+Lazy! sync', '+qa') | Out-Null
+    -Arguments @('--headless', $lazyCommand, '+qa') | Out-Null
 }
 
 Invoke-MeowskyStep 'Install Mason language servers' {
@@ -675,6 +682,139 @@ Invoke-MeowskyStep 'Install Treesitter parsers' {
     -Label 'nvim-treesitter-install' `
     -FilePath 'nvim' `
     -Arguments @('--headless', "+lua require('nvim-treesitter').install({ $quotedParsers }):wait(300000)", '+qa') | Out-Null
+}
+
+Invoke-MeowskyStep 'Verify fresh-terminal environment' {
+  $expectedBin = Get-MeowskyPathKey $script:cCompilerBin
+  foreach ($name in @('gcc.exe', 'gdb.exe')) {
+    $freshCommand = Get-MeowskyFreshPathCommand -Name $name
+    if (-not $freshCommand -or (Get-MeowskyPathKey (Split-Path $freshCommand -Parent)) -ne $expectedBin) {
+      throw "$name does not resolve to the selected toolchain from persistent PATH. Open a new terminal after repair."
+    }
+  }
+  $codexName = Split-Path $script:codexCommand -Leaf
+  $expectedCodexDir = Get-MeowskyPathKey (Split-Path $script:codexCommand -Parent)
+  foreach ($name in @('nvim.exe', 'node.exe', $codexName)) {
+    $freshCommand = Get-MeowskyFreshPathCommand -Name $name
+    if (-not $freshCommand) {
+      throw "$name is unavailable from persistent PATH."
+    }
+    if ($name -eq $codexName -and
+        (Get-MeowskyPathKey (Split-Path $freshCommand -Parent)) -ne $expectedCodexDir) {
+      throw "A different Codex installation takes precedence in persistent PATH: $freshCommand"
+    }
+  }
+  foreach ($name in @('gcc.exe', 'gdb.exe', 'nvim.exe', (Split-Path $script:codexCommand -Leaf))) {
+    if (-not (Get-Command $name -ErrorAction SilentlyContinue)) {
+      throw "$name is unavailable in the installer process."
+    }
+  }
+  if ([Environment]::GetEnvironmentVariable('MEOWSKY_DEVKIT_HOME', 'User') -ne $repoRoot) {
+    throw 'MEOWSKY_DEVKIT_HOME is not persisted for new terminals.'
+  }
+  $globalInstructions = Join-Path $(if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $HOME '.codex' }) 'AGENTS.md'
+  if (-not (Test-Path -LiteralPath $globalInstructions -PathType Leaf)) {
+    throw "Codex global instructions are missing: $globalInstructions"
+  }
+  if ((Get-FileHash -LiteralPath $globalInstructions).Hash -ne
+      (Get-FileHash -LiteralPath (Join-Path $repoRoot 'features\codex\global-instructions.md')).Hash) {
+    Write-Warning "Existing custom Codex instructions were preserved at $globalInstructions; compare them with the Meowsky source."
+  }
+  foreach ($relative in @('init.lua', 'lua\meowsky\c.lua')) {
+    $source = Join-Path $repoRoot "nvim\$relative"
+    $installed = Join-Path $env:LOCALAPPDATA "nvim\$relative"
+    if (-not (Test-Path -LiteralPath $installed -PathType Leaf) -or
+        (Get-FileHash -LiteralPath $source).Hash -ne (Get-FileHash -LiteralPath $installed).Hash) {
+      throw "Installed Neovim configuration does not match $source"
+    }
+  }
+  foreach ($profilePath in (Get-MeowskyProfilePaths)) {
+    $content = (Get-MeowskyProfileText -Path $profilePath).Text
+    if ([regex]::Matches($content, '# >>> Meowsky DevKit managed import >>>').Count -ne 1 -or
+        -not $content.Contains((Join-Path $repoRoot 'powershell\profile.ps1').Replace("'", "''"))) {
+      throw "Meowsky profile import is missing or duplicated in $profilePath"
+    }
+  }
+  foreach ($shell in @('powershell.exe', 'pwsh.exe')) {
+    if (-not (Get-Command $shell -ErrorAction SilentlyContinue)) { continue }
+    $result = Invoke-QuietNativeCommand -Label "verify-$shell-profile" -FilePath $shell -Arguments @(
+      '-NoLogo', '-NonInteractive', '-Command',
+      "if (`$Error.Count -gt 0) { throw ('PowerShell profile reported an error: ' + `$Error[0]) }; if (-not (Get-Command meowsky -CommandType Function -ErrorAction SilentlyContinue)) { throw 'meowsky is unavailable in a fresh session' }; 'MEOWSKY_DISCOVERED'; 'MEOWSKY_CODEX=' + (Resolve-MeowskyCodexCommand)"
+    )
+    $shellOutput = $result.Output | Out-String
+    if (-not $shellOutput.Contains('MEOWSKY_DISCOVERED')) {
+      throw "meowsky was not discovered in a fresh $shell session."
+    }
+    $codexMatch = [regex]::Match($shellOutput, '(?m)^MEOWSKY_CODEX=([^\r\n]+)')
+    if (-not $codexMatch.Success -or
+        (Get-MeowskyPathKey (Split-Path $codexMatch.Groups[1].Value -Parent)) -ne $expectedCodexDir) {
+      throw "Meowsky resolved an unexpected Codex executable in a fresh $shell session."
+    }
+  }
+
+  $fixture = Join-Path ([IO.Path]::GetTempPath()) ('meowsky-install-verify-' + [guid]::NewGuid().ToString('N'))
+  New-Item -ItemType Directory -Path $fixture | Out-Null
+  $previousStateHome = $env:XDG_STATE_HOME
+  try {
+    $cFile = Join-Path $fixture 'main.c'
+    $tsFile = Join-Path $fixture 'app.ts'
+    [IO.File]::WriteAllText($cFile, "int main(void) { int value = 5; return value - 5; }`n")
+    [IO.File]::WriteAllText($tsFile, "const value: number = 5;`nconsole.log(value);`n")
+    $exe = Join-Path $fixture 'main.exe'
+    Invoke-QuietNativeCommand -Label 'verify-c-build' -FilePath (Join-Path $script:cCompilerBin 'gcc.exe') `
+      -Arguments @('-std=c11', '-Wall', '-Wextra', '-Wpedantic', '-g', $cFile, '-o', $exe) | Out-Null
+    Invoke-QuietNativeCommand -Label 'verify-c-run' -FilePath $exe -Arguments @() | Out-Null
+    $gdbResult = Invoke-QuietNativeCommand -Label 'verify-gdb' -FilePath (Join-Path $script:cCompilerBin 'gdb.exe') `
+      -Arguments @('-q', '-batch', '-ex', 'break main', '-ex', 'run', $exe)
+    if (-not (($gdbResult.Output | Out-String) -match 'Breakpoint\s+1.*main')) {
+      throw 'GDB did not stop at the temporary C program breakpoint.'
+    }
+
+    $luaPath = Join-Path $fixture 'verify.lua'
+    $lua = @'
+local cbuf = vim.api.nvim_get_current_buf()
+assert(vim.bo.filetype == 'c', 'C filetype missing')
+assert(pcall(vim.treesitter.language.add, 'c'), 'C parser missing')
+for _, name in ipairs({ 'CBuild', 'CRun', 'CDebug', 'CDefinition', 'CReferences', 'CDiagnostics' }) do
+  assert(vim.fn.exists(':' .. name) == 2, name .. ' missing')
+end
+assert(vim.wait(15000, function()
+  for _, client in ipairs(vim.lsp.get_clients({ bufnr = cbuf })) do
+    if client.name == 'clangd' then return true end
+  end
+  return false
+end, 200), 'clangd did not attach')
+assert(package.loaded['cmp'] ~= nil, 'completion not configured')
+vim.cmd('edit ' .. vim.fn.fnameescape(vim.g.meowsky_ts_path))
+local tsbuf = vim.api.nvim_get_current_buf()
+assert(pcall(vim.treesitter.language.add, 'typescript'), 'TypeScript parser missing')
+assert(vim.wait(15000, function()
+  for _, client in ipairs(vim.lsp.get_clients({ bufnr = tsbuf })) do
+    if client.name == 'ts_ls' then return true end
+  end
+  return false
+end, 200), 'TypeScript LSP did not attach')
+print('MEOWSKY_EDITOR_VERIFIED')
+vim.cmd('qa!')
+'@
+    [IO.File]::WriteAllText($luaPath, $lua)
+    $env:XDG_STATE_HOME = $fixture
+    $tsLiteral = $tsFile.Replace("'", "''")
+    $result = Invoke-QuietNativeCommand -Label 'verify-nvim-c-web' -FilePath 'nvim.exe' `
+      -Arguments @('--headless', '-i', 'NONE', '-n', $cFile, '-c', "let g:meowsky_ts_path='$tsLiteral'", '-c', "luafile $luaPath")
+    if (-not (($result.Output | Out-String).Contains('MEOWSKY_EDITOR_VERIFIED'))) {
+      throw 'Neovim did not confirm C and TypeScript editor support.'
+    }
+  } finally {
+    $env:XDG_STATE_HOME = $previousStateHome
+    $tempRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\', '/')
+    $target = [IO.Path]::GetFullPath($fixture)
+    if (-not $target.StartsWith($tempRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+      throw "Refusing to remove a verification fixture outside the temporary directory: $target"
+    }
+    Remove-Item -LiteralPath $target -Recurse -Force
+  }
+  Write-Host 'Automated verification passed. Check Windows Terminal layout and interactive editor actions manually.'
 }
 
 Write-Host ''

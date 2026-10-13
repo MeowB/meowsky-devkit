@@ -4,12 +4,14 @@ This workflow uses PowerShell, Neovim, one MinGW-w64 GCC/GDB toolchain, and clan
 
 ## Prerequisites
 
-Run `scripts/install-windows.ps1` from this checkout, then open a new PowerShell terminal. The installer reuses a working GCC and GDB pair from the same directory on PATH. If neither is present, it installs MSYS2 UCRT64 GCC and GDB under `C:\msys64` and adds `C:\msys64\ucrt64\bin` to your user PATH once. When MSYS2 needs new packages, the installer first completes its full system update, which may take time. An incomplete or mismatched pair stops setup so another toolchain is not silently layered over it. The installer also installs clangd with Mason and the C Treesitter parser, and copies the Neovim configuration.
+Run `scripts/install-windows.ps1` from this checkout, then open a new PowerShell terminal. The installer reuses a working GCC and GDB pair from the same directory and persists that directory on PATH even if the pair was visible only to its own process. Otherwise it uses an existing MSYS2 UCRT64 installation or installs one, completing MSYS2 system updates before adding missing GCC/GDB packages. A nonstandard MSYS2 root can be supplied with `-Msys2Root <absolute-path>`. An incomplete or mismatched pair on PATH stops setup so another toolchain is not silently layered over it. The installer also installs clangd with Mason and the C Treesitter parser, copies the Neovim configuration, and runs a temporary C build and editor check before reporting success.
 
 Check the active tools:
 
 ```powershell
 Get-Command gcc, gdb, nvim
+where.exe gcc
+where.exe gdb
 gcc -dumpmachine
 gcc --version
 gdb --version
@@ -61,6 +63,6 @@ For clangd's view of a multi-file project's compile flags, add a plain `compile_
 
 ## PATH and toolchain troubleshooting
 
-Run `Get-Command gcc, gdb -All` and `where.exe gcc` / `where.exe gdb` to see which binaries PowerShell finds. The first matching directories should be the same toolchain; `gcc -dumpmachine` should contain `mingw`. If either command is missing, open a fresh terminal after installation and inspect user PATH with `[Environment]::GetEnvironmentVariable('Path', 'User')`. Do not add multiple MinGW/MSYS2 `bin` directories to PATH. If a Code::Blocks compiler is already installed, use its GCC/GDB pair only if both executables work and are in the same directory. Otherwise repair that installation or choose the single MSYS2 UCRT64 pair.
+Run `Get-Command gcc, gdb -All` and `where.exe gcc` / `where.exe gdb` in a newly opened terminal. The first matching directories should be the same toolchain; `gcc -dumpmachine` should contain `mingw`. If either command is missing, rerun the installer from the intended checkout and inspect its PATH verification error. Do not add multiple MinGW/MSYS2 `bin` directories manually. If a Code::Blocks compiler is already installed, the installer reuses its GCC/GDB pair only if both executables work and are in the same directory; otherwise it reports the conflict.
 
 If `:CBuild` reports GCC missing while PowerShell finds it, restart Neovim from a fresh terminal. If clangd has no completion or diagnostics, inspect `:Mason` for `clangd`, `:LspInfo` for attachment, and `:checkhealth vim.lsp` for errors. If C highlighting is missing, inspect `:TSInstallInfo` and confirm the `c` parser installed. If GDB cannot stop at source lines, confirm the program was built with `-g` and that you are debugging the newly built `.exe`.

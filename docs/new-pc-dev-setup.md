@@ -12,13 +12,15 @@ From the repository root:
 .\scripts\install-windows.ps1 -Upgrade
 ```
 
-The installer verifies the expected tools, repairs Neovim runtime variables, creates Zig compiler wrappers for Treesitter, copies the Neovim configuration from `nvim/`, and imports [powershell/profile.ps1](../powershell/profile.ps1) from your PowerShell profile. It also installs editor plugins, language servers, parsers, a C compiler/debugger pair, and global Codex instructions. Codex must already be installed for the Codex workflow. See [C development](c-development.md) for the compiler, Neovim, and GDB workflow.
+Windows 11 with App Installer (`winget.exe`) is the supported prerequisite. The installer installs or verifies Git, Node.js, Neovim, tree-sitter, eza, Pandoc, Codex CLI, a compatible GCC/GDB pair, Zig tooling, editor plugins, language servers, and parsers. It copies the managed Neovim configuration, maintains a marked import of [powershell/profile.ps1](../powershell/profile.ps1) in the Windows PowerShell 5.1 user profile and the PowerShell 7 user profile when that edition is installed, and verifies the resulting environment. Existing healthy tools are reused. Node.js supplies npm for Codex installation when Codex is missing. Package managers may request elevation if a particular package requires it; the installer does not require elevation for its profile or user PATH changes. See [C development](c-development.md) for the compiler, Neovim, and GDB workflow.
 
 Codex natively reads `AGENTS.md` from `CODEX_HOME` (or `~/.codex` when unset) and then applicable project directories. The Windows installer copies [global-instructions.md](../features/codex/global-instructions.md) to that global `AGENTS.md` only when the destination is absent. If an existing file differs, it is left untouched and the installer prints both paths for manual comparison. To install or check instructions without rerunning machine setup, run `powershell -NoProfile -File features/codex/install-instructions.ps1`. A project's own `AGENTS.md` remains project-owned and can add more specific guidance; Meowsky does not copy global rules into each project.
 
-`MEOWSKY_DEVKIT_HOME` points to this checkout. Keep the checkout available: the profile loads `core/` and `features/` directly. Open a new terminal after installation.
+`MEOWSKY_DEVKIT_HOME` points to this checkout. Keep the checkout available: the profile loads `core/` and `features/` directly. The installer maintains one marked Meowsky import per supported profile, updates that import after relocation, and backs up an existing profile before changing it. It removes only legacy imports identified by the historic Meowsky comment; an unmarked import is preserved and reported as an error for review. Open a new terminal after installation to inherit persistent PATH and profile changes. Running the same command again is safe and checks the installation again.
 
-The Windows workspace defaults to `C:\meowsky`, including on this machine. Optionally set the user-level `WORK_HOME` to an absolute path to override it:
+Neovim files installed by Meowsky are tracked in `%LOCALAPPDATA%\nvim\.meowsky-managed.json`. A rerun reuses matching files or backs up and updates files that still match the installer's previous hashes. An unrelated or manually edited `init.lua` or C module is left untouched and reported instead of being overwritten.
+
+The Windows workspace defaults to `C:\meowsky` when `WORK_HOME` is unset. Optionally set the user-level `WORK_HOME` to your own absolute path to override it:
 
 ```powershell
 [Environment]::SetEnvironmentVariable('WORK_HOME', 'C:\meowsky', 'User')
@@ -28,21 +30,30 @@ Open a new terminal so the setting is inherited. Use your own absolute path on a
 
 For manual setup, the tool package list and Zig wrapper implementation are maintained in [scripts/install-windows.ps1](../scripts/install-windows.ps1). The wrappers live under `%LOCALAPPDATA%\nvim-tools` and remove incompatible compiler target arguments. Installing Zig alone does not create them.
 
-Copy `nvim/init.lua` to `%LOCALAPPDATA%\nvim\init.lua` and `nvim/lua/meowsky/c.lua` to `%LOCALAPPDATA%\nvim\lua\meowsky\c.lua`, set `MEOWSKY_DEVKIT_HOME` to your checkout, and add its stable profile import to `$PROFILE`:
+The installer handles the following steps automatically. If you need to inspect them, its managed profile import resolves the checkout from the script location; no machine-specific checkout path is required. The installed editor files are `%LOCALAPPDATA%\nvim\init.lua` and `%LOCALAPPDATA%\nvim\lua\meowsky\c.lua`.
+
+Editor package bootstrap commands used by the installer are:
 
 ```powershell
-. "F:\dev\meowsky-devkit\powershell\profile.ps1"
-```
-
-Bootstrap editor packages:
-
-```powershell
-nvim --headless "+Lazy! sync" +qa
+nvim --headless "+Lazy! install" +qa
 nvim --headless "+MasonInstall clangd typescript-language-server eslint-lsp html-lsp css-lsp json-lsp lua-language-server prisma-language-server" +qa
 nvim --headless "+lua require('nvim-treesitter').install({ 'c', 'lua', 'vim', 'vimdoc', 'javascript', 'typescript', 'tsx', 'json', 'html', 'css', 'markdown', 'prisma' }):wait(300000)" +qa
 ```
 
 The usual Neovim executable directory is `C:\Program Files\Neovim\bin`. Markdown preview also checks `C:\Program Files\Pandoc\pandoc.exe` and `%LOCALAPPDATA%\Pandoc\pandoc.exe`.
+
+If MSYS2 is installed outside its standard location and not discoverable from PATH, pass its directory as `-Msys2Root <absolute-path>`. The installer verifies both the current process and persistent PATH, compiles and debugs a temporary C program, loads C and TypeScript support in headless Neovim, and tests `meowsky` discovery in a new PowerShell process. It reports failures instead of printing a success message. Windows Terminal pane layout, browser previews, and interactive completion/debugging still need a manual smoke test.
+
+After opening a new terminal, check the installed commands with:
+
+```powershell
+Get-Command meowsky, gcc, gdb, nvim, codex
+where.exe gcc
+where.exe gdb
+meowsky -h
+```
+
+`gcc` and `gdb` should resolve to the same toolchain directory. For isolated checks of profile reconciliation and PATH logic without changing user configuration, run `powershell -NoProfile -File tests/verify-windows-installer.ps1` from this checkout. Rerun `scripts/install-windows.ps1` to repair or verify an existing installation; use `-Upgrade` only when you also want package upgrade checks.
 
 ## Daily Windows workflow
 

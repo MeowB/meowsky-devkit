@@ -72,11 +72,11 @@ Run the one-command bootstrap:
 .\scripts\install-windows.ps1
 ```
 
-It installs the core tools, copies the Neovim config, wires your PowerShell profile, installs global Codex instructions when no global `AGENTS.md` exists, and sets `MEOWSKY_DEVKIT_HOME` so the profile can find the session-context template. An existing global `AGENTS.md` is left untouched with a notice to merge desired rules manually.
+Run it from the checkout you want to keep. It installs or verifies the core tools and Codex CLI, copies the Neovim config, manages one Meowsky import in each installed PowerShell edition's user profile, installs global Codex instructions when no global `AGENTS.md` exists, and sets `MEOWSKY_DEVKIT_HOME` for the session-context template. Existing user instructions are preserved and reported. The installer verifies command discovery, a temporary C build, and headless C/TypeScript editor support before reporting success. Open a new terminal afterwards so it inherits the persistent PATH and profile changes.
 
 On Windows, the workspace defaults to `C:\meowsky`. To use another workspace, set the user-level `WORK_HOME` to an absolute path and open a new terminal.
 
-The installer reuses tools that are already present. To explicitly check package upgrades too, run:
+Rerunning the installer from the same or a relocated checkout repairs its managed PATH and profile entries without duplicating them. It preserves unrelated profile content and backs up an existing profile before changing it. It updates only known Meowsky-managed Neovim files; an unrelated or manually changed editor config and an unmarked Meowsky-style profile import require review rather than automatic replacement. To explicitly check package upgrades too, run:
 
 ```powershell
 .\scripts\install-windows.ps1 -Upgrade
