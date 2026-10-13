@@ -19,6 +19,26 @@ gdb --version
 
 The GCC target should contain `mingw`. `clangd` is installed in Neovim's Mason directory, so it need not appear on the ordinary PowerShell PATH. In Neovim, open a C file and use `:LspInfo` or `:checkhealth vim.lsp` to verify that clangd attaches.
 
+## Daily C workflow
+
+From a PowerShell terminal, enter the C project's directory and launch the Meowsky workspace there:
+
+```powershell
+Set-Location C:\path\to\your-c-project
+meowsky ./
+```
+
+The Codex pane starts in that project and can read this guide through the absolute path in its launch context, even when the project is outside the devkit checkout. The four-pane layout contains Codex, Matrix, status, and tree panes; use the original PowerShell terminal or another terminal for interactive editing and builds. Open a source file from the project directory with `nvim .\main.c`. In Neovim, `:w` saves, `:q` exits, and `:wq` saves and exits. There are no custom C key mappings; use the commands below.
+
+| Task | PowerShell | From a C buffer in Neovim |
+| --- | --- | --- |
+| Compile with warnings and debug symbols | `gcc -std=c11 -Wall -Wextra -Wpedantic -g .\main.c -o .\main.exe` | `:CBuild` (then `:copen` for compiler messages) |
+| Run the program | `.\main.exe` after building | `:CRun` builds, then runs in a terminal split |
+| Debug the program | `gdb .\main.exe` after building | `:CDebug` builds, then opens GDB in a terminal split |
+| Navigate and inspect C diagnostics | — | `:CDefinition`, `:CReferences`, `:CDiagnostics` |
+
+For a program with multiple source files, pass each additional `.c` file to GCC or to `:CBuild`, `:CRun`, or `:CDebug` from the main source buffer. The commands below show the full sequence and GDB shortcuts.
+
 ## Your first exercise
 
 Create a folder for the exercise and write `main.c` there. For example, begin with a small `main` function and add your own statements. Open it from the project folder:

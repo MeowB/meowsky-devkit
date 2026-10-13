@@ -25,11 +25,14 @@ function Get-MeowskyCodexPrompt {
       $template = (Get-Content -Raw -LiteralPath (Join-Path $script:MeowskyRoot 'features/codex/fallback-orientation.md')).TrimEnd("`r", "`n")
     }
 
+    $cDevelopmentGuide = Join-Path $script:MeowskyRoot 'docs/c-development.md'
+
     return $template.
       Replace('$today', $Today).
       Replace('$root', $Root).
       Replace('$tree', $Tree).
-      Replace('$gitStatus', $GitStatus)
+      Replace('$gitStatus', $GitStatus).
+      Replace('$cDevelopmentGuide', $cDevelopmentGuide)
   }
 
 function Get-MeowskyPromptTree {

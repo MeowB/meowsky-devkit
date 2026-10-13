@@ -153,10 +153,15 @@ try {
   Assert-Equal ($fallbackPrompt -match 'Today: 2026-09-26') $true 'Fallback date context'
   Assert-Equal ($fallbackPrompt -match 'tree fixture') $true 'Fallback tree context'
   Assert-Equal ($fallbackPrompt -match 'git fixture') $true 'Fallback Git context'
+  $cDevelopmentGuide = Join-Path $repo 'docs/c-development.md'
+  Assert-Equal ($fallbackPrompt.Contains($cDevelopmentGuide)) $true 'Fallback C guide path'
+  Assert-Equal ($fallbackPrompt.Contains('$cDevelopmentGuide')) $false 'Fallback C guide placeholder resolved'
   Assert-Equal ($fallbackPrompt -match 'Before modifying any files|Never run `git commit`') $false 'Fallback excludes global rules'
   $env:MEOWSKY_DEVKIT_HOME = $repo
   $primaryPrompt = Get-MeowskyCodexPrompt '2026-09-26' $project 'tree fixture' 'git fixture'
   Assert-Equal ($primaryPrompt -match 'Give a concise orientation') $true 'Primary project orientation'
+  Assert-Equal ($primaryPrompt.Contains($cDevelopmentGuide)) $true 'Primary C guide path'
+  Assert-Equal ($primaryPrompt.Contains('$cDevelopmentGuide')) $false 'Primary C guide placeholder resolved'
   Assert-Equal ($primaryPrompt -match 'Before modifying any files|Never run `git commit`') $false 'Primary excludes global rules'
   foreach ($name in @('Resolve-MeowskyCodexCommand', 'New-MeowskyCodexNodeLauncher', 'Invoke-MeowskyCodex')) {
     $oldFunction = $baselineAst.Find({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $name }, $true).Extent.Text
@@ -261,6 +266,7 @@ try {
   $promptPath = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String($promptPathEncoded))
   $workspacePrompt = Get-Content -Raw -LiteralPath $promptPath
   Assert-Equal ($workspacePrompt -match 'inspect README.md if present') $true 'Current-directory development orientation preserved'
+  Assert-Equal ($workspacePrompt.Contains($cDevelopmentGuide)) $true 'Current-directory workspace can locate C guide'
   Assert-Equal ([regex]::Matches($workspacePrompt, 'Workspace root:').Count) 1 'Development context appears once'
   Remove-Item -LiteralPath $promptPath
   Assert-Throws { meowsky bach unexpected } 'Usage: meowsky bach'
