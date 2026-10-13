@@ -101,6 +101,23 @@ try {
   $binKey = Get-MeowskyPathKey $bin
   Assert-True (@($script:pathState.User -split ';' | Where-Object { (Get-MeowskyPathKey $_) -eq $binKey }).Count -eq 1) 'Rerun adds no duplicate PATH entry'
   Assert-True ((Get-MeowskyPathKey (Get-MeowskyFreshPathCommand 'gcc.exe')) -eq (Get-MeowskyPathKey (Join-Path $bin 'gcc.exe'))) 'Fresh PATH command discovery'
+  $script:toolchainState = @{ User = ''; Process = '' }
+  $script:toolchainWrites = 0
+  function Get-MeowskyToolchainDirectory { param([string]$Scope) return $script:toolchainState[$Scope] }
+  function Set-MeowskyToolchainDirectory { param([string]$Scope, [string]$Directory) $script:toolchainState[$Scope] = $Directory; $script:toolchainWrites++ }
+  $script:pathState.Process = "C:\Program Files\PostgreSQL\17\bin;$bin;C:\Other;$($bin.ToUpperInvariant().Replace('\', '/'))\"
+  Ensure-MeowskyCompilerEnvironment -Directory $bin | Out-Null
+  Assert-True ((Get-MeowskyPathKey (($script:pathState.Process -split ';')[0])) -eq $binKey) 'Selected compiler precedes conflicting machine PATH entries'
+  Assert-True (@($script:pathState.Process -split ';' | Where-Object { (Get-MeowskyPathKey $_) -eq $binKey }).Count -eq 1) 'Selected compiler has one process PATH entry'
+  Assert-True ((Get-MeowskyPathKey $script:toolchainState.User) -eq $binKey) 'Selected compiler persisted for fresh PowerShell'
+  $preferredPath = $script:pathState.Process
+  $writesBeforeRerun = $script:toolchainWrites
+  Ensure-MeowskyCompilerEnvironment -Directory $bin | Out-Null
+  Assert-True ($script:pathState.Process -eq $preferredPath) 'Repeated compiler setup preserves PATH ordering'
+  Assert-True ($script:toolchainWrites -eq $writesBeforeRerun) 'Repeated compiler setup does not rewrite environment variables'
+  $script:toolchainState.User = ''
+  function Set-MeowskyToolchainDirectory { param([string]$Scope, [string]$Directory) if ($Scope -ne 'User') { $script:toolchainState[$Scope] = $Directory } }
+  Assert-Throws { Ensure-MeowskyCompilerEnvironment -Directory $bin | Out-Null } 'Failed compiler selection persistence is detected'
   $script:pathState.User = 'C:\Existing'
   $script:pathState.Machine = $bin.ToUpperInvariant().Replace('\', '/') + '\'
   Ensure-MeowskyPersistentPath -Directory $bin | Out-Null
@@ -120,8 +137,33 @@ try {
   $roots = @(Get-MeowskyMsys2Roots -PreferredRoot $checkoutB)
   Assert-True ((Get-MeowskyPathKey $roots[0]) -eq (Get-MeowskyPathKey $checkoutB)) 'Relocated MSYS2 root takes priority'
 
-  # Exercise the installer's real compiler decision function with side effects mocked.
+  $logRoot = Join-Path $fixture 'logs'
+  New-Item -ItemType Directory -Path $logRoot | Out-Null
   $installerSource = Get-Content -Raw -LiteralPath (Join-Path $repo 'scripts/install-windows.ps1')
+  $logFunction = [regex]::Match($installerSource, '(?s)function New-MeowskyLogPath \{.*?(?=\r?\nfunction Invoke-QuietNativeCommand)')
+  $nativeFunction = [regex]::Match($installerSource, '(?s)function Invoke-QuietNativeCommand \{.*?(?=\r?\nfunction Invoke-MeowskyFreshPowerShellCommand)')
+  Assert-True ($logFunction.Success -and $nativeFunction.Success) 'Native command logger found'
+  Invoke-Expression $logFunction.Value
+  Invoke-Expression $nativeFunction.Value
+  Assert-Throws { Invoke-QuietNativeCommand -Label 'empty-output' -FilePath 'powershell.exe' -Arguments @('-NoProfile', '-Command', 'exit 9') | Out-Null } 'Silent native failure is reported'
+  $failureLog = Get-ChildItem -LiteralPath $logRoot -Filter '*empty-output.log' | Select-Object -First 1
+  Assert-True ($failureLog -and ([IO.File]::ReadAllText($failureLog.FullName) -match 'Exit code: 9')) 'Silent native failure creates a useful log'
+
+  $freshFunction = [regex]::Match($installerSource, '(?s)function Invoke-MeowskyFreshPowerShellCommand \{.*?(?=\r?\nfunction Repair-NeovimRuntimeEnvironment)')
+  Assert-True $freshFunction.Success 'Fresh PowerShell verifier found'
+  Invoke-Expression $freshFunction.Value
+  $script:pathState = @{ Machine = 'C:\Machine'; User = "$bin;C:\User"; Process = 'C:\Current' }
+  $script:toolchainState = @{ User = $bin; Process = 'C:\Old' }
+  function Invoke-QuietNativeCommand {
+    param([string]$Label, [string]$FilePath, [string[]]$Arguments)
+    return @{ Path = (Get-MeowskyEnvironmentPath -Scope Process); Toolchain = (Get-MeowskyToolchainDirectory -Scope Process) }
+  }
+  $freshState = Invoke-MeowskyFreshPowerShellCommand -Label 'fixture' -FilePath 'powershell.exe' -Arguments @('-NoProfile')
+  Assert-True ($freshState.Path -eq "C:\Machine;$bin;C:\User") 'Fresh shell starts with persistent PATH ordering'
+  Assert-True ((Get-MeowskyPathKey $freshState.Toolchain) -eq $binKey) 'Fresh shell inherits persisted toolchain selection'
+  Assert-True ($script:pathState.Process -eq 'C:\Current' -and $script:toolchainState.Process -eq 'C:\Old') 'Installer process environment restored after fresh check'
+
+  # Exercise the installer's real compiler decision function with side effects mocked.
   $initializer = [regex]::Match($installerSource, '(?s)function Initialize-CCompiler \{.*?(?=\r?\nfunction Get-ZigPath)')
   Assert-True $initializer.Success 'Compiler initializer found'
   Invoke-Expression $initializer.Value
@@ -140,7 +182,7 @@ try {
     Microsoft.PowerShell.Core\Get-Command $Name -ErrorAction SilentlyContinue
   }
   function Test-CCompilerPair { param([string]$Directory) return $script:healthyPair }
-  function Ensure-MeowskyPersistentPath { param([string]$Directory) $script:ensuredBin = $Directory; return $Directory }
+  function Ensure-MeowskyCompilerEnvironment { param([string]$Directory) $script:ensuredBin = $Directory; return $Directory }
   function Get-MeowskyMsys2Roots { param([string]$PreferredRoot) return $script:fakeRoot }
   function Install-WinGetPackage { $script:packageInstalls++; return $true }
   Initialize-CCompiler

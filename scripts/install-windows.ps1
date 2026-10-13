@@ -92,7 +92,7 @@ function Invoke-QuietNativeCommand {
   } finally {
     $ErrorActionPreference = $previousErrorActionPreference
   }
-  $output | Set-Content -Encoding UTF8 -LiteralPath $logPath
+  [IO.File]::WriteAllText($logPath, "Executable: $FilePath`r`nExit code: $exitCode`r`n" + ($output | Out-String))
 
   if ($SuccessExitCodes -contains $exitCode) {
     Write-Host ' ok' -ForegroundColor Green
@@ -108,6 +108,25 @@ function Invoke-QuietNativeCommand {
     $output | Select-Object -Last 20 | ForEach-Object { Write-Host "    $_" }
   }
   throw "$Label failed with exit code $exitCode. Full log: $logPath"
+}
+
+function Invoke-MeowskyFreshPowerShellCommand {
+  param(
+    [Parameter(Mandatory)][string]$Label,
+    [Parameter(Mandatory)][string]$FilePath,
+    [Parameter(Mandatory)][string[]]$Arguments
+  )
+  $originalPath = Get-MeowskyEnvironmentPath -Scope Process
+  $originalToolchain = Get-MeowskyToolchainDirectory -Scope Process
+  try {
+    $persistentPath = ((Get-MeowskyEnvironmentPath -Scope Machine), (Get-MeowskyEnvironmentPath -Scope User)) -join ';'
+    Set-MeowskyEnvironmentPath -Scope Process -Value $persistentPath
+    Set-MeowskyToolchainDirectory -Scope Process -Directory (Get-MeowskyToolchainDirectory -Scope User)
+    return Invoke-QuietNativeCommand -Label $Label -FilePath $FilePath -Arguments $Arguments
+  } finally {
+    Set-MeowskyEnvironmentPath -Scope Process -Value $originalPath
+    Set-MeowskyToolchainDirectory -Scope Process -Directory $originalToolchain
+  }
 }
 
 function Repair-NeovimRuntimeEnvironment {
@@ -300,13 +319,34 @@ function Test-CCompilerPair {
     return $false
   }
 
+  $originalPath = Get-MeowskyEnvironmentPath -Scope Process
+  $fixture = Join-Path ([IO.Path]::GetTempPath()) ('meowsky-toolchain-check-' + [guid]::NewGuid().ToString('N'))
   try {
-    $target = & $gcc -dumpmachine 2>$null | Select-Object -First 1
-    if ($LASTEXITCODE -ne 0 -or $target -notmatch 'mingw') { return $false }
-    & $gdb --version 2>$null | Out-Null
+    Set-MeowskyEnvironmentPath -Scope Process -Value (Move-MeowskyPathEntryFirst -PathValue $originalPath -Directory $Directory)
+    # Let GCC exit before checking LASTEXITCODE; Select-Object -First can stop its pipeline early.
+    $targets = @(& $gcc -dumpmachine 2>$null)
+    if ($LASTEXITCODE -ne 0 -or $targets.Count -eq 0 -or $targets[0] -notmatch 'mingw') { return $false }
+    $null = & $gdb --version 2>$null
+    if ($LASTEXITCODE -ne 0) { return $false }
+
+    New-Item -ItemType Directory -Path $fixture | Out-Null
+    $source = Join-Path $fixture 'main.c'
+    $program = Join-Path $fixture 'main.exe'
+    [IO.File]::WriteAllText($source, "int main(void) { return 0; }`n")
+    $null = & $gcc -std=c11 -Wall -Wextra -Wpedantic -g $source -o $program 2>$null
+    if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $program -PathType Leaf)) { return $false }
+    $null = & $program 2>$null
     return $LASTEXITCODE -eq 0
   } catch {
     return $false
+  } finally {
+    Set-MeowskyEnvironmentPath -Scope Process -Value $originalPath
+    $tempRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\', '/')
+    $target = [IO.Path]::GetFullPath($fixture)
+    if (-not $target.StartsWith($tempRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+      throw "Refusing to remove a toolchain fixture outside the temporary directory: $target"
+    }
+    if (Test-Path -LiteralPath $target) { Remove-Item -LiteralPath $target -Recurse -Force }
   }
 }
 
@@ -323,8 +363,7 @@ function Initialize-CCompiler {
       throw 'GCC/GDB on PATH are incomplete, mismatched, or unhealthy. Resolve the existing toolchain before installing another. See docs/c-development.md.'
     }
     $selectedBin = Split-Path -Parent $gccCommand.Source
-    Ensure-MeowskyPersistentPath -Directory $selectedBin | Out-Null
-    $script:cCompilerBin = $selectedBin
+    $script:cCompilerBin = Ensure-MeowskyCompilerEnvironment -Directory $selectedBin
     Write-Host "Using existing GCC/GDB at $selectedBin"
     return
   }
@@ -359,8 +398,7 @@ function Initialize-CCompiler {
   if (-not (Test-CCompilerPair -Directory $ucrtBin)) {
     throw 'MSYS2 UCRT64 GCC/GDB did not pass verification. Check the installer log and docs/c-development.md.'
   }
-  Ensure-MeowskyPersistentPath -Directory $ucrtBin | Out-Null
-  $script:cCompilerBin = $ucrtBin
+  $script:cCompilerBin = Ensure-MeowskyCompilerEnvironment -Directory $ucrtBin
   Write-Host "Using MSYS2 UCRT64 GCC/GDB at $ucrtBin"
 }
 
@@ -686,11 +724,12 @@ Invoke-MeowskyStep 'Install Treesitter parsers' {
 
 Invoke-MeowskyStep 'Verify fresh-terminal environment' {
   $expectedBin = Get-MeowskyPathKey $script:cCompilerBin
-  foreach ($name in @('gcc.exe', 'gdb.exe')) {
-    $freshCommand = Get-MeowskyFreshPathCommand -Name $name
-    if (-not $freshCommand -or (Get-MeowskyPathKey (Split-Path $freshCommand -Parent)) -ne $expectedBin) {
-      throw "$name does not resolve to the selected toolchain from persistent PATH. Open a new terminal after repair."
-    }
+  if ((Get-MeowskyPathKey (Get-MeowskyToolchainDirectory -Scope User)) -ne $expectedBin) {
+    throw 'The selected C toolchain directory is not persisted for new PowerShell sessions.'
+  }
+  if (-not (Test-MeowskyPathContains (Get-MeowskyEnvironmentPath -Scope User) $script:cCompilerBin) -and
+      -not (Test-MeowskyPathContains (Get-MeowskyEnvironmentPath -Scope Machine) $script:cCompilerBin)) {
+    throw 'The selected C toolchain directory is missing from persistent PATH.'
   }
   $codexName = Split-Path $script:codexCommand -Leaf
   $expectedCodexDir = Get-MeowskyPathKey (Split-Path $script:codexCommand -Parent)
@@ -705,8 +744,13 @@ Invoke-MeowskyStep 'Verify fresh-terminal environment' {
     }
   }
   foreach ($name in @('gcc.exe', 'gdb.exe', 'nvim.exe', (Split-Path $script:codexCommand -Leaf))) {
-    if (-not (Get-Command $name -ErrorAction SilentlyContinue)) {
+    $command = Get-Command $name -ErrorAction SilentlyContinue
+    if (-not $command) {
       throw "$name is unavailable in the installer process."
+    }
+    if ($name -in @('gcc.exe', 'gdb.exe') -and
+        (Get-MeowskyPathKey (Split-Path $command.Source -Parent)) -ne $expectedBin) {
+      throw "$name does not resolve to the selected toolchain in the installer process."
     }
   }
   if ([Environment]::GetEnvironmentVariable('MEOWSKY_DEVKIT_HOME', 'User') -ne $repoRoot) {
@@ -737,9 +781,9 @@ Invoke-MeowskyStep 'Verify fresh-terminal environment' {
   }
   foreach ($shell in @('powershell.exe', 'pwsh.exe')) {
     if (-not (Get-Command $shell -ErrorAction SilentlyContinue)) { continue }
-    $result = Invoke-QuietNativeCommand -Label "verify-$shell-profile" -FilePath $shell -Arguments @(
+    $result = Invoke-MeowskyFreshPowerShellCommand -Label "verify-$shell-profile" -FilePath $shell -Arguments @(
       '-NoLogo', '-NonInteractive', '-Command',
-      "if (`$Error.Count -gt 0) { throw ('PowerShell profile reported an error: ' + `$Error[0]) }; if (-not (Get-Command meowsky -CommandType Function -ErrorAction SilentlyContinue)) { throw 'meowsky is unavailable in a fresh session' }; 'MEOWSKY_DISCOVERED'; 'MEOWSKY_CODEX=' + (Resolve-MeowskyCodexCommand)"
+      "if (`$Error.Count -gt 0) { throw ('PowerShell profile reported an error: ' + `$Error[0]) }; if (-not (Get-Command meowsky -CommandType Function -ErrorAction SilentlyContinue)) { throw 'meowsky is unavailable in a fresh session' }; 'MEOWSKY_DISCOVERED'; 'MEOWSKY_CODEX=' + (Resolve-MeowskyCodexCommand); 'MEOWSKY_GCC=' + (Get-Command gcc.exe -CommandType Application -ErrorAction Stop).Source; 'MEOWSKY_GDB=' + (Get-Command gdb.exe -CommandType Application -ErrorAction Stop).Source"
     )
     $shellOutput = $result.Output | Out-String
     if (-not $shellOutput.Contains('MEOWSKY_DISCOVERED')) {
@@ -749,6 +793,13 @@ Invoke-MeowskyStep 'Verify fresh-terminal environment' {
     if (-not $codexMatch.Success -or
         (Get-MeowskyPathKey (Split-Path $codexMatch.Groups[1].Value -Parent)) -ne $expectedCodexDir) {
       throw "Meowsky resolved an unexpected Codex executable in a fresh $shell session."
+    }
+    foreach ($name in @('GCC', 'GDB')) {
+      $match = [regex]::Match($shellOutput, "(?m)^MEOWSKY_$name=([^\r\n]+)")
+      if (-not $match.Success -or
+          (Get-MeowskyPathKey (Split-Path $match.Groups[1].Value -Parent)) -ne $expectedBin) {
+        throw "$name does not resolve to the selected toolchain in a fresh $shell session."
+      }
     }
   }
 
@@ -764,6 +815,26 @@ Invoke-MeowskyStep 'Verify fresh-terminal environment' {
     Invoke-QuietNativeCommand -Label 'verify-c-build' -FilePath (Join-Path $script:cCompilerBin 'gcc.exe') `
       -Arguments @('-std=c11', '-Wall', '-Wextra', '-Wpedantic', '-g', $cFile, '-o', $exe) | Out-Null
     Invoke-QuietNativeCommand -Label 'verify-c-run' -FilePath $exe -Arguments @() | Out-Null
+    foreach ($shell in @('powershell.exe', 'pwsh.exe')) {
+      if (-not (Get-Command $shell -ErrorAction SilentlyContinue)) { continue }
+      $freshExe = Join-Path $fixture "fresh-$shell"
+      $sourceLiteral = $cFile.Replace("'", "''")
+      $programLiteral = $freshExe.Replace("'", "''")
+      $freshBuild = @"
+`$ErrorActionPreference = 'Stop'
+& gcc.exe -std=c11 -Wall -Wextra -Wpedantic -g '$sourceLiteral' -o '$programLiteral'
+if (`$LASTEXITCODE -ne 0) { throw 'Fresh PowerShell C build failed.' }
+& '$programLiteral'
+if (`$LASTEXITCODE -ne 0) { throw 'Fresh PowerShell C program failed.' }
+'MEOWSKY_FRESH_C_VERIFIED'
+"@
+      $encodedBuild = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($freshBuild))
+      $freshResult = Invoke-MeowskyFreshPowerShellCommand -Label "verify-$shell-c-build" -FilePath $shell `
+        -Arguments @('-NoLogo', '-NonInteractive', '-EncodedCommand', $encodedBuild)
+      if (-not (($freshResult.Output | Out-String).Contains('MEOWSKY_FRESH_C_VERIFIED'))) {
+        throw "A fresh $shell session did not confirm C compilation and execution."
+      }
+    }
     $gdbResult = Invoke-QuietNativeCommand -Label 'verify-gdb' -FilePath (Join-Path $script:cCompilerBin 'gdb.exe') `
       -Arguments @('-q', '-batch', '-ex', 'break main', '-ex', 'run', $exe)
     if (-not (($gdbResult.Output | Out-String) -match 'Breakpoint\s+1.*main')) {

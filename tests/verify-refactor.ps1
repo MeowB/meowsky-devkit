@@ -8,6 +8,8 @@ $originalLocalAppData = $env:LOCALAPPDATA
 $originalWorkHome = $env:WORK_HOME
 $originalDevkitHome = $env:MEOWSKY_DEVKIT_HOME
 $originalPanel = $env:MEOWSKY_PANEL
+$originalPath = $env:Path
+$originalCompilerBin = $env:MEOWSKY_C_TOOLCHAIN_BIN
 $checks = 0
 function Assert-Equal($actual, $expected, [string]$label) {
   if (([string]$actual -replace "`r`n", "`n") -cne ([string]$expected -replace "`r`n", "`n")) { throw "$label failed.`nExpected: $expected`nActual: $actual" }
@@ -42,7 +44,16 @@ try {
     [void][Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$null, [ref]$parseErrors)
     Assert-Equal $parseErrors.Count 0 "Parse $($file.Name)"
   }
+  $compilerBin = Join-Path $fixture 'compiler/bin'
+  New-Item -ItemType Directory -Path $compilerBin -Force | Out-Null
+  [IO.File]::WriteAllText((Join-Path $compilerBin 'gcc.exe'), '')
+  [IO.File]::WriteAllText((Join-Path $compilerBin 'gdb.exe'), '')
+  $env:MEOWSKY_C_TOOLCHAIN_BIN = $compilerBin
+  $env:Path = "C:\Program Files\PostgreSQL\17\bin;$compilerBin;$($compilerBin.ToUpperInvariant().Replace('\', '/'));$originalPath"
   . (Join-Path $repo 'powershell/profile.ps1')
+  $compilerKey = [IO.Path]::GetFullPath($compilerBin).TrimEnd('\').ToLowerInvariant()
+  Assert-Equal (($env:Path -split ';')[0].ToLowerInvariant()) $compilerKey 'Profile puts selected compiler before machine PATH'
+  Assert-Equal (@($env:Path -split ';' | Where-Object { $_.Replace('/', '\').TrimEnd('\').ToLowerInvariant() -eq $compilerKey }).Count) 1 'Profile deduplicates selected compiler path'
   if (Get-Module -Name PSReadLine) {
     $inputColors = Get-PSReadLineOption
     $expectedInputColors = @{
@@ -382,6 +393,8 @@ if ($script:MeowskyCommands.Count -ne 10) { throw 'Unexpected command count afte
   $env:WORK_HOME = $originalWorkHome
   $env:MEOWSKY_DEVKIT_HOME = $originalDevkitHome
   $env:MEOWSKY_PANEL = $originalPanel
+  $env:Path = $originalPath
+  $env:MEOWSKY_C_TOOLCHAIN_BIN = $originalCompilerBin
   # The checked fixture path is uniquely created by this test under the system temp directory.
   if ((Split-Path $fixture -Parent) -eq ([IO.Path]::GetTempPath()).TrimEnd('\')) {
     Remove-Item -LiteralPath $fixture -Recurse -Force -ErrorAction SilentlyContinue

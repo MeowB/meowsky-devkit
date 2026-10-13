@@ -33,6 +33,25 @@ function Add-MeowskyPathEntry {
   return $PathValue.TrimEnd(';') + ';' + $Directory
 }
 
+function Move-MeowskyPathEntryFirst {
+  param([string]$PathValue, [Parameter(Mandatory)][string]$Directory)
+  $wanted = Get-MeowskyPathKey $Directory
+  $otherEntries = @($PathValue -split ';' | Where-Object {
+    $_.Trim() -and (Get-MeowskyPathKey $_) -ne $wanted
+  })
+  return (@($Directory) + $otherEntries) -join ';'
+}
+
+function Get-MeowskyToolchainDirectory {
+  param([ValidateSet('Process', 'User')][string]$Scope)
+  return [Environment]::GetEnvironmentVariable('MEOWSKY_C_TOOLCHAIN_BIN', $Scope)
+}
+
+function Set-MeowskyToolchainDirectory {
+  param([ValidateSet('Process', 'User')][string]$Scope, [string]$Directory)
+  [Environment]::SetEnvironmentVariable('MEOWSKY_C_TOOLCHAIN_BIN', $Directory, $Scope)
+}
+
 function Sync-MeowskyProcessPath {
   $processPath = Get-MeowskyEnvironmentPath -Scope Process
   foreach ($scope in @('Machine', 'User')) {
@@ -64,6 +83,26 @@ function Ensure-MeowskyPersistentPath {
   $processPath = Get-MeowskyEnvironmentPath -Scope Process
   if (-not (Test-MeowskyPathContains $processPath $directory)) {
     Set-MeowskyEnvironmentPath -Scope Process -Value (Add-MeowskyPathEntry $processPath $directory)
+  }
+  return $directory
+}
+
+function Ensure-MeowskyCompilerEnvironment {
+  param([Parameter(Mandatory)][string]$Directory)
+  $directory = Ensure-MeowskyPersistentPath -Directory $Directory
+  if ((Get-MeowskyPathKey (Get-MeowskyToolchainDirectory -Scope User)) -ne (Get-MeowskyPathKey $directory)) {
+    Set-MeowskyToolchainDirectory -Scope User -Directory $directory
+  }
+  if ((Get-MeowskyPathKey (Get-MeowskyToolchainDirectory -Scope User)) -ne (Get-MeowskyPathKey $directory)) {
+    throw "Selected C toolchain directory did not persist for a new terminal: $directory"
+  }
+  if ((Get-MeowskyPathKey (Get-MeowskyToolchainDirectory -Scope Process)) -ne (Get-MeowskyPathKey $directory)) {
+    Set-MeowskyToolchainDirectory -Scope Process -Directory $directory
+  }
+  $processPath = Get-MeowskyEnvironmentPath -Scope Process
+  $preferredPath = Move-MeowskyPathEntryFirst -PathValue $processPath -Directory $directory
+  if ($preferredPath -ne $processPath) {
+    Set-MeowskyEnvironmentPath -Scope Process -Value $preferredPath
   }
   return $directory
 }
