@@ -559,7 +559,7 @@ Invoke-MeowskyStep 'Check Codex CLI' {
 }
 
 Invoke-MeowskyStep 'Install Codex global instructions' {
-  & (Join-Path $PSScriptRoot 'install-codex-instructions.ps1')
+  & (Join-Path $repoRoot 'features\codex\install-instructions.ps1')
 }
 
 Invoke-MeowskyStep 'Create Zig compiler wrappers' {

@@ -18,7 +18,7 @@ try {
   [IO.File]::WriteAllText((Join-Path $project 'AGENTS.md'), "Project-specific instruction marker: PROJECT_RULE_4821`n")
 
   $env:CODEX_HOME = $codexHome
-  & (Join-Path $repo 'scripts/install-codex-instructions.ps1') | Out-Null
+  & (Join-Path $repo 'features/codex/install-instructions.ps1') | Out-Null
   $globalPath = Join-Path $codexHome 'AGENTS.md'
   Assert-True (Test-Path -LiteralPath $globalPath -PathType Leaf) 'Global installation'
   $sourcePath = Join-Path $repo 'features/codex/global-instructions.md'
@@ -42,7 +42,7 @@ try {
 
   $custom = "Existing user instructions: DO_NOT_OVERWRITE_4821`n"
   [IO.File]::WriteAllText($globalPath, $custom)
-  & (Join-Path $repo 'scripts/install-codex-instructions.ps1') 3>$null | Out-Null
+  & (Join-Path $repo 'features/codex/install-instructions.ps1') 3>$null | Out-Null
   Assert-True (([IO.File]::ReadAllText($globalPath)) -eq $custom) 'Existing user AGENTS.md remains untouched'
   Write-Host 'PASS: global and project instruction discovery, edit gate, context separation, and non-overwrite behavior.'
 } finally {

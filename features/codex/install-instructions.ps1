@@ -1,7 +1,6 @@
 $ErrorActionPreference = 'Stop'
 
-$repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
-$sourcePath = Join-Path $repoRoot 'features/codex/global-instructions.md'
+$sourcePath = Join-Path $PSScriptRoot 'global-instructions.md'
 $codexHome = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $HOME '.codex' }
 
 if (-not [IO.Path]::IsPathRooted($codexHome)) {
