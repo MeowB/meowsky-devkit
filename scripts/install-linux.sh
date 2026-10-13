@@ -9,6 +9,25 @@ meowsky_profile="$meowsky_dir/meowsky.sh"
 
 export MEOWSKY_DEVKIT_HOME="$repo_root"
 
+codex_home="${CODEX_HOME:-$HOME/.codex}"
+codex_instructions="$repo_root/features/codex/global-instructions.md"
+if [ -e "$codex_home/AGENTS.md" ] || [ -L "$codex_home/AGENTS.md" ]; then
+  if cmp -s "$codex_instructions" "$codex_home/AGENTS.md"; then
+    echo "Codex global instructions are already current: $codex_home/AGENTS.md"
+  else
+    echo "Existing Codex AGENTS.md was left unchanged: $codex_home/AGENTS.md" >&2
+    echo "Compare it with $codex_instructions and merge any desired Meowsky rules manually." >&2
+  fi
+else
+  mkdir -p "$codex_home"
+  cp -n "$codex_instructions" "$codex_home/AGENTS.md"
+  if cmp -s "$codex_instructions" "$codex_home/AGENTS.md"; then
+    echo "Installed Codex global instructions: $codex_home/AGENTS.md"
+  else
+    echo "Codex AGENTS.md appeared during installation and was left unchanged: $codex_home/AGENTS.md" >&2
+  fi
+fi
+
 if command -v apt-get >/dev/null 2>&1; then
   sudo apt-get update
   sudo apt-get install -y git neovim nodejs npm tmux pandoc xdg-utils eza

@@ -16,7 +16,7 @@ It is a small repo, but it does three concrete things:
 | GitHub CLI | Optional, only if you want terminal-first GitHub repo workflows |
 | Editor setup | Loads a personal Neovim config with web-focused plugins, LSPs, Treesitter, and completion |
 | Workspace flow | Adds `meowsky` to PowerShell so you can enter the workspace or dev district, open the fullscreen project layout, or start Codex directly |
-| Prompting | Keeps the Codex orientation prompt in a separate file so it can be reused and edited independently |
+| Codex instructions | Installs durable behavioral rules once in Codex's global `AGENTS.md`; project `AGENTS.md` files add local guidance, while the launch prompt supplies session context |
 | Preview helpers | Uses Pandoc to preview Markdown and the default PDF viewer for PDFs |
 | Linux support | Includes a lighter Ubuntu version using `tmux` |
 
@@ -71,7 +71,7 @@ Run the one-command bootstrap:
 .\scripts\install-windows.ps1
 ```
 
-It installs the core tools, copies the Neovim config, wires your PowerShell profile, and sets `MEOWSKY_DEVKIT_HOME` so the profile can find the Codex prompt file.
+It installs the core tools, copies the Neovim config, wires your PowerShell profile, installs global Codex instructions when no global `AGENTS.md` exists, and sets `MEOWSKY_DEVKIT_HOME` so the profile can find the session-context template. An existing global `AGENTS.md` is left untouched with a notice to merge desired rules manually.
 
 On Windows, the workspace defaults to `C:\meowsky`. To use another workspace, set the user-level `WORK_HOME` to an absolute path and open a new terminal.
 
@@ -120,7 +120,7 @@ meowsky launchpad
 
 These commands read district-specific startup guidance. They ask the agent to read `current.md` if present; they do not create personal records. PDFs and Word documents in a district's `references/` are original sources, not working files. See [district continuity](docs/district-continuity.md) for the optional state, session, and manual capsule convention.
 
-Start Codex directly with the custom orientation prompt:
+Start Codex directly with the project session context and native `AGENTS.md` instructions:
 
 ```powershell
 meowsky codex
@@ -138,7 +138,7 @@ meowsky ptree 5
 
 When `meowsky ./` runs in any folder, it opens a fullscreen Windows Terminal layout with:
 
-- a Codex session started from [features/codex/codex-orientation.md](features/codex/codex-orientation.md)
+- a Codex session given the dynamic context from [features/codex/codex-orientation.md](features/codex/codex-orientation.md); durable behavior comes from Codex's global and project `AGENTS.md` files
 - a shell at the project root
 - a tree view pane
 - a compact status pane

@@ -50,7 +50,29 @@ if meowsky missing; then exit 1; fi
 EOF
 "$BASH" "$fixture/exercise.sh" "$fixture/baseline.sh" "$fixture" > "$fixture/baseline.out" 2>&1
 "$BASH" "$fixture/exercise.sh" "$repo/shell/meowsky.sh" "$fixture" > "$fixture/current.out" 2>&1
-diff -u "$fixture/baseline.out" "$fixture/current.out"
+normalize_prompt() {
+  awk '
+    /^tmux <new-session>/ {
+      sub(/ <Session context.*$/, " <PROMPT>")
+      sub(/ <Project session context.*$/, " <PROMPT>")
+      print
+      in_prompt=1
+      next
+    }
+    in_prompt && /^tmux </ { in_prompt=0 }
+    !in_prompt { print }
+  ' "$1"
+}
+normalize_prompt "$fixture/baseline.out" > "$fixture/baseline-normalized.out"
+normalize_prompt "$fixture/current.out" > "$fixture/current-normalized.out"
+diff -u "$fixture/baseline-normalized.out" "$fixture/current-normalized.out"
+test "$(grep -c 'Project session context:' "$fixture/current.out")" -eq 2
+grep -Fq "Workspace root: $fixture/work/project" "$fixture/current.out"
+grep -Fq 'Today: ' "$fixture/current.out"
+grep -Fq 'Top-level project tree:' "$fixture/current.out"
+grep -Fq 'Git status at startup:' "$fixture/current.out"
+grep -Fq 'Give a concise orientation:' "$fixture/current.out"
+! grep -Fq 'Answering rules:' "$fixture/current.out"
 mkdir -p "$fixture/installed"
 cp "$repo/shell/meowsky.sh" "$fixture/installed/meowsky.sh"
 for runtime_file in core/paths.sh core/git.sh core/cli.sh \
@@ -60,5 +82,5 @@ for runtime_file in core/paths.sh core/git.sh core/cli.sh \
   cp "$repo/$runtime_file" "$fixture/installed/$runtime_file"
 done
 "$BASH" "$fixture/exercise.sh" "$fixture/installed/meowsky.sh" "$fixture" > "$fixture/installed.out" 2>&1
-diff -u "$fixture/baseline.out" "$fixture/installed.out"
+diff -u "$fixture/current.out" "$fixture/installed.out"
 printf 'PASS: shell syntax, original Linux behavior, copied installation layout.\n'

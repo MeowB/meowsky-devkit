@@ -41,7 +41,8 @@ Approval covers only the described edit batch. If the files, scope, or intent ch
 - Before implementing a feature, identify its data shape, data or API functions, entry point or route, feature implementation, and shared UI where applicable. Keep data logic, dispatch, and rendering in their appropriate modules. Suggest a split when a file becomes too large or mixed.
 - On Windows, `powershell/profile.ps1` loads `core/` and the explicit feature registry in `core/feature-loader.ps1`. `core/` owns shared CLI, path, Git, tree-enumeration, terminal, and completion functions. Each PowerShell feature under `features/` owns its implementation, manifest, and help; `features/workspace/` composes the Codex, tree, and matrix features.
 - `nvim/init.lua` owns the editor configuration. `scripts/` owns installation. Linux uses `shell/meowsky.sh` and copied `.sh` core and feature files rather than the PowerShell feature registry. Consult `docs/architecture.md` for feature boundaries and verification commands.
-- For filesystem organization decisions, consult [the filesystem conventions](conventions/filesystem.md). Apply them to the current task without reorganizing unrelated files.
+- Consult [filesystem](conventions/filesystem.md), [architecture](conventions/architecture.md), and [code style](conventions/code-style.md) conventions when the task involves those decisions. Apply them to the current task without reorganizing unrelated files.
+- Before a significant feature or boundary change, perform the lightweight review in the architecture conventions. Keep it proportional to the task and preserve the edit gate above.
 
 ## Git discipline
 

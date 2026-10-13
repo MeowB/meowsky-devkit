@@ -12,7 +12,9 @@ From the repository root:
 .\scripts\install-windows.ps1 -Upgrade
 ```
 
-The installer verifies the expected tools, repairs Neovim runtime variables, creates Zig compiler wrappers for Treesitter, copies [nvim/init.lua](../nvim/init.lua), and imports [powershell/profile.ps1](../powershell/profile.ps1) from your PowerShell profile. It also installs editor plugins, language servers and parsers. Codex must already be installed for the Codex workflow.
+The installer verifies the expected tools, repairs Neovim runtime variables, creates Zig compiler wrappers for Treesitter, copies [nvim/init.lua](../nvim/init.lua), and imports [powershell/profile.ps1](../powershell/profile.ps1) from your PowerShell profile. It also installs editor plugins, language servers, parsers, and global Codex instructions. Codex must already be installed for the Codex workflow.
+
+Codex natively reads `AGENTS.md` from `CODEX_HOME` (or `~/.codex` when unset) and then applicable project directories. The Windows installer copies [global-instructions.md](../features/codex/global-instructions.md) to that global `AGENTS.md` only when the destination is absent. If an existing file differs, it is left untouched and the installer prints both paths for manual comparison. To install or check instructions without rerunning machine setup, run `powershell -NoProfile -File scripts/install-codex-instructions.ps1`. A project's own `AGENTS.md` remains project-owned and can add more specific guidance; Meowsky does not copy global rules into each project.
 
 `MEOWSKY_DEVKIT_HOME` points to this checkout. Keep the checkout available: the profile loads `core/` and `features/` directly. Open a new terminal after installation.
 
@@ -71,7 +73,7 @@ The development (`meowsky .` / `./`) fullscreen layout retains four panes: Codex
 
 `ptree [level]` remains available independently. `dev` aliases `meowsky` when an existing alias does not occupy that name. Feature help lives at `features/<name>/help.txt`: PowerShell supports `meowsky <command> -h` and `-Help`. Bare `meowsky -h`, `help`, and `--help` display global help.
 
-Legacy `project-colors.json` files are ignored and left untouched. `meowsky color` remains an explanatory compatibility command. Apply terminal colors through `meowsky identity apply <id> --target terminal`. Markdown previews use the system temporary directory under `meowsky-preview`. Windows Codex uses [its orientation resource](../features/codex/codex-orientation.md), retaining its existing fallback when the primary template cannot be found.
+Legacy `project-colors.json` files are ignored and left untouched. `meowsky color` remains an explanatory compatibility command. Apply terminal colors through `meowsky identity apply <id> --target terminal`. Markdown previews use the system temporary directory under `meowsky-preview`. Windows Codex uses [its session-context resource](../features/codex/codex-orientation.md), retaining a context-only fallback when the primary template cannot be found. The prompt contains a startup date, root, top-level tree, Git summary, and brief project orientation; durable rules come from native `AGENTS.md` discovery. Detailed conventions are read only when relevant.
 
 ## Linux / Ubuntu
 
@@ -79,7 +81,7 @@ Legacy `project-colors.json` files are ignored and left untouched. `meowsky colo
 bash ./scripts/install-linux.sh
 ```
 
-The installer copies [shell/meowsky.sh](../shell/meowsky.sh) and its shell core/feature files into `${XDG_CONFIG_HOME:-$HOME/.config}/meowsky`, copies the editor configuration, and adds the runtime import to `.bashrc` and `.zshrc`. It installs the existing apt/npm dependencies and bootstraps Neovim. Open a new terminal afterwards.
+The installer copies [shell/meowsky.sh](../shell/meowsky.sh) and its shell core/feature files into `${XDG_CONFIG_HOME:-$HOME/.config}/meowsky`, copies the editor configuration, and adds the runtime import to `.bashrc` and `.zshrc`. It installs the existing apt/npm dependencies, bootstraps Neovim, and installs the same global Codex instructions only when `${CODEX_HOME:-$HOME/.codex}/AGENTS.md` is absent. Existing instructions are reported and left untouched. Open a new terminal afterwards.
 
 ```bash
 export WORK_HOME="$HOME/work" # optional; persist in your shell rc
@@ -90,7 +92,7 @@ meowsky md ./README.md
 meowsky pdf ./docs/spec.pdf
 ```
 
-Linux retains its smaller command set, original Codex prompt, tmux layout and session reattachment. It does not add PowerShell color, matrix, direct Codex or help commands. Tree output uses eza when available, otherwise find. Previews use xdg-open.
+Linux retains its smaller command set, context-only Codex prompt, tmux layout and session reattachment. It does not add PowerShell color, matrix, direct Codex or help commands. Tree output uses eza when available, otherwise find. Previews use xdg-open.
 
 ## Editor verification
 

@@ -19,7 +19,7 @@ Folder names do not create commands: tree remains `ptree`, workspace remains `.`
 | tree | Rendering and live panel | directory-tree, terminal |
 | md | Pandoc preview | paths |
 | pdf | Viewer launch | paths |
-| codex | Launchers and primary/fallback prompts | paths, git, directory-tree, terminal |
+| codex | Launchers, global instruction source, and primary/fallback session-context prompts | paths, git, directory-tree, terminal |
 | bach | Bachelor district command, help, and startup context | workspace, paths |
 | launchpad | Income exploration district command, help, and startup context | workspace, paths |
 | color | Explain retirement of project color overrides | none |
@@ -41,9 +41,9 @@ Removing an ordinary feature directory removes its registered commands on a fres
 
 ## Installation boundaries
 
-Windows loads this checkout directly through the installed profile. `MEOWSKY_DEVKIT_HOME` still controls primary Codex template lookup. Temporary prompts and configuration discovery paths are unchanged. Legacy project-color files are ignored and left untouched.
+Windows loads this checkout directly through the installed profile. `MEOWSKY_DEVKIT_HOME` still controls primary Codex session-context template lookup. The installer copies `features/codex/global-instructions.md` to `CODEX_HOME/AGENTS.md` (or `~/.codex/AGENTS.md` when `CODEX_HOME` is unset) only when absent; it never overwrites an existing user's file. Codex itself discovers global and project `AGENTS.md` files in precedence order. Meowsky's prompt contains only the launch snapshot and project orientation, while the shared Codex launch arguments and temporary prompt path remain unchanged. Legacy project-color files are ignored and left untouched.
 
-Linux has a `shell/meowsky.sh` bootstrap and `.sh` implementations beside their features. Its installer copies those files to the existing runtime directory; the checkout is not needed at runtime. Linux retains its command subset and prompt. PowerShell manifests do not drive shell loading.
+Linux has a `shell/meowsky.sh` bootstrap and `.sh` implementations beside their features. Its installer copies those files to the existing runtime directory and installs global Codex instructions without replacing an existing file; the checkout is not needed at runtime. Linux retains its command subset and context-only prompt. PowerShell manifests do not drive shell loading.
 
 `nvim/init.lua` and the Windows installer are unchanged in this milestone. Neovim ownership can move in a separate structural change. Zig wrappers currently serve Treesitter; no C/C++ feature is introduced.
 

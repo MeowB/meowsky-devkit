@@ -135,11 +135,17 @@ try {
   Assert-Equal (Remove-Ansi (Capture { ptree 2 })) (Capture { . ([scriptblock]::Create($oldTree)); ptree 2 }) 'Tree 50-item limit'
   $oldSnapshot = $baselineAst.Find({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Get-MeowskyPromptTree' }, $true).Extent.Text
   Assert-Equal (Get-MeowskyPromptTree $project) (& { . ([scriptblock]::Create($oldSnapshot)); Get-MeowskyPromptTree $project }) 'Codex snapshot output'
-  $oldPrompt = $baselineAst.Find({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Get-MeowskyCodexPrompt' }, $true).Extent.Text
   $env:MEOWSKY_DEVKIT_HOME = ''
-  $expectedPrompt = & { . ([scriptblock]::Create($oldPrompt)); Get-MeowskyCodexPrompt '2026-09-26' $project 'tree fixture' 'git fixture' }
-  Assert-Equal (Get-MeowskyCodexPrompt '2026-09-26' $project 'tree fixture' 'git fixture') $expectedPrompt 'Fallback prompt preserved'
+  $fallbackPrompt = Get-MeowskyCodexPrompt '2026-09-26' $project 'tree fixture' 'git fixture'
+  Assert-Equal ($fallbackPrompt -match [regex]::Escape("Workspace root: $project")) $true 'Fallback workspace context'
+  Assert-Equal ($fallbackPrompt -match 'Today: 2026-09-26') $true 'Fallback date context'
+  Assert-Equal ($fallbackPrompt -match 'tree fixture') $true 'Fallback tree context'
+  Assert-Equal ($fallbackPrompt -match 'git fixture') $true 'Fallback Git context'
+  Assert-Equal ($fallbackPrompt -match 'Before modifying any files|Never run `git commit`') $false 'Fallback excludes global rules'
   $env:MEOWSKY_DEVKIT_HOME = $repo
+  $primaryPrompt = Get-MeowskyCodexPrompt '2026-09-26' $project 'tree fixture' 'git fixture'
+  Assert-Equal ($primaryPrompt -match 'Give a concise orientation') $true 'Primary project orientation'
+  Assert-Equal ($primaryPrompt -match 'Before modifying any files|Never run `git commit`') $false 'Primary excludes global rules'
   foreach ($name in @('Resolve-MeowskyCodexCommand', 'New-MeowskyCodexNodeLauncher', 'Invoke-MeowskyCodex')) {
     $oldFunction = $baselineAst.Find({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $name }, $true).Extent.Text
     Assert-Equal ((Get-Command $name).ScriptBlock.ToString().Trim()) (([scriptblock]::Create($oldFunction)).Ast.Find({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] }, $true).Body.ToString().Trim('{}').Trim()) "Preserved $name implementation"
@@ -243,7 +249,8 @@ try {
   $promptPathEncoded = [regex]::Match($encoded[0], "FromBase64String\('([^']+)'\)").Groups[1].Value
   $promptPath = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String($promptPathEncoded))
   $workspacePrompt = Get-Content -Raw -LiteralPath $promptPath
-  Assert-Equal ($workspacePrompt -match 'Inspect `README.md` first') $true 'Current-directory development orientation preserved'
+  Assert-Equal ($workspacePrompt -match 'inspect README.md if present') $true 'Current-directory development orientation preserved'
+  Assert-Equal ([regex]::Matches($workspacePrompt, 'Workspace root:').Count) 1 'Development context appears once'
   Remove-Item -LiteralPath $promptPath
   Assert-Throws { meowsky bach unexpected } 'Usage: meowsky bach'
   Assert-Throws { meowsky launchpad unexpected } 'Usage: meowsky launchpad'
