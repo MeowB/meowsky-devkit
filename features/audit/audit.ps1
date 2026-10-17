@@ -6,6 +6,25 @@
 . (Join-Path $PSScriptRoot 'refactor-prompt.ps1')
 . (Join-Path $PSScriptRoot 'state.ps1')
 
+function Add-MeowskyAuditGitignoreEntry {
+  param([Parameter(Mandatory = $true)][string]$Root)
+  $path = Join-Path $Root '.gitignore'
+  if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { return }
+  $item = Get-Item -LiteralPath $path -Force -ErrorAction Stop
+  if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) { return }
+
+  $reader = New-Object IO.StreamReader($path, $true)
+  try {
+    $content = $reader.ReadToEnd()
+    $encoding = $reader.CurrentEncoding
+  } finally { $reader.Dispose() }
+  if ($content -match '(?m)^[ \t]*/?\.meowsky/?[ \t]*\r?$') { return }
+
+  $newline = if ($content.Contains("`r`n")) { "`r`n" } elseif ($content.Contains("`n")) { "`n" } else { [Environment]::NewLine }
+  $prefix = if ($content -and -not $content.EndsWith("`n")) { $newline } else { '' }
+  [IO.File]::AppendAllText($path, $prefix + '.meowsky/' + $newline, $encoding)
+}
+
 function Invoke-MeowskyAuditFeature {
   param([string]$Target, [string]$WorkRoot, [string[]]$Arguments)
 
@@ -58,6 +77,7 @@ function Invoke-MeowskyAuditFeature {
 
   if ($promptRequested) { return (Get-MeowskyAuditRefactorPrompt -Root $root -Ids $promptIds) }
 
+  Add-MeowskyAuditGitignoreEntry -Root $root
   $history = @()
   try {
     $previous = Read-MeowskyAuditState -Root $root

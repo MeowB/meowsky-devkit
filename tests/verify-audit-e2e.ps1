@@ -126,6 +126,19 @@ try {
   Assert-Audit ((meowsky audit --help).Contains('--refactor-prompt')) 'Audit help describes workflow'
   Assert-Audit ((meowsky -h).Contains('meowsky audit')) 'Global help lists Audit'
   Assert-Audit (((meowsky audit --quick) -join "`n") -ne '') 'Default target quick audit returns output'
+  Assert-Audit (-not (Test-Path -LiteralPath (Join-Path $c '.gitignore'))) 'Audit does not create a missing gitignore'
+
+  $ignored = Join-Path $fixture 'existing-gitignore'
+  Add-FixtureFile $ignored 'README.md' '# Ignore fixture'
+  Add-FixtureFile $ignored '.gitignore' 'nvim.log'
+  $null = meowsky audit $ignored
+  $ignoreText = [IO.File]::ReadAllText((Join-Path $ignored '.gitignore'))
+  Assert-Audit ($ignoreText -match '(?m)^nvim\.log\r?$' -and $ignoreText -match '(?m)^\.meowsky/\r?$') 'Audit preserves existing ignore entries and adds its output directory'
+  $null = meowsky audit $ignored
+  Assert-Audit ([IO.File]::ReadAllText((Join-Path $ignored '.gitignore')) -ceq $ignoreText) 'Repeat audit does not duplicate the ignore entry'
+  [IO.File]::WriteAllText((Join-Path $ignored '.gitignore'), "nvim.log`n/.meowsky/`n")
+  $null = meowsky audit $ignored
+  Assert-Audit ([IO.File]::ReadAllText((Join-Path $ignored '.gitignore')) -ceq "nvim.log`n/.meowsky/`n") 'Equivalent root ignore entry remains unchanged'
 
   $cInventory = Get-MeowskyAuditInventory -Root $c
   Assert-Audit ($cInventory.Files.Count -eq 5 -and $cInventory.Languages -contains 'C') 'Standalone C discovery without Git'
