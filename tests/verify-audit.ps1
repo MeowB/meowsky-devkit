@@ -1,4 +1,4 @@
-# Audit discovery, static checks, and mocked Codex integration; maps are absent.
+# Audit discovery, static checks, mocked Codex integration, and Markdown reporting.
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path $PSScriptRoot -Parent
 $fixture = Join-Path ([IO.Path]::GetTempPath()) ('meowsky-audit-tests-' + [guid]::NewGuid().ToString('N'))
@@ -113,11 +113,6 @@ try {
   $callsBeforeQuick = $script:auditInvocationCount
   Assert-Equal ($quick.Contains('Quick static checks complete; Codex was not invoked.')) $true 'Quick option before directory recognized'
   Assert-Equal $script:auditInvocationCount $callsBeforeQuick 'Quick audit did not invoke Codex'
-  $refresh = (meowsky audit 'sample project' --refresh) -join "`n"
-  Assert-Equal ($refresh.Contains('Map refresh is not implemented yet; no files were changed.')) $true 'Refresh option after directory recognized'
-  $combined = (meowsky audit --refresh $project --quick) -join "`n"
-  Assert-Equal ($combined.Contains('Quick static checks complete; Codex was not invoked.')) $true 'Combined options recognized'
-  Assert-Equal ($combined.Contains('Map refresh is not implemented yet; no files were changed.')) $true 'Combined refresh recognized'
 
   $inventory = Get-MeowskyAuditInventory -Root $plain
   $paths = @($inventory.Files | ForEach-Object { $_.Path })
@@ -232,8 +227,81 @@ try {
   Assert-Equal (Get-FixtureContentHashes) $beforeContent 'Audit commands did not change target file contents'
   Assert-Equal (Get-Content -Raw -LiteralPath (Join-Path $project 'keep.txt')) "original`r`n" 'Target content preserved'
   Assert-Equal (Test-Path -LiteralPath $env:WORK_HOME) $false 'Audit did not create unrelated work root'
-  Assert-Equal (Test-Path -LiteralPath (Join-Path $project '.meowsky')) $false 'Refresh placeholder did not create map'
+  Assert-Equal (Test-Path -LiteralPath (Join-Path $project '.meowsky')) $false 'Normal audit did not create report directory'
   Assert-Equal (Get-Location).Path $fixture 'Audit did not navigate away from current directory'
+
+  $sourceHashes = (@(Get-ChildItem -LiteralPath $issues -Recurse -File | ForEach-Object { "$($_.FullName):$((Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash)" }) | Sort-Object) -join "`n"
+  $script:auditMockMode = 'finding'
+  $refresh = (meowsky audit $issues --refresh) -join "`n"
+  $reportPath = Join-Path $issues '.meowsky/AUDIT.md'
+  Assert-Equal ($refresh.Contains("Audit report: Created $reportPath")) $true 'Refresh creates a report'
+  Assert-Equal (Test-Path -LiteralPath $reportPath) $true 'Refresh report exists'
+  $reportText = Get-Content -Raw -LiteralPath $reportPath
+  Assert-Equal ($reportText.Contains('## Executive summary')) $true 'Report has executive summary'
+  Assert-Equal ($reportText.Contains('## Architecture')) $true 'Report has architecture group'
+  Assert-Equal ($reportText.Contains('## Code quality and naming')) $true 'Report has code quality group'
+  Assert-Equal ($reportText.Contains('## Potentially obsolete functionality')) $true 'Report has obsolete functionality group'
+  Assert-Equal ($reportText.Contains('## Documentation')) $true 'Report has documentation group'
+  Assert-Equal ($reportText.Contains('## Workspace hygiene')) $true 'Report has hygiene group'
+  Assert-Equal ($reportText.Contains('## Prioritized files for human inspection')) $true 'Report prioritizes inspection'
+  Assert-Equal ($reportText.Contains('## Findings requiring manual verification')) $true 'Report labels manual verification'
+  Assert-Equal ($reportText.Contains('[V001]')) $true 'Report retains static verified ID'
+  Assert-Equal ($reportText.Contains('[S001]')) $true 'Report assigns stable semantic ID'
+  Assert-Equal ($reportText.Contains('Suggested improvement:')) $true 'Report includes proposals'
+  Assert-Equal ($reportText.Contains('Confidence:')) $true 'Report includes confidence'
+  Assert-Equal ($reportText.Contains('Expected impact:')) $true 'Report includes impact'
+  Assert-Equal ($reportText.Contains('Regression risk:')) $true 'Report includes regression risk'
+  Assert-Equal ($reportText.Contains('Source links below confirm path existence at generation time.')) $true 'Report separates link validation from semantic truth'
+  Assert-Equal ($reportText.Contains('](../README.md)')) $true 'Report links to existing relative source'
+  $links = [regex]::Matches($reportText, '\]\(\.\./(?<path>[^)]+)\)')
+  foreach ($link in $links) {
+    $relativePath = [Uri]::UnescapeDataString($link.Groups['path'].Value).Replace('/', '\')
+    Assert-Equal (Test-Path -LiteralPath (Join-Path $issues $relativePath)) $true "Report link exists: $relativePath"
+  }
+  $reportHash = (Get-FileHash -LiteralPath $reportPath -Algorithm SHA256).Hash
+  $reportEntries = Get-FixtureEntries
+  $reportHashes = Get-FixtureContentHashes
+  $normalAfterRefresh = (meowsky audit $issues) -join "`n"
+  Assert-Equal ($normalAfterRefresh.Contains('Semantic evaluation: Complete.')) $true 'Normal audit still displays findings'
+  Assert-Equal (Get-FixtureEntries) $reportEntries 'Normal audit after refresh does not change entries'
+  Assert-Equal (Get-FixtureContentHashes) $reportHashes 'Normal audit after refresh does not write files'
+  $script:auditMockMode = 'complete'
+  $quickCalls = $script:auditInvocationCount
+  $quickRefresh = (meowsky audit --refresh $issues --quick) -join "`n"
+  Assert-Equal ($quickRefresh.Contains('Quick static checks complete; Codex was not invoked.')) $true 'Quick refresh skips Codex'
+  Assert-Equal $script:auditInvocationCount $quickCalls 'Quick refresh did not call Codex'
+  $quickText = Get-Content -Raw -LiteralPath $reportPath
+  Assert-Equal ($quickText.Contains('Codex review: Not run')) $true 'Quick report discloses absent semantic analysis'
+  Assert-Equal ($quickText.Contains('this is a partial audit')) $true 'Quick report is labeled partial'
+  $backup = @(Get-ChildItem -LiteralPath (Join-Path $issues '.meowsky') -Filter '*.md.bak')
+  Assert-Equal $backup.Count 1 'Changed report creates one backup'
+  Assert-Equal (Get-FileHash -LiteralPath $backup[0].FullName -Algorithm SHA256).Hash $reportHash 'Backup retains prior report bytes'
+  $unchanged = Write-MeowskyAuditReport -Root $issues -Content $quickText.TrimEnd("`r", "`n")
+  Assert-Equal $unchanged.State 'Unchanged' 'Identical report content avoids replacement'
+  Assert-Equal @(Get-ChildItem -LiteralPath (Join-Path $issues '.meowsky') -Filter '*.md.bak').Count 1 'Identical content avoids another backup'
+  $script:auditMockMode = 'timeout'
+  $failedRefresh = (meowsky audit $issues --refresh) -join "`n"
+  Assert-Equal ($failedRefresh.Contains('Semantic evaluation: Incomplete.')) $true 'Timeout remains visible in CLI'
+  Assert-Equal ((Get-Content -Raw -LiteralPath $reportPath).Contains('Codex review: Incomplete:')) $true 'Report discloses incomplete semantic evaluation'
+  $script:auditMockMode = 'complete'
+  $quickProject = (meowsky audit --refresh $project --quick) -join "`n"
+  Assert-Equal ($quickProject.Contains('Audit report: Created')) $true 'Combined options create report in explicit target'
+  Assert-Equal (Test-Path -LiteralPath (Join-Path $project 'keep.txt')) $true 'Target application file remains in place'
+  Assert-Equal (Get-Content -Raw -LiteralPath (Join-Path $project 'keep.txt')) "original`r`n" 'Target application content remains unchanged'
+  $sourceHashesAfter = (@(Get-ChildItem -LiteralPath $issues -Recurse -File | Where-Object { -not $_.FullName.StartsWith((Join-Path $issues '.meowsky') + '\') } | ForEach-Object { "$($_.FullName):$((Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash)" }) | Sort-Object) -join "`n"
+  Assert-Equal $sourceHashesAfter $sourceHashes 'Refresh preserves application source and documentation bytes'
+
+  $blocked = Join-Path $fixture 'blocked project'
+  New-Item -ItemType Directory -Path $blocked | Out-Null
+  Set-Content -LiteralPath (Join-Path $blocked '.meowsky') -Value 'owned file'
+  Assert-Error { Write-MeowskyAuditReport -Root $blocked -Content 'fixture' } 'Audit output directory must be a regular directory*'
+  Assert-Equal (Get-Content -Raw -LiteralPath (Join-Path $blocked '.meowsky')) "owned file`r`n" 'Blocked output path is preserved'
+
+  $invalidFinding = [pscustomobject]@{ Id = 'V999'; Category = 'Markdown link'; Path = 'missing.md'; Evidence = 'Missing path fixture.'; Priority = 'Medium'; Method = 'Fixture' }
+  $invalidStatic = [pscustomobject]@{ Verified = @($invalidFinding); Candidates = @(); Limitations = @() }
+  $invalidText = New-MeowskyAuditReport -Inventory $issueInventory -StaticReport $invalidStatic -Quick
+  Assert-Equal ($invalidText.Contains('missing.md)')) $false 'Uninventoried source does not become a link'
+  Assert-Equal ($invalidText.Contains('unlinked; path was not confirmed')) $true 'Missing source is labeled unlinked'
 
   $mockCli = Join-Path $fixture 'mock-codex.ps1'
   Set-Content -LiteralPath $mockCli -Value @('param($Mode, $Payload)', 'Write-Output $Payload', 'exit 0')

@@ -1,6 +1,7 @@
 . (Join-Path $PSScriptRoot 'discovery.ps1')
 . (Join-Path $PSScriptRoot 'static-checks.ps1')
 . (Join-Path $PSScriptRoot 'semantic.ps1')
+. (Join-Path $PSScriptRoot 'report.ps1')
 
 function Invoke-MeowskyAuditFeature {
   param([string]$Target, [string]$WorkRoot, [string[]]$Arguments)
@@ -65,6 +66,7 @@ function Invoke-MeowskyAuditFeature {
     "  [$($finding.Id)] $($finding.Category) [$($finding.Priority)] $($finding.Path): $($finding.Evidence) (Method: $($finding.Method))"
   }
   if ($findings.Count -gt 8) { "  ... $($findings.Count - 8) more finding(s)." }
+  $semantic = $null
   if ($quick) { 'Quick static checks complete; Codex was not invoked.' }
   else {
     'Starting Codex review: read-only, requested sample of up to 12 files, 180-second timeout; Codex usage may apply.'
@@ -81,5 +83,10 @@ function Invoke-MeowskyAuditFeature {
       foreach ($limitation in $semantic.Limitations) { "  Review limitation: $limitation" }
     }
   }
-  if ($refresh) { 'Map refresh is not implemented yet; no files were changed.' }
+  if ($refresh) {
+    $content = New-MeowskyAuditReport -Inventory $inventory -StaticReport $report -Semantic $semantic -Quick:$quick
+    $written = Write-MeowskyAuditReport -Root $inventory.Root -Content $content
+    "Audit report: $($written.State) $($written.Path)"
+    if ($written.Backup) { "Previous report backup: $($written.Backup)" }
+  }
 }

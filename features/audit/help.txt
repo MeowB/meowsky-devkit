@@ -4,8 +4,9 @@ The directory may be relative to the current location or an absolute path.
 Options may appear before or after the directory.
 
 --quick    Show filesystem discovery and concise static findings without Codex.
---refresh  Request a workspace map refresh. Map generation is not implemented
-           yet; this option does not write any files.
+--refresh  Write .meowsky/AUDIT.md from the current audit. An existing changed
+           report is backed up before replacement. With --quick, the report
+           explicitly states that Codex analysis was not run.
 --help     Show this help when used alone. -h and -Help also show feature help.
 
 Discovery lists relevant source, test, configuration, and documentation files.
@@ -37,4 +38,7 @@ Codex runs non-interactively with a read-only sandbox, no approval escalation,
 disabled hooks/plugins/apps, no user config, an ephemeral session, and a
 180-second timeout. The prompt forbids project tooling, tests, and edits; the
 sandbox enforces the target file-write boundary. The bounded summary and
-structured response stay in memory. Map generation is not implemented.
+structured response stay in memory unless --refresh writes the Markdown report.
+Normal audits do not write project files. Report source links are checked
+against the discovery inventory at generation time; semantic claims still need
+human verification. Map generation is not implemented.
