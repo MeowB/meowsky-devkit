@@ -56,7 +56,8 @@ function Invoke-MeowskyAuditCodexProcess {
     [Parameter(Mandatory = $true)][string]$Root,
     [Parameter(Mandatory = $true)][string[]]$Arguments,
     [Parameter(Mandatory = $true)][string]$Prompt,
-    [ValidateRange(1, 600)][int]$TimeoutSeconds = 180
+    [ValidateRange(1, 3600)][int]$TimeoutSeconds = 180,
+    [string]$ProgressLabel = ''
   )
 
   $quotedCommand = "'" + $Command.Replace("'", "''") + "'"
@@ -74,29 +75,41 @@ function Invoke-MeowskyAuditCodexProcess {
   $start.RedirectStandardError = $true
   $process = New-Object Diagnostics.Process
   $process.StartInfo = $start
+  $started = $false
   try {
     if (-not $process.Start()) { throw 'Could not launch Codex.' }
+    $started = $true
     $outputTask = $process.StandardOutput.ReadToEndAsync()
     $errorTask = $process.StandardError.ReadToEndAsync()
     $process.StandardInput.Write($Prompt)
     $process.StandardInput.Close()
-    if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
-      # Stop the process tree so a child CLI cannot continue after the audit times out.
-      if (-not $process.HasExited) {
-        try { & taskkill.exe /PID $process.Id /T /F 2>$null | Out-Null } catch { }
+    $timer = [Diagnostics.Stopwatch]::StartNew()
+    $nextTick = 0
+    while (-not $process.WaitForExit(500)) {
+      if ($ProgressLabel -and $timer.Elapsed.TotalSeconds -ge $nextTick) {
+        Write-Host '.' -NoNewline
+        $nextTick += 3
       }
-      if (-not $process.WaitForExit(1000)) {
-        try { $process.Kill() } catch { }
-        $null = $process.WaitForExit(1000)
+      if ($timer.Elapsed.TotalSeconds -ge $TimeoutSeconds) {
+        return [pscustomobject]@{ ExitCode = -1; TimedOut = $true; StdOut = ''; StdErr = '' }
       }
-      return [pscustomobject]@{ ExitCode = -1; TimedOut = $true; StdOut = ''; StdErr = '' }
     }
     $process.WaitForExit()
     $stdout = $outputTask.Result
     $stderr = $errorTask.Result
     if ($stdout.Length -gt 4194304 -or $stderr.Length -gt 1048576) { throw 'Codex process output exceeded the audit capture limit.' }
     [pscustomobject]@{ ExitCode = $process.ExitCode; TimedOut = $false; StdOut = $stdout; StdErr = $stderr }
-  } finally { $process.Dispose() }
+  } finally {
+    if ($ProgressLabel -and $started) { Write-Host '' }
+    if ($started -and -not $process.HasExited) {
+      try { & taskkill.exe /PID $process.Id /T /F 2>$null | Out-Null } catch { }
+      if (-not $process.WaitForExit(1000)) {
+        try { $process.Kill() } catch { }
+        $null = $process.WaitForExit(1000)
+      }
+    }
+    $process.Dispose()
+  }
 }
 
 function Test-MeowskyAuditSemanticMap {

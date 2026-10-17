@@ -7,9 +7,9 @@ function Read-MeowskyReviewHandoff {
     $raw = Get-Content -Raw -LiteralPath $item.FullName -ErrorAction Stop
   } else {
     $raw = Get-Clipboard -Raw -ErrorAction Stop
-    $raw = $raw -replace '^\s*```(?:json)?\s*', '' -replace '\s*```\s*$', ''
     if ($raw.Length -gt 262144) { throw 'Review handoff exceeds 256 KiB.' }
   }
+  $raw = $raw -replace '^\s*```(?:json)?\s*', '' -replace '\s*```\s*$', ''
   try { $raw | ConvertFrom-Json -ErrorAction Stop }
   catch { throw 'Review handoff is not valid JSON. Copy only the final JSON object.' }
 }
@@ -50,6 +50,13 @@ function Assert-MeowskyReviewHandoff {
     $reviewed[$path] = $true
   }
   if (-not $reviewed.Count) { throw 'A completed review must identify at least one inspected file.' }
+  if ($Session.mode -eq 'full') {
+    $unreviewed = @($Inventory.Files | Where-Object { $_.Category -in @('Source','Test','Configuration') -and -not $reviewed.ContainsKey($_.Path) } | ForEach-Object Path)
+    if ($unreviewed.Count) {
+      $examples = (@($unreviewed | Select-Object -First 5)) -join ', '
+      throw "Full review did not inspect $($unreviewed.Count) source, test, or configuration file(s): $examples. Review remains pending."
+    }
+  }
   if ($Handoff.findings -isnot [array] -or $Handoff.findings.Count -gt 100) { throw 'Review handoff has invalid findings.' }
   if ($Session.mode -eq 'docs' -and @($Handoff.findings | Where-Object { $_.category -notmatch '(?i)document|architecture' }).Count) {
     throw 'Documentation review contains an out-of-scope finding.'

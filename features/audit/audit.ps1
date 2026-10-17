@@ -123,10 +123,8 @@ function Invoke-MeowskyAuditFeature {
   $mapContent = New-MeowskyAuditMap -Inventory $inventory -Quick
   $written = Write-MeowskyAuditReport -Root $inventory.Root -Content $content
   "Audit report: $($written.State) $($written.Path)"
-  if ($written.Backup) { "Previous report backup: $($written.Backup)" }
   $mapWritten = Write-MeowskyAuditReport -Root $inventory.Root -Content $mapContent -Name 'MAP.md'
   "Workspace map: $($mapWritten.State) $($mapWritten.Path)"
-  if ($mapWritten.Backup) { "Previous map backup: $($mapWritten.Backup)" }
   $currentFingerprint = Get-MeowskyAuditFingerprint -Inventory (Get-MeowskyAuditInventory -Root $root)
   if ($currentFingerprint -cne $fingerprint) { throw 'Workspace changed during audit generation. Run meowsky audit again.' }
   $pending.audit.status = 'complete'

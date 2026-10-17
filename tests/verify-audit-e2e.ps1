@@ -158,7 +158,7 @@ try {
   Assert-Audit ($script:mockCalls -eq $callsBeforeQuick -and $tsQuick.Contains('Codex was not invoked')) 'Quick audit skips Codex'
   $cDefault = (meowsky audit $c) -join "`n"
   Assert-Audit ($cDefault.Contains('Audit state: complete; review pending.') -and $script:mockCalls -eq $callsBeforeQuick) 'Default audit writes state without Codex'
-  $null = meowsky review $c
+  $null = meowsky review $c --interactive
   Assert-Audit ($script:reviewLaunches -eq 1) 'Gitless project launches mocked interactive review'
   try { $null = meowsky refactor $c; throw 'Refactor gate should have blocked.' }
   catch { Assert-Audit ($_.Exception.Message -like 'Review is incomplete*') 'Refactor gate requires completed review' }

@@ -36,7 +36,8 @@ and section anchors are not verified.
 
 Audit does not invoke Codex. Semantic review is pending until meowsky review
 is explicitly completed. Every audit writes .meowsky/AUDIT.md,
-.meowsky/MAP.md, and state.json, with changed prior outputs backed up. A
+.meowsky/MAP.md, and state.json. Changed outputs are replaced without creating
+backups; existing backup files from older versions are left in place. A
 failed or interrupted audit leaves state pending, blocking later stages.
 Audit never writes application source. Report source links are checked
 against the discovery inventory at generation time. The map links to inventoried

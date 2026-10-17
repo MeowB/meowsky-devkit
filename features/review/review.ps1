@@ -20,16 +20,23 @@ function New-MeowskyReviewPrompt {
   foreach ($finding in @($allFindings | Select-Object -First 15)) { $lines.Add("$($finding.Id) $($finding.Category) $($finding.Path): $($finding.Evidence)") }
   foreach ($category in @('Configuration','Documentation','Source','Test')) {
     $files = @($Inventory.Files | Where-Object Category -eq $category | Sort-Object Path)
-    $lines.Add("${category} ($($files.Count), first 20): $((@($files | Select-Object -First 20 | ForEach-Object Path)) -join ', ')")
+    if ($category -eq 'Documentation') {
+      $lines.Add("${category} ($($files.Count), first 20): $((@($files | Select-Object -First 20 | ForEach-Object Path)) -join ', ')")
+    } else { $lines.Add("${category}: $($files.Count) file(s); see required review paths below.") }
   }
   $summary = $lines -join "`n"
-  if ($summary.Length -gt 6500) { $summary = $summary.Substring(0, 6500) + "`n[Summary truncated. Inspect the workspace when necessary.]" }
+  if ($summary.Length -gt 4500) { $summary = $summary.Substring(0, 4500) + "`n[Summary truncated. Inspect the workspace when necessary.]" }
+  $required = @($Inventory.Files | Where-Object { $_.Category -in @('Source','Test','Configuration') } | Sort-Object Path | ForEach-Object Path)
+  $requiredPaths = if ($Mode -eq 'full') { $required -join "`n" } else { 'Documentation mode has no mandatory source-file list.' }
+  if ($requiredPaths.Length -gt 7000) {
+    $requiredPaths = $requiredPaths.Substring(0, 7000) + "`n[Path list truncated. Enumerate remaining source, test, and configuration files; all are still required for full-review completion.]"
+  }
   $previous = @($History | Where-Object { $null -ne $_ } | Select-Object -Last 30 | ForEach-Object {
     "$($_.id) [$($_.status)] $($_.path): $($_.evidence) Decision: $($_.rationale)"
   }) -join "`n"
   if (-not $previous) { $previous = 'No previous full-review findings are recorded.' }
-  if ($previous.Length -gt 8000) { $previous = $previous.Substring(0, 8000) + "`n[History truncated; inspect state.json for older decisions.]" }
-  (Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot 'review-prompt.md')).Replace('$mode', $Mode).Replace('$session', $SessionId).Replace('$root', $Inventory.Root).Replace('$summary', $summary).Replace('$history', $previous)
+  if ($previous.Length -gt 5000) { $previous = $previous.Substring(0, 5000) + "`n[History truncated; inspect state.json for older decisions.]" }
+  (Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot 'review-prompt.md')).Replace('$mode', $Mode).Replace('$session', $SessionId).Replace('$root', $Inventory.Root).Replace('$summary', $summary).Replace('$history', $previous).Replace('$requiredPaths', $requiredPaths)
 }
 
 function Set-MeowskyReviewHistory {
@@ -188,19 +195,20 @@ function Complete-MeowskyReview {
 
 function Invoke-MeowskyReviewFeature {
   param([string]$Target, [string]$WorkRoot, [string[]]$Arguments)
-  $usage = 'Usage: meowsky review [<directory>] [--docs] [--help] | meowsky review [<directory>] --complete [<json-file>] | meowsky review [<directory>] --decide <json-file>'
+  $usage = 'Usage: meowsky review [<directory>] [--docs] [--interactive] [--help] | meowsky review [<directory>] --complete [<json-file>] | meowsky review [<directory>] --decide <json-file>'
   $tokens = @()
   if ($Target) { $tokens += $Target }
   if ($Arguments) { $tokens += $Arguments }
   if ($tokens.Count -eq 1 -and $tokens[0] -eq '--help') {
     return (Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot 'help.txt'))
   }
-  $directory = ''; $mode = 'full'; $complete = $false; $decide = $false; $handoffPath = ''
+  $directory = ''; $mode = 'full'; $complete = $false; $decide = $false; $interactive = $false; $handoffPath = ''
   foreach ($token in $tokens) {
     switch -CaseSensitive ($token) {
       '--docs' { if ($mode -eq 'docs' -or $complete -or $decide) { throw $usage }; $mode = 'docs' }
-      '--complete' { if ($complete -or $decide -or $mode -eq 'docs') { throw $usage }; $complete = $true }
-      '--decide' { if ($complete -or $decide -or $mode -eq 'docs') { throw $usage }; $decide = $true }
+      '--interactive' { if ($interactive -or $complete -or $decide) { throw $usage }; $interactive = $true }
+      '--complete' { if ($complete -or $decide -or $interactive -or $mode -eq 'docs') { throw $usage }; $complete = $true }
+      '--decide' { if ($complete -or $decide -or $interactive -or $mode -eq 'docs') { throw $usage }; $decide = $true }
       default {
         if ($token.StartsWith('-')) { throw $usage }
         if (($complete -or $decide) -and -not $directory -and $token -match '(?i)\.json$' -and (Test-Path -LiteralPath $token -PathType Leaf)) { $handoffPath = $token; continue }
@@ -222,7 +230,6 @@ function Invoke-MeowskyReviewFeature {
   $static = Get-MeowskyAuditStaticFindings -Inventory $inventory
   $id = [guid]::NewGuid().ToString('N')
   $prompt = New-MeowskyReviewPrompt -Inventory $inventory -StaticReport $static -Mode $mode -SessionId $id -History @($state.history)
-  $promptPath = New-MeowskyCodexPromptFile -Prompt $prompt
   if ($mode -eq 'full') {
     $state.review = [ordered]@{ status = 'pending' }
     $state.PSObject.Properties.Remove('refactor')
@@ -230,8 +237,30 @@ function Invoke-MeowskyReviewFeature {
   $state | Add-Member -NotePropertyName activeReview -NotePropertyValue ([ordered]@{
       id = $id; mode = $mode; auditFingerprint = $state.audit.fingerprint; startedAt = (Get-Date).ToString('o') }) -Force
   $null = Write-MeowskyAuditState -Root $root -State $state
-  Write-Host "Interactive $mode review started. Session $id. Copy its final JSON to clipboard, then run meowsky review --complete."
-  Invoke-MeowskyCodex -Root $root -PromptPath $promptPath -Arguments @('--sandbox','read-only','--ask-for-approval','never',
-    '--disable','hooks','--disable','plugins','--disable','apps')
-  Write-Host 'Codex session ended. Review remains pending until meowsky review --complete validates its handoff.'
+  if ($interactive) {
+    $promptPath = New-MeowskyCodexPromptFile -Prompt $prompt
+    Write-Host "Interactive $mode review started. Session $id. Copy its final JSON to clipboard, then run meowsky review --complete."
+    Invoke-MeowskyCodex -Root $root -PromptPath $promptPath -Arguments @('--sandbox','read-only','--ask-for-approval','never',
+      '--disable','hooks','--disable','plugins','--disable','apps')
+    Write-Host 'Codex session ended. Review remains pending until meowsky review --complete validates its handoff.'
+    return
+  }
+  $outputPath = Join-Path ([IO.Path]::GetTempPath()) ("meowsky-review-$id.json")
+  try {
+    Write-Host "Reviewing $root ($mode). Reading project files"
+    $run = Invoke-MeowskyAuditCodexProcess -Command (Resolve-MeowskyCodexCommand) -Root $root -Prompt $prompt -TimeoutSeconds 1800 -ProgressLabel 'Review' -Arguments @(
+      '--ask-for-approval','never','exec','--skip-git-repo-check','--ephemeral','--ignore-user-config',
+      '--sandbox','read-only','--disable','hooks','--disable','plugins','--disable','apps',
+      '--output-last-message',$outputPath)
+    if ($run.TimedOut) { throw 'Review timed out. Review remains pending; run meowsky review again.' }
+    if ($run.ExitCode -ne 0) {
+      $reason = ([string]$run.StdErr).Trim()
+      if ($reason.Length -gt 500) { $reason = $reason.Substring($reason.Length - 500) }
+      throw "Codex review failed with exit code $($run.ExitCode). $reason Review remains pending."
+    }
+    if (-not (Test-Path -LiteralPath $outputPath -PathType Leaf)) { throw 'Codex returned no review handoff. Review remains pending.' }
+    Complete-MeowskyReview -Root $root -HandoffPath $outputPath
+  } finally {
+    if (Test-Path -LiteralPath $outputPath) { Remove-Item -LiteralPath $outputPath -Force -ErrorAction SilentlyContinue }
+  }
 }

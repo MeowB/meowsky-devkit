@@ -207,24 +207,17 @@ function Write-MeowskyAuditReport {
     }
     $oldBytes = [IO.File]::ReadAllBytes($target)
     if ([Convert]::ToBase64String($oldBytes) -ceq [Convert]::ToBase64String($bytes)) {
-      return [pscustomobject]@{ Path = $target; State = 'Unchanged'; Backup = '' }
+      return [pscustomobject]@{ Path = $target; State = 'Unchanged' }
     }
   }
   $baseName = [IO.Path]::GetFileNameWithoutExtension($Name)
   $temp = Join-Path $directory ('.' + $baseName + '-' + [guid]::NewGuid().ToString('N') + '.tmp')
-  $backup = ''
   try {
     [IO.File]::WriteAllBytes($temp, $bytes)
-    if ($existing) {
-      $backup = Join-Path $directory ($baseName + '-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '-' + [guid]::NewGuid().ToString('N') + [IO.Path]::GetExtension($Name) + '.bak')
-      [IO.File]::Copy($target, $backup, $false)
-      if ((Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash -cne (Get-FileHash -LiteralPath $backup -Algorithm SHA256).Hash) {
-        throw 'Audit report backup verification failed; existing report was preserved.'
-      }
-      [IO.File]::Replace($temp, $target, [NullString]::Value)
-    } else { [IO.File]::Move($temp, $target) }
+    if ($existing) { [IO.File]::Replace($temp, $target, [NullString]::Value) }
+    else { [IO.File]::Move($temp, $target) }
   } finally {
     if (Test-Path -LiteralPath $temp) { Remove-Item -LiteralPath $temp -Force }
   }
-  [pscustomobject]@{ Path = $target; State = if ($existing) { 'Replaced' } else { 'Created' }; Backup = $backup }
+  [pscustomobject]@{ Path = $target; State = if ($existing) { 'Replaced' } else { 'Created' } }
 }

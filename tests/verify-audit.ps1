@@ -54,10 +54,27 @@ try {
   }
   function Resolve-MeowskyCodexCommand { if ($script:auditCodexAvailable) { 'mock-codex.ps1' } }
   function Invoke-MeowskyAuditCodexProcess {
-    param($Command, $Root, [string[]]$Arguments, $Prompt, $TimeoutSeconds)
+    param($Command, $Root, [string[]]$Arguments, $Prompt, $TimeoutSeconds, $ProgressLabel)
     $script:auditInvocationCount++
     $script:auditLastArguments = $Arguments
     $script:auditLastPrompt = $Prompt
+    $outputIndex = [Array]::IndexOf($Arguments, '--output-last-message')
+    if ($outputIndex -ge 0) {
+      $script:lastHeadlessOutputPath = $Arguments[$outputIndex + 1]
+      if ($script:headlessReviewMode -eq 'failed') { return [pscustomobject]@{ ExitCode = 1; TimedOut = $false; StdOut = ''; StdErr = 'fixture failure' } }
+      if ($script:headlessReviewMode -eq 'timeout') { return [pscustomobject]@{ ExitCode = -1; TimedOut = $true; StdOut = ''; StdErr = '' } }
+      $session = (Read-MeowskyAuditState -Root $Root).activeReview
+      $requiredPaths = @((Get-MeowskyAuditInventory -Root $Root).Files | Where-Object { $_.Category -in @('Source','Test','Configuration') } | ForEach-Object Path)
+      if ($script:headlessReviewMode -eq 'partial') { $requiredPaths = @($requiredPaths | Select-Object -Skip 1) }
+      $response = @{ version = 1; session_id = $session.id; mode = $session.mode; status = 'complete'
+        summary = 'Inspected the fixture.'; reviewed_paths = @('README.md') + $requiredPaths
+        limitations = @(); map = $null; findings = @() }
+      if ($script:headlessReviewMode -eq 'incomplete') { $response.status = 'incomplete' }
+      $payload = $response | ConvertTo-Json -Depth 8
+      if ($script:headlessReviewMode -eq 'fenced') { $payload = '```json' + "`n" + $payload + "`n" + '```' }
+      [IO.File]::WriteAllText($Arguments[$outputIndex + 1], $payload)
+      return [pscustomobject]@{ ExitCode = 0; TimedOut = $false; StdOut = ''; StdErr = '' }
+    }
     if ($script:auditMockMode -eq 'auth') { return [pscustomobject]@{ ExitCode = 1; TimedOut = $false; StdOut = ''; StdErr = 'Not logged in' } }
     if ($script:auditMockMode -eq 'timeout') { return [pscustomobject]@{ ExitCode = -1; TimedOut = $true; StdOut = ''; StdErr = '' } }
     if ($script:auditMockMode -eq 'malformed') { return [pscustomobject]@{ ExitCode = 0; TimedOut = $false; StdOut = 'not-json'; StdErr = '' } }
@@ -368,7 +385,6 @@ try {
     $relativePath = [Uri]::UnescapeDataString($link.Groups['path'].Value).Replace('/', '\')
     Assert-Equal (Test-Path -LiteralPath (Join-Path $issues $relativePath)) $true "Report link exists: $relativePath"
   }
-  $reportHash = (Get-FileHash -LiteralPath $reportPath -Algorithm SHA256).Hash
   $reportEntries = Get-FixtureEntries
   $reportHashes = Get-FixtureContentHashes
   $normalAfterRefresh = (meowsky audit $issues) -join "`n"
@@ -390,14 +406,22 @@ try {
   $sameMap = (meowsky audit $issues --quick --refresh) -join "`n"
   Assert-Equal ($sameMap.Contains('Workspace map: Unchanged')) $true 'Repeat quick refresh preserves identical map'
   Assert-Equal (Get-FileHash -LiteralPath $mapPath -Algorithm SHA256).Hash $quickMapHash 'Repeat generation keeps identical map bytes'
+  $quickReportHash = (Get-FileHash -LiteralPath $reportPath -Algorithm SHA256).Hash
   $changedText = $quickText.TrimEnd("`r", "`n") + "`n<!-- fixture change -->"
-  $null = Write-MeowskyAuditReport -Root $issues -Content $changedText
-  $backup = @(Get-ChildItem -LiteralPath (Join-Path $issues '.meowsky') -Filter 'AUDIT-*.md.bak')
-  Assert-Equal ($backup.Count -ge 1) $true 'Changed report creates a backup'
-  Assert-Equal (@($backup | Where-Object { (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash -eq $reportHash }).Count -ge 1) $true 'Backup retains prior report bytes'
+  $changed = Write-MeowskyAuditReport -Root $issues -Content $changedText
+  Assert-Equal $changed.State 'Replaced' 'Changed report replaces existing output'
+  Assert-Equal ((Get-FileHash -LiteralPath $reportPath -Algorithm SHA256).Hash -ne $quickReportHash) $true 'Changed report writes new bytes'
   $unchanged = Write-MeowskyAuditReport -Root $issues -Content $changedText
   Assert-Equal $unchanged.State 'Unchanged' 'Identical report content avoids replacement'
-  Assert-Equal @(Get-ChildItem -LiteralPath (Join-Path $issues '.meowsky') -Filter 'AUDIT-*.md.bak').Count $backup.Count 'Identical content avoids another backup'
+  $changedReportHash = (Get-FileHash -LiteralPath $reportPath -Algorithm SHA256).Hash
+  $null = Write-MeowskyAuditReport -Root $issues -Content ($changedText + "`n<!-- second change -->")
+  Assert-Equal ((Get-FileHash -LiteralPath $reportPath -Algorithm SHA256).Hash -ne $changedReportHash) $true 'Subsequent replacement writes new bytes'
+  Assert-Equal @(Get-ChildItem -LiteralPath (Join-Path $issues '.meowsky') -Filter '*.bak' -Recurse -File).Count 0 'Repeated writes create no backups'
+  Assert-Equal (Test-Path -LiteralPath (Join-Path $issues '.meowsky/backups')) $false 'Writer creates no backup directory'
+  $legacyBackup = Join-Path $issues '.meowsky/AUDIT-legacy.md.bak'
+  Set-Content -LiteralPath $legacyBackup -Value 'previous version'
+  $null = Write-MeowskyAuditReport -Root $issues -Content $changedText
+  Assert-Equal (Get-Content -Raw -LiteralPath $legacyBackup) "previous version`r`n" 'Existing legacy backup is left untouched'
   $script:auditMockMode = 'timeout'
   $failedRefresh = (meowsky audit $issues --refresh) -join "`n"
   Assert-Equal ($failedRefresh.Contains('Audit state: complete; review pending.')) $true 'Audit does not invoke timed-out Codex mock'
@@ -420,8 +444,7 @@ try {
   $plainMapHash = (Get-FileHash -LiteralPath $plainMapPath -Algorithm SHA256).Hash
   $plainRefresh = (meowsky audit $plain --quick --refresh) -join "`n"
   Assert-Equal ($plainRefresh.Contains('Workspace map: Unchanged')) $true 'Unchanged map is preserved on refresh'
-  $plainMapBackup = @(Get-ChildItem -LiteralPath (Join-Path $plain '.meowsky') -Filter 'MAP-*.md.bak')
-  Assert-Equal ($plainMapBackup.Count -ge 1) $true 'Preexisting map was preserved during first audit'
+  Assert-Equal (Test-Path -LiteralPath (Join-Path $plain '.meowsky/backups')) $false 'Preexisting map does not cause backup creation'
   Assert-Equal (Get-FileHash -LiteralPath $plainMapPath -Algorithm SHA256).Hash $plainMapHash 'Map retains previous bytes'
   Assert-Equal (Test-Path -LiteralPath (Join-Path $plain '.meowskyignore')) $true 'Refresh preserves unrelated project exclusion configuration'
 
@@ -457,12 +480,12 @@ try {
   Assert-Equal $savedState.review.status 'pending' 'Review initially remains pending'
   Assert-Equal $savedState.audit.coverage 'complete within exclusions' 'State records coverage'
   Assert-Equal ($savedState.audit.fingerprint -match '^[A-F0-9]{64}$') $true 'Input fingerprint is SHA256'
-  $null = meowsky review $issues
+  $null = meowsky review $issues --interactive
   Assert-Equal $script:reviewInvocations 1 'Review launches interactive Codex once'
   Assert-Equal ($script:lastReviewArguments -join ' ') '--sandbox read-only --ask-for-approval never --disable hooks --disable plugins --disable apps' 'Review enforces read-only launch options'
   Assert-Equal ($script:lastReviewPrompt.Contains('Review session:')) $true 'Review prompt identifies handoff session'
   Set-Location $issues
-  $null = meowsky review
+  $null = meowsky review --interactive
   Assert-Equal $script:reviewInvocations 2 'Review defaults to current directory'
   Set-Location $fixture
   Assert-Error { meowsky refactor $issues } 'Review is incomplete*'
@@ -478,14 +501,14 @@ try {
   Assert-Error { meowsky review $issues } 'Audit is stale*'
   Assert-Error { meowsky refactor $issues } 'Audit is stale*'
   [IO.File]::WriteAllBytes($sourcePath, $originalSource)
-  $null = meowsky review $issues
+  $null = meowsky review $issues --interactive
   Assert-Equal $script:reviewInvocations 3 'Restored input restores review launch'
 
   $excludePath = Join-Path $issues '.meowskyignore'
   [IO.File]::WriteAllText($excludePath, 'src/large.ps1')
   Assert-Error { meowsky review $issues } 'Audit is stale*'
   Remove-Item -LiteralPath $excludePath -Force
-  $null = meowsky review $issues
+  $null = meowsky review $issues --interactive
   Assert-Equal $script:reviewInvocations 4 'Restored exclusions restore review launch'
 
   $reportBytes = [IO.File]::ReadAllBytes($reportPath)
@@ -500,7 +523,7 @@ try {
   Assert-Error { meowsky review $issues } 'Audit is incomplete*'
   Set-Item Function:New-MeowskyAuditMap $originalMapFunction
   $null = meowsky audit $issues
-  $null = meowsky review $issues
+  $null = meowsky review $issues --interactive
   Assert-Equal $script:reviewInvocations 5 'Successful retry restores review launch'
 
   $session = (Get-Content -Raw -LiteralPath $statePath | ConvertFrom-Json).activeReview.id
@@ -508,7 +531,8 @@ try {
   $handoffPath = Join-Path $fixture 'review-handoff.json'
   $handoff = @{
     version = 1; session_id = $session; mode = 'full'; status = 'complete'; summary = 'Inspected documentation and runner.'
-    reviewed_paths = @('README.md', 'scripts/used.ps1'); limitations = @('Other files were not inspected.'); map = $null; findings = @()
+    reviewed_paths = @('README.md') + @((Get-MeowskyAuditInventory -Root $issues).Files | Where-Object { $_.Category -in @('Source','Test','Configuration') } | ForEach-Object Path)
+    limitations = @('Other documentation was not inspected.'); map = $null; findings = @()
   }
   $handoff | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $handoffPath
   Assert-Equal (Get-Content -Raw -LiteralPath $statePath | ConvertFrom-Json).review.status 'pending' 'Session exit cannot complete review'
@@ -521,6 +545,9 @@ try {
   $bad = $handoff.Clone(); $bad.reviewed_paths = @('outside.ps1')
   $bad | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $handoffPath
   Assert-Error { meowsky review $issues --complete $handoffPath } 'Review handoff has an invalid or duplicate reviewed path*'
+  $bad = $handoff.Clone(); $bad.reviewed_paths = @('README.md','scripts/used.ps1')
+  $bad | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $handoffPath
+  Assert-Error { meowsky review $issues --complete $handoffPath } 'Full review did not inspect*'
   $finding = @{ id = 'S001'; category = 'Documentation'; path = 'README.md'; line = 9999;
     evidence = 'The guide reference needs review.'; recommendation = 'Verify the guide link.'; priority = 'low'; confidence = 'medium';
     impact = 'Clearer navigation.'; risk = 'Link changes could misdirect readers.'; affected_paths = @('README.md');
@@ -536,7 +563,7 @@ try {
   Assert-Equal $reviewState.review.approval 'pending' 'Plan remains unapproved'
   Assert-Equal ((Get-Content -Raw -LiteralPath (Join-Path $issues '.meowsky/PLAN.md')).Contains('No justified refactoring tasks')) $true 'Empty review creates no invented work'
   Assert-Error { meowsky refactor $issues } 'No findings are explicitly approved*'
-  $null = meowsky review $issues
+  $null = meowsky review $issues --interactive
   $finding.line = 1
   $handoff.session_id = (Get-Content -Raw -LiteralPath $statePath | ConvertFrom-Json).activeReview.id
   $handoff.findings = @($finding)
@@ -557,7 +584,7 @@ try {
   $reviewState = Get-Content -Raw -LiteralPath $statePath | ConvertFrom-Json
   $reviewState.review.approval = 'approved'
   $null = Write-MeowskyAuditState -Root $issues -State $reviewState
-  $null = meowsky review $issues --docs
+  $null = meowsky review $issues --docs --interactive
   Assert-Equal (Get-Content -Raw -LiteralPath $statePath | ConvertFrom-Json).review.approval 'approved' 'Docs launch preserves approval state'
   $docsSession = (Get-Content -Raw -LiteralPath $statePath | ConvertFrom-Json).activeReview.id
   $docsHandoff = @{
@@ -577,6 +604,44 @@ try {
   Assert-Equal ((Get-Content -Raw -LiteralPath (Join-Path $issues '.meowsky/AUDIT.md')).Contains('Guide and entry point inspected.')) $true 'Docs mode enriches audit'
   Assert-Equal ((Get-Content -Raw -LiteralPath (Join-Path $issues '.meowsky/AUDIT.md')).Contains('guide reference needs review')) $true 'Docs mode preserves full review findings'
   Assert-Equal (Get-FileHash -LiteralPath (Join-Path $issues 'scripts/used.ps1') -Algorithm SHA256).Hash $reviewSourceHash 'Review and completion leave application source unchanged'
+
+  $autoRoot = Join-Path $fixture 'automatic review'
+  New-Item -ItemType Directory -Path (Join-Path $autoRoot 'src'),(Join-Path $autoRoot 'tests') -Force | Out-Null
+  Set-Content -LiteralPath (Join-Path $autoRoot 'README.md') -Value '# Automatic review fixture'
+  Set-Content -LiteralPath (Join-Path $autoRoot 'package.json') -Value '{"name":"review-fixture"}'
+  Set-Content -LiteralPath (Join-Path $autoRoot 'src/main.js') -Value 'console.log("ready")'
+  Set-Content -LiteralPath (Join-Path $autoRoot 'tests/main.test.js') -Value 'console.log("test")'
+  $autoSourceHash = (Get-FileHash -LiteralPath (Join-Path $autoRoot 'src/main.js') -Algorithm SHA256).Hash
+  $null = meowsky audit $autoRoot
+  $script:headlessReviewMode = 'partial'
+  Assert-Error { meowsky review $autoRoot } 'Full review did not inspect*'
+  Assert-Equal (Read-MeowskyAuditState -Root $autoRoot).review.status 'pending' 'Partial headless review remains pending'
+  Assert-Equal (Test-Path -LiteralPath (Join-Path $autoRoot '.meowsky/PLAN.md')) $false 'Partial review creates no plan'
+  $script:headlessReviewMode = 'incomplete'
+  Assert-Error { meowsky review $autoRoot } 'Review handoff is incomplete*'
+  $script:headlessReviewMode = 'failed'
+  Assert-Error { meowsky review $autoRoot } 'Codex review failed with exit code 1*'
+  $script:headlessReviewMode = 'timeout'
+  Assert-Error { meowsky review $autoRoot } 'Review timed out*'
+  $script:headlessReviewMode = 'complete'
+  $autoOutput = (meowsky review $autoRoot) -join "`n"
+  Assert-Equal ($autoOutput.Contains('Review complete (full)')) $true 'Headless review completes and writes artifacts in one command'
+  Assert-Equal (Read-MeowskyAuditState -Root $autoRoot).review.status 'complete' 'Validated headless review completes state'
+  Assert-Equal ((Get-Content -Raw -LiteralPath (Join-Path $autoRoot '.meowsky/PLAN.md')).Contains('No justified refactoring tasks')) $true 'Headless empty review writes an unapproved plan'
+  Assert-Equal ($script:auditLastArguments -contains 'exec') $true 'Headless review uses Codex exec'
+  Assert-Equal ($script:auditLastArguments -contains '--skip-git-repo-check') $true 'Headless review supports projects without Git'
+  Assert-Equal ($script:auditLastArguments -contains 'read-only') $true 'Headless review requests read-only sandbox'
+  Assert-Equal ($script:auditLastPrompt.Contains('src/main.js')) $true 'Review prompt lists required source paths'
+  Assert-Equal (Test-Path -LiteralPath $script:lastHeadlessOutputPath) $false 'Temporary headless handoff is removed'
+  Assert-Equal (Get-FileHash -LiteralPath (Join-Path $autoRoot 'src/main.js') -Algorithm SHA256).Hash $autoSourceHash 'Headless review preserves application source'
+  $autoState = Read-MeowskyAuditState -Root $autoRoot
+  $autoState.review.approval = 'approved'
+  $null = Write-MeowskyAuditState -Root $autoRoot -State $autoState
+  $autoPlanHash = (Get-FileHash -LiteralPath (Join-Path $autoRoot '.meowsky/PLAN.md') -Algorithm SHA256).Hash
+  $script:headlessReviewMode = 'fenced'
+  Assert-Equal (((meowsky review $autoRoot --docs) -join "`n").Contains('Review complete (docs)')) $true 'Headless docs review completes without clipboard handoff'
+  Assert-Equal (Read-MeowskyAuditState -Root $autoRoot).review.approval 'approved' 'Headless docs review preserves full approval state'
+  Assert-Equal (Get-FileHash -LiteralPath (Join-Path $autoRoot '.meowsky/PLAN.md') -Algorithm SHA256).Hash $autoPlanHash 'Headless docs review preserves existing plan'
 
   $mockCli = Join-Path $fixture 'mock-codex.ps1'
   Set-Content -LiteralPath $mockCli -Value @('param($Mode, $Payload)', 'Write-Output $Payload', 'exit 0')

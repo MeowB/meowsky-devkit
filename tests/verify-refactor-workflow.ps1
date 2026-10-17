@@ -42,12 +42,12 @@ try {
   Assert-Refactor (-not (Test-Path (Join-Path $project '.git'))) 'Project has no Git repository'
   Assert-RefactorError { meowsky refactor $project } 'Review is incomplete*'
   Assert-RefactorError { meowsky refactor $project --prepare S001 } 'Review is incomplete*'
-  $null = meowsky review $project
+  $null = meowsky review $project --interactive
   $reviewSession = (Read-MeowskyAuditState -Root $project).activeReview.id
   $reviewFile = Join-Path $fixture 'review.json'
   $review = @{
     version = 1; session_id = $reviewSession; mode = 'full'; status = 'complete'
-    summary = 'Inspected the fixture.'; reviewed_paths = @('README.md','src/main.ps1')
+    summary = 'Inspected the fixture.'; reviewed_paths = @('README.md','src/main.ps1','src/other.ps1')
     limitations = @(); map = $null
     findings = @(@{ id = 'S001'; category = 'Code quality'; path = 'src/main.ps1'; line = 1
       evidence = 'The command emits the old value.'; recommendation = 'Update the value to the approved output.'
@@ -152,7 +152,7 @@ try {
   $null = meowsky audit $project
   $state = Read-MeowskyAuditState -Root $project
   Assert-Refactor (@($state.history | Where-Object id -EQ 'S001').Count -eq 1) 'New audit preserves finding history'
-  $null = meowsky review $project
+  $null = meowsky review $project --interactive
   Assert-Refactor ($script:launches[-1].Prompt.Contains('S001 [resolved]')) 'Next review receives resolved decision'
   $review.session_id = (Read-MeowskyAuditState -Root $project).activeReview.id
   $review.findings[0].evidence = 'The command emits the new value.'
@@ -172,10 +172,10 @@ try {
   Assert-RefactorError { meowsky refactor $project --prepare S001 } 'Finding S001 is resolved*'
 
   $null = meowsky audit $project
-  $null = meowsky review $project
+  $null = meowsky review $project --interactive
   $review.session_id = (Read-MeowskyAuditState -Root $project).activeReview.id
   $review.summary = 'Found a concern in the other script.'
-  $review.reviewed_paths = @('README.md','src/other.ps1')
+  $review.reviewed_paths = @('README.md','src/main.ps1','src/other.ps1')
   $review.findings = @(@{ id = 'S002'; category = 'Code quality'; path = 'src/other.ps1'; line = 1
       evidence = 'The other script emits a value.'; recommendation = 'Consider changing the value.'
       priority = 'low'; confidence = 'medium'; impact = 'Could improve output.'; risk = 'Output consumers may change.'
@@ -189,7 +189,7 @@ try {
   $null = meowsky review $project --decide $decisionFile
   Assert-RefactorError { meowsky refactor $project --prepare S002 } 'Finding S002 is rejected*'
   $null = meowsky audit $project
-  $null = meowsky review $project
+  $null = meowsky review $project --interactive
   Assert-Refactor ($script:launches[-1].Prompt.Contains('S002 [rejected]')) 'Rejected decision survives audit and appears in review prompt'
   $review.session_id = (Read-MeowskyAuditState -Root $project).activeReview.id
   $review | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $reviewFile
@@ -201,7 +201,7 @@ try {
   Assert-Refactor ((Get-Content -Raw -LiteralPath $planPath).Contains('No justified refactoring tasks')) 'Rejected concern does not return in next plan'
   [IO.File]::WriteAllText((Join-Path $project 'src/other.ps1'), "Write-Output 'changed'`n")
   $null = meowsky audit $project
-  $null = meowsky review $project
+  $null = meowsky review $project --interactive
   $review.session_id = (Read-MeowskyAuditState -Root $project).activeReview.id
   $review.findings = @(@{ id = 'S002'; category = 'Code quality'; path = 'src/other.ps1'; line = 1
       evidence = 'The changed output now conflicts with the documented behavior.'; recommendation = 'Restore the documented output.'
