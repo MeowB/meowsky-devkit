@@ -80,6 +80,12 @@ try {
   $script:mockMode = 'complete'
   $script:mockArguments = @()
   function Resolve-MeowskyCodexCommand { 'mock-codex.ps1' }
+  $script:reviewLaunches = 0
+  function Invoke-MeowskyCodex {
+    param([string]$Root, [string]$PromptPath, [string[]]$Arguments)
+    $script:reviewLaunches++
+    Remove-Item -LiteralPath $PromptPath -Force
+  }
   function Invoke-MeowskyAuditCodexProcess {
     param($Command, $Root, [string[]]$Arguments, $Prompt, $TimeoutSeconds)
     $script:mockCalls++
@@ -139,7 +145,8 @@ try {
   Assert-Audit ($script:mockCalls -eq $callsBeforeQuick -and $tsQuick.Contains('Codex was not invoked')) 'Quick audit skips Codex'
   $cDefault = (meowsky audit $c) -join "`n"
   Assert-Audit ($cDefault.Contains('Audit state: complete; review pending.') -and $script:mockCalls -eq $callsBeforeQuick) 'Default audit writes state without Codex'
-  Assert-Audit (((meowsky review $c) -join "`n").Contains('Review is allowed')) 'Gitless project reaches review gate'
+  $null = meowsky review $c
+  Assert-Audit ($script:reviewLaunches -eq 1) 'Gitless project launches mocked interactive review'
   try { $null = meowsky refactor $c; throw 'Refactor gate should have blocked.' }
   catch { Assert-Audit ($_.Exception.Message -like 'Review is incomplete*') 'Refactor gate requires completed review' }
   $psDefault = (meowsky audit $ps) -join "`n"

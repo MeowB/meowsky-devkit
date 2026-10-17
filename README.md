@@ -167,8 +167,10 @@ When `meowsky ./` runs in any folder, it opens a fullscreen Windows Terminal lay
 | `meowsky audit [directory]` | Run filesystem discovery and static checks, then write `.meowsky/MAP.md`, `AUDIT.md`, and `state.json`; no Codex invocation. |
 | `meowsky audit [directory] --quick` | Compatibility option for the same local audit. |
 | `meowsky audit [directory] --refresh` | Compatibility option; every audit now regenerates the artifacts. |
-| `meowsky review [directory]` | Check whether the saved audit is complete and current; interactive review is not yet implemented. |
-| `meowsky refactor [directory]` | Check review prerequisites; refactoring is not yet implemented. |
+| `meowsky review [directory]` | Start a read-only interactive Codex review after a current audit. |
+| `meowsky review [directory] --docs` | Review architecture and documentation without replacing the full plan. |
+| `meowsky review [directory] --complete [json-file]` | Validate the session handoff and save reviewed artifacts. |
+| `meowsky refactor [directory]` | Check review and plan prerequisites; refactoring is not yet implemented. |
 | `meowsky audit [directory] --refactor-prompt 'V001,S002'` | Print the legacy planning prompt only after completed review. |
 | `meowsky color` | Explain retired project color overrides; all panels inherit the active Terminal theme. |
 | `meowsky identity` | Describe the Identity system; no settings are applied. |
@@ -194,7 +196,7 @@ When `meowsky ./` runs in any folder, it opens a fullscreen Windows Terminal lay
 
 `meowsky audit` accepts any local directory, including projects without Git. It reports verified static issues, investigation candidates, and coverage limits, then writes `.meowsky/AUDIT.md`, `.meowsky/MAP.md`, and `state.json`. It never invokes Codex or edits application source. Changed existing outputs receive backups. The report marks semantic review pending. Source links confirm path existence at generation time; they do not establish architectural truth. `--quick` and `--refresh` remain accepted as compatibility options.
 
-`meowsky review` now checks for a current completed audit, and `meowsky refactor` checks for a completed review. They are prerequisite gates in this migration chunk: neither launches Codex or changes source yet. The existing [manual refactoring template](features/audit/refactor-prompt.md) remains available for later stages. Run `meowsky audit --help` for scan limits and coverage details. The six-fixture Windows validation is `powershell -NoProfile -ExecutionPolicy Bypass -File tests/verify-audit-e2e.ps1`.
+`meowsky review` requires a current audit and launches the existing interactive Codex CLI in a read-only sandbox with hooks, plugins, and apps disabled. It asks Codex to inspect relevant source and return one JSON handoff. Copy that JSON to the clipboard, then run `meowsky review --complete` in the same workspace, or pass a JSON file outside the project. Meowsky validates the session, source references, line bounds, and fingerprint before updating `MAP.md` and `AUDIT.md`. Full review also creates an **unapproved** `PLAN.md`. Ending the Codex session alone leaves review pending. `--docs` enriches documentation without replacing a valid full plan or approval state. The read-only CLI settings cannot rule out effects from every user configuration or external tool; the prompt forbids project tooling, and completion checks workspace inputs again. `meowsky refactor` remains a prerequisite gate in this chunk. The existing [manual refactoring template](features/audit/refactor-prompt.md) remains available. Run `meowsky review --help` for the handoff procedure and `meowsky audit --help` for scan limits. The six-fixture Windows validation is `powershell -NoProfile -ExecutionPolicy Bypass -File tests/verify-audit-e2e.ps1`.
 
 ## Identity
 

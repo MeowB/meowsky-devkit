@@ -19,7 +19,8 @@ SYNOPSIS
     meowsky identity apply <id> --target vscode [--dry-run]
     meowsky audit [<directory>] [--quick] [--refresh]
     meowsky audit [<directory>] --refactor-prompt '<ID[,ID...]>'
-    meowsky review [<directory>]
+    meowsky review [<directory>] [--docs]
+    meowsky review [<directory>] --complete [<json-file>]
     meowsky refactor [<directory>]
     meowsky matrix
     meowsky ptree [<level>]
@@ -57,8 +58,10 @@ COMMANDS
     meowsky audit --refresh Compatibility option; outputs always regenerate.
     meowsky audit --refactor-prompt '<IDs>'  Print a plan after completed review.
     meowsky audit --help    Show Audit options, coverage, and limitations.
-    meowsky review [path]   Check for a complete, current audit (Chunk A gate).
-    meowsky refactor [path] Check for a complete review (Chunk A gate).
+    meowsky review [path]   Start an interactive read-only Codex review after audit.
+    meowsky review --docs   Review architecture and documentation only.
+    meowsky review --complete  Validate a copied JSON handoff and save outputs.
+    meowsky refactor [path] Check review and plan prerequisites; no execution yet.
     meowsky matrix          Run the animated matrix display; press Ctrl+C to stop.
     meowsky ptree [level]   Print the current directory tree to the given depth;
                             default is 3 levels. Level must be a positive integer.

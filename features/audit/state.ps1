@@ -85,6 +85,14 @@ function Assert-MeowskyAuditPrerequisite {
   if ($Stage -eq 'refactor' -and $state.review.status -ne 'complete') {
     throw 'Review is incomplete. Complete meowsky review before refactoring.'
   }
+  if ($Stage -eq 'refactor') {
+    $planPath = Join-Path $Root '.meowsky/PLAN.md'
+    try {
+      if (-not $state.review.planHash -or (Get-MeowskyAuditOutputHash -Path $planPath) -cne $state.review.planHash) {
+        throw 'Refactoring plan changed after review.'
+      }
+    } catch { throw "Review plan could not be verified: $($_.Exception.Message) Complete meowsky review again." }
+  }
   $state
 }
 

@@ -36,9 +36,9 @@ function Get-MeowskyAuditReportAdvice {
   if ($Kind -eq 'Semantic') {
     return [pscustomobject]@{
       Suggestion = [string]$Finding.recommendation
-      Confidence = 'AI judgment; source path checked, claim requires human verification'
-      Impact = 'Potential maintainability improvement; confirm scope before acting'
-      Risk = 'Assess callers and tests before changing behavior'
+      Confidence = "$($Finding.confidence) (source path and line checked; interpretation requires human verification)"
+      Impact = [string]$Finding.impact
+      Risk = [string]$Finding.risk
     }
   }
   switch ($Finding.Category) {
@@ -67,7 +67,8 @@ function New-MeowskyAuditReport {
   if ($Semantic -and $Semantic.State -in @('Complete', 'Incomplete')) {
     $ordered = @($Semantic.Findings | Sort-Object path, category, evidence)
     for ($i = 0; $i -lt $ordered.Count; $i++) {
-      $items.Add([pscustomobject]@{ Id = ('S{0:D3}' -f ($i + 1)); Kind = 'Semantic'; Finding = $ordered[$i] })
+      $identifier = if ($ordered[$i].id) { [string]$ordered[$i].id } else { 'S{0:D3}' -f ($i + 1) }
+      $items.Add([pscustomobject]@{ Id = $identifier; Kind = 'Semantic'; Finding = $ordered[$i] })
     }
   }
 
@@ -139,7 +140,7 @@ function New-MeowskyAuditReport {
       }
       $location = if ($item.Kind -eq 'Semantic' -and $finding.line -gt 0) { ":$($finding.line)" } else { '' }
       $advice = Get-MeowskyAuditReportAdvice -Finding $finding -Kind $item.Kind
-      $method = if ($item.Kind -eq 'Semantic') { 'Bounded Codex review' } else { [string]$finding.Method }
+      $method = if ($item.Kind -eq 'Semantic') { 'Interactive Codex review; path and line validated' } else { [string]$finding.Method }
       $lines.Add("### [$($item.Id)] $(ConvertTo-MeowskyAuditMarkdownText $category)")
       $lines.Add('')
       $lines.Add("- Status: $($item.Kind); priority: $(ConvertTo-MeowskyAuditMarkdownText ([string]$finding.priority)).")
@@ -185,7 +186,7 @@ function Write-MeowskyAuditReport {
   param(
     [Parameter(Mandatory = $true)][string]$Root,
     [Parameter(Mandatory = $true)][string]$Content,
-    [ValidateSet('AUDIT.md', 'MAP.md', 'state.json')][string]$Name = 'AUDIT.md'
+    [ValidateSet('AUDIT.md', 'MAP.md', 'PLAN.md', 'state.json')][string]$Name = 'AUDIT.md'
   )
 
   $directory = Join-Path $Root '.meowsky'

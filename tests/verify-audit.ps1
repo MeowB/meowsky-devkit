@@ -43,6 +43,15 @@ try {
   $script:auditLastPrompt = ''
   $originalResolver = (Get-Item Function:Resolve-MeowskyCodexCommand).ScriptBlock
   $originalRunner = (Get-Item Function:Invoke-MeowskyAuditCodexProcess).ScriptBlock
+  $script:reviewInvocations = 0
+  $script:lastReviewArguments = @()
+  function Invoke-MeowskyCodex {
+    param([string]$Root, [string]$PromptPath, [string[]]$Arguments)
+    $script:reviewInvocations++
+    $script:lastReviewArguments = $Arguments
+    $script:lastReviewPrompt = Get-Content -Raw -LiteralPath $PromptPath
+    Remove-Item -LiteralPath $PromptPath -Force
+  }
   function Resolve-MeowskyCodexCommand { if ($script:auditCodexAvailable) { 'mock-codex.ps1' } }
   function Invoke-MeowskyAuditCodexProcess {
     param($Command, $Root, [string[]]$Arguments, $Prompt, $TimeoutSeconds)
@@ -430,7 +439,7 @@ try {
   $mapped = Invoke-MeowskyAuditSemantic -Inventory $issueInventory -StaticReport $report -IncludeMap
   Assert-Equal $mapped.State 'Complete' 'Validated semantic map context accepted'
   $semanticMap = New-MeowskyAuditMap -Inventory $issueInventory -Semantic $mapped
-  Assert-Equal ($semanticMap.Contains('bounded Codex interpretation from [README.md](../README.md)')) $true 'Purpose has a reviewed source link'
+  Assert-Equal ($semanticMap.Contains('Codex interpretation from [README.md](../README.md)')) $true 'Purpose has a reviewed source link'
   Assert-Equal ($semanticMap.Contains('README links to the runner')) $true 'Map uses source-linked relationship evidence'
   Assert-Equal ($semanticMap.Contains('](../scripts/used.ps1)')) $true 'Map links to reviewed script'
   Assert-Equal ($semanticMap.Contains('Follow the documented script link')) $true 'Map includes bounded workflow description'
@@ -448,14 +457,18 @@ try {
   Assert-Equal $savedState.review.status 'pending' 'Review initially remains pending'
   Assert-Equal $savedState.audit.coverage 'complete within exclusions' 'State records coverage'
   Assert-Equal ($savedState.audit.fingerprint -match '^[A-F0-9]{64}$') $true 'Input fingerprint is SHA256'
-  Assert-Equal ((meowsky review $issues) -join "`n").Contains('Review is allowed') $true 'Review gate accepts current audit'
+  $null = meowsky review $issues
+  Assert-Equal $script:reviewInvocations 1 'Review launches interactive Codex once'
+  Assert-Equal ($script:lastReviewArguments -join ' ') '--sandbox read-only --ask-for-approval never --disable hooks --disable plugins --disable apps' 'Review enforces read-only launch options'
+  Assert-Equal ($script:lastReviewPrompt.Contains('Review session:')) $true 'Review prompt identifies handoff session'
   Set-Location $issues
-  Assert-Equal ((meowsky review) -join "`n").Contains('Review is allowed') $true 'Review defaults to current directory'
+  $null = meowsky review
+  Assert-Equal $script:reviewInvocations 2 'Review defaults to current directory'
   Set-Location $fixture
   Assert-Error { meowsky refactor $issues } 'Review is incomplete*'
   Assert-Error { meowsky review $missingMap } 'Audit state is missing*'
   Assert-Error { meowsky review 'missing project' } 'Audit target was not found:*'
-  Assert-Equal ((meowsky review --help).Contains('does not launch Codex')) $true 'Review help states Chunk A limit'
+  Assert-Equal ((meowsky review --help).Contains('--complete')) $true 'Review help describes handoff'
   Assert-Equal ((meowsky refactor --help).Contains('does not')) $true 'Refactor help states Chunk A limit'
   Assert-Error { meowsky review $issues --unknown } 'Usage: meowsky review*'
 
@@ -465,13 +478,15 @@ try {
   Assert-Error { meowsky review $issues } 'Audit is stale*'
   Assert-Error { meowsky refactor $issues } 'Audit is stale*'
   [IO.File]::WriteAllBytes($sourcePath, $originalSource)
-  Assert-Equal ((meowsky review $issues) -join "`n").Contains('Review is allowed') $true 'Restored input restores current fingerprint'
+  $null = meowsky review $issues
+  Assert-Equal $script:reviewInvocations 3 'Restored input restores review launch'
 
   $excludePath = Join-Path $issues '.meowskyignore'
   [IO.File]::WriteAllText($excludePath, 'src/large.ps1')
   Assert-Error { meowsky review $issues } 'Audit is stale*'
   Remove-Item -LiteralPath $excludePath -Force
-  Assert-Equal ((meowsky review $issues) -join "`n").Contains('Review is allowed') $true 'Restored exclusions restore current fingerprint'
+  $null = meowsky review $issues
+  Assert-Equal $script:reviewInvocations 4 'Restored exclusions restore review launch'
 
   $reportBytes = [IO.File]::ReadAllBytes($reportPath)
   [IO.File]::AppendAllText($reportPath, "`n<!-- tampered -->")
@@ -485,7 +500,83 @@ try {
   Assert-Error { meowsky review $issues } 'Audit is incomplete*'
   Set-Item Function:New-MeowskyAuditMap $originalMapFunction
   $null = meowsky audit $issues
-  Assert-Equal ((meowsky review $issues) -join "`n").Contains('Review is allowed') $true 'Successful retry restores review gate'
+  $null = meowsky review $issues
+  Assert-Equal $script:reviewInvocations 5 'Successful retry restores review launch'
+
+  $session = (Get-Content -Raw -LiteralPath $statePath | ConvertFrom-Json).activeReview.id
+  $reviewSourceHash = (Get-FileHash -LiteralPath (Join-Path $issues 'scripts/used.ps1') -Algorithm SHA256).Hash
+  $handoffPath = Join-Path $fixture 'review-handoff.json'
+  $handoff = @{
+    version = 1; session_id = $session; mode = 'full'; status = 'complete'; summary = 'Inspected documentation and runner.'
+    reviewed_paths = @('README.md', 'scripts/used.ps1'); limitations = @('Other files were not inspected.'); map = $null; findings = @()
+  }
+  $handoff | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $handoffPath
+  Assert-Equal (Get-Content -Raw -LiteralPath $statePath | ConvertFrom-Json).review.status 'pending' 'Session exit cannot complete review'
+  $bad = $handoff.Clone(); $bad.session_id = 'wrong'
+  $bad | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $handoffPath
+  Assert-Error { meowsky review $issues --complete $handoffPath } 'Review handoff does not match*'
+  $bad = $handoff.Clone(); $bad.status = 'incomplete'
+  $bad | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $handoffPath
+  Assert-Error { meowsky review $issues --complete $handoffPath } 'Review handoff is incomplete*'
+  $bad = $handoff.Clone(); $bad.reviewed_paths = @('outside.ps1')
+  $bad | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $handoffPath
+  Assert-Error { meowsky review $issues --complete $handoffPath } 'Review handoff has an invalid or duplicate reviewed path*'
+  $finding = @{ id = 'S001'; category = 'Documentation'; path = 'README.md'; line = 9999;
+    evidence = 'The guide reference needs review.'; recommendation = 'Verify the guide link.'; priority = 'low'; confidence = 'medium';
+    impact = 'Clearer navigation.'; risk = 'Link changes could misdirect readers.'; affected_paths = @('README.md');
+    dependencies = @(); verification = @('Check the link.'); behavioral_constraints = @('Keep commands stable.') }
+  $bad = $handoff.Clone(); $bad.findings = @($finding)
+  $bad | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $handoffPath
+  Assert-Error { meowsky review $issues --complete $handoffPath } 'Review finding S001 cites a line beyond the file*'
+  Assert-Equal (Get-Content -Raw -LiteralPath $statePath | ConvertFrom-Json).review.status 'pending' 'Invalid evidence leaves review pending'
+  $handoff | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $handoffPath
+  Assert-Equal ((meowsky review $issues --complete $handoffPath) -join "`n").Contains('Review complete (full)') $true 'Empty completed review is accepted'
+  $reviewState = Get-Content -Raw -LiteralPath $statePath | ConvertFrom-Json
+  Assert-Equal $reviewState.review.status 'complete' 'Validated handoff records completion'
+  Assert-Equal $reviewState.review.approval 'pending' 'Plan remains unapproved'
+  Assert-Equal ((Get-Content -Raw -LiteralPath (Join-Path $issues '.meowsky/PLAN.md')).Contains('No justified refactoring tasks')) $true 'Empty review creates no invented work'
+  Assert-Equal ((meowsky refactor $issues) -join "`n").Contains('Refactor prerequisite is satisfied') $true 'Refactor gate accepts completed review'
+  $null = meowsky review $issues
+  $finding.line = 1
+  $handoff.session_id = (Get-Content -Raw -LiteralPath $statePath | ConvertFrom-Json).activeReview.id
+  $handoff.findings = @($finding)
+  $handoff.map = @{
+    purpose = 'README describes the documented runner'; purpose_path = 'README.md'
+    entries = @(@{ path = 'scripts/used.ps1'; role = 'Documented runner' })
+    modules = @(); relationships = @(); workflows = @()
+  }
+  $handoff | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $handoffPath
+  $null = meowsky review $issues --complete $handoffPath
+  $fullPlan = Get-Content -Raw -LiteralPath (Join-Path $issues '.meowsky/PLAN.md')
+  Assert-Equal ($fullPlan.Contains('[S001]')) $true 'Validated finding receives stable plan ID'
+  Assert-Equal ($fullPlan.Contains('README.md](../README.md)')) $true 'Plan links to validated source'
+  Assert-Equal ((Get-Content -Raw -LiteralPath (Join-Path $issues '.meowsky/AUDIT.md')).Contains('guide reference needs review')) $true 'Finding appears in audit report'
+  Assert-Equal ((Get-Content -Raw -LiteralPath (Join-Path $issues '.meowsky/MAP.md')).Contains('Documented runner')) $true 'Reviewed map context appears in map'
+  $planPath = Join-Path $issues '.meowsky/PLAN.md'
+  $planBytes = [IO.File]::ReadAllBytes($planPath)
+  $reviewState = Get-Content -Raw -LiteralPath $statePath | ConvertFrom-Json
+  $reviewState.review.approval = 'approved'
+  $null = Write-MeowskyAuditState -Root $issues -State $reviewState
+  $null = meowsky review $issues --docs
+  Assert-Equal (Get-Content -Raw -LiteralPath $statePath | ConvertFrom-Json).review.approval 'approved' 'Docs launch preserves approval state'
+  $docsSession = (Get-Content -Raw -LiteralPath $statePath | ConvertFrom-Json).activeReview.id
+  $docsHandoff = @{
+    version = 1; session_id = $docsSession; mode = 'docs'; status = 'complete'; summary = 'Guide and entry point inspected.'
+    reviewed_paths = @('README.md', 'scripts/used.ps1'); limitations = @(); findings = @()
+    map = @{ purpose = 'README documents the runner'; purpose_path = 'README.md';
+      entries = @(@{ path = 'scripts/used.ps1'; role = 'Documented runner' }); modules = @(); relationships = @(); workflows = @() }
+  }
+  $docsHandoff | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $handoffPath
+  Set-Location $issues
+  Assert-Equal ((meowsky review --complete $handoffPath) -join "`n").Contains('Review complete (docs)') $true 'Docs handoff completes from current directory'
+  Set-Location $fixture
+  Assert-Equal (Get-Content -Raw -LiteralPath $statePath | ConvertFrom-Json).review.approval 'approved' 'Docs completion preserves approval state'
+  Assert-Equal ([Convert]::ToBase64String([IO.File]::ReadAllBytes($planPath))) ([Convert]::ToBase64String($planBytes)) 'Docs mode leaves plan untouched'
+  Assert-Equal ((Get-Content -Raw -LiteralPath (Join-Path $issues '.meowsky/MAP.md')).Contains('Documentation review')) $true 'Docs mode enriches map'
+  Assert-Equal ((Get-Content -Raw -LiteralPath (Join-Path $issues '.meowsky/MAP.md')).Contains('README documents the runner')) $true 'Docs map carries reviewed purpose'
+  Assert-Equal ((Get-Content -Raw -LiteralPath (Join-Path $issues '.meowsky/AUDIT.md')).Contains('Guide and entry point inspected.')) $true 'Docs mode enriches audit'
+  Assert-Equal ((Get-Content -Raw -LiteralPath (Join-Path $issues '.meowsky/AUDIT.md')).Contains('guide reference needs review')) $true 'Docs mode preserves full review findings'
+  Assert-Equal (Get-FileHash -LiteralPath (Join-Path $issues 'scripts/used.ps1') -Algorithm SHA256).Hash $reviewSourceHash 'Review and completion leave application source unchanged'
 
   $mockCli = Join-Path $fixture 'mock-codex.ps1'
   Set-Content -LiteralPath $mockCli -Value @('param($Mode, $Payload)', 'Write-Output $Payload', 'exit 0')

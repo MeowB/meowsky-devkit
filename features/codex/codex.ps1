@@ -103,8 +103,8 @@ function New-MeowskyCodexNodeLauncher {
 const { spawnSync } = require("node:child_process");
 const fs = require("node:fs");
 
-const [, , entrypoint, root, promptPath] = process.argv;
-const args = ["-C", root];
+const [, , entrypoint, root, promptPath, ...options] = process.argv;
+const args = [...options, "-C", root];
 
 if (promptPath) {
   args.push(fs.readFileSync(promptPath, "utf8"));
@@ -139,7 +139,8 @@ function Invoke-MeowskyCodex {
     [Parameter(Mandatory = $true)]
     [string]$Root,
 
-    [string]$PromptPath
+    [string]$PromptPath,
+    [string[]]$Arguments = @()
   )
 
   $codexCommand = Get-Command codex -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -157,9 +158,9 @@ function Invoke-MeowskyCodex {
       if ($node) {
         if ($PromptPath) {
           $launcher = New-MeowskyCodexNodeLauncher
-          & $node $launcher $entrypoint $Root $PromptPath
+          & $node $launcher $entrypoint $Root $PromptPath @Arguments
         } else {
-          & $node $entrypoint -C $Root
+          & $node $entrypoint @Arguments -C $Root
         }
         return
       }
@@ -174,14 +175,14 @@ function Invoke-MeowskyCodex {
   if ($PromptPath) {
     $prompt = Get-Content -Raw -LiteralPath $PromptPath
     try {
-      & $codex -C $Root $prompt
+      & $codex @Arguments -C $Root $prompt
     } finally {
       Remove-Item -LiteralPath $PromptPath -Force -ErrorAction SilentlyContinue
     }
     return
   }
 
-  & $codex -C $Root
+  & $codex @Arguments -C $Root
 }
 
 function Invoke-MeowskyCodexFeature {

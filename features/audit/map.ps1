@@ -11,7 +11,7 @@ function New-MeowskyAuditMap {
   $map = if (-not $Quick -and $Semantic -and $Semantic.State -in @('Complete', 'Incomplete')) { $Semantic.Map } else { $null }
   $purposeLink = if ($map -and $map.purpose) { Get-MeowskyAuditReportLink -Path $map.purpose_path -Inventory $Inventory } else { $null }
   if ($purposeLink) {
-    $lines.Add("- Purpose (bounded Codex interpretation from $purposeLink): $(ConvertTo-MeowskyAuditMarkdownText $map.purpose)")
+    $lines.Add("- Purpose (Codex interpretation from $purposeLink): $(ConvertTo-MeowskyAuditMarkdownText $map.purpose)")
   } else {
     $readme = @($Inventory.Files | Where-Object { $_.Path -match '(?i)^README\.(md|rst|adoc)$' } | Select-Object -First 1)
     if ($readme.Count) {
@@ -117,9 +117,9 @@ function New-MeowskyAuditMap {
   elseif ($Semantic.State -notin @('Complete', 'Incomplete')) {
     $state = if ($Semantic) { "$($Semantic.State): $($Semantic.Reason)" } else { 'not run' }
     $lines.Add("- Semantic context unavailable: $(ConvertTo-MeowskyAuditMarkdownText $state).")
-  } elseif (-not $map) { $lines.Add('- The bounded Codex review returned no validated map context; structural navigation uses static discovery only.') }
+  } elseif (-not $map) { $lines.Add('- The Codex review returned no validated map context; structural navigation uses static discovery only.') }
   if ($Semantic -and $Semantic.State -eq 'Incomplete') { $lines.Add("- Codex review incomplete: $(ConvertTo-MeowskyAuditMarkdownText $Semantic.Reason).") }
-  $lines.Add('- This map is a snapshot from the latest `meowsky audit`. Recheck linked source before relying on it; no automatic synchronization runs.')
+  $lines.Add('- This map is a snapshot from the latest audit or review. Recheck linked source before relying on it; no automatic synchronization runs.')
   $lines.Add('')
   $lines -join "`r`n"
 }

@@ -164,9 +164,18 @@ try {
   Assert-Equal ($primaryPrompt.Contains($cDevelopmentGuide)) $true 'Primary C guide path'
   Assert-Equal ($primaryPrompt.Contains('$cDevelopmentGuide')) $false 'Primary C guide placeholder resolved'
   Assert-Equal ($primaryPrompt -match 'Before modifying any files|Never run `git commit`') $false 'Primary excludes global rules'
-  foreach ($name in @('Resolve-MeowskyCodexCommand', 'New-MeowskyCodexNodeLauncher', 'Invoke-MeowskyCodex')) {
+  foreach ($name in @('Resolve-MeowskyCodexCommand')) {
     $oldFunction = $baselineAst.Find({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $name }, $true).Extent.Text
     Assert-Equal ((Get-Command $name).ScriptBlock.ToString().Trim()) (([scriptblock]::Create($oldFunction)).Ast.Find({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] }, $true).Body.ToString().Trim('{}').Trim()) "Preserved $name implementation"
+  }
+  if (Get-Command node.exe -ErrorAction SilentlyContinue) {
+    $mockCodexEntry = Join-Path $fixture 'codex-argv-mock.js'
+    [IO.File]::WriteAllText($mockCodexEntry, 'console.log(JSON.stringify(process.argv.slice(2)))')
+    $launchPrompt = New-MeowskyCodexPromptFile -Prompt 'review fixture prompt'
+    $launcher = New-MeowskyCodexNodeLauncher
+    $launchedArgs = (& node.exe $launcher $mockCodexEntry $project $launchPrompt --sandbox read-only | ConvertFrom-Json)
+    Assert-Equal (($launchedArgs -join '|')) "--sandbox|read-only|-C|$project|review fixture prompt" 'Codex launcher forwards review options and prompt'
+    Assert-Equal (Test-Path -LiteralPath $launchPrompt) $false 'Codex launcher removes temporary prompt'
   }
   $completion = [Management.Automation.CommandCompletion]::CompleteInput('meowsky co', 10, $null)
   Assert-Equal (($completion.CompletionMatches.CompletionText | Sort-Object) -join ',') 'codex,color' 'Command completion'

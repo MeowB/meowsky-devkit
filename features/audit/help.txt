@@ -34,8 +34,8 @@ Markdown files over 1 MiB and complex link syntax are reported as coverage
 limits instead of being called broken links. Links outside the audited root
 and section anchors are not verified.
 
-Audit does not invoke Codex. Semantic review is pending until the separate
-review stage is implemented and completed. Every audit writes .meowsky/AUDIT.md,
+Audit does not invoke Codex. Semantic review is pending until meowsky review
+is explicitly completed. Every audit writes .meowsky/AUDIT.md,
 .meowsky/MAP.md, and state.json, with changed prior outputs backed up. A
 failed or interrupted audit leaves state pending, blocking later stages.
 Audit never writes application source. Report source links are checked
@@ -47,8 +47,8 @@ not prove a semantic claim. Audit does not perform semantic review.
 Incomplete discovery coverage is disclosed, not treated as full coverage.
 Audit does not edit application source files.
 
-Workflow: run meowsky audit <directory>, then meowsky review <directory> to
-check freshness. Interactive review and completion recording arrive in a later
-chunk. Until then, meowsky refactor and --refactor-prompt remain blocked by the
-pending review state. The manual planning template remains in
-features/audit/refactor-prompt.md.
+Workflow: run meowsky audit <directory>, then meowsky review <directory> for
+an interactive read-only semantic review. Complete its structured handoff with
+meowsky review <directory> --complete. A full review creates an unapproved
+PLAN.md; meowsky refactor still performs prerequisite checks only. The manual
+planning template remains in features/audit/refactor-prompt.md.

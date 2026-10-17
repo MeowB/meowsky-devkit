@@ -1,5 +1,25 @@
-meowsky review [<directory>]
-Check that a saved local audit is complete and current. Defaults to the current
-directory; Git is not required. This Chunk A command does not launch Codex,
-record a review, or change application source. Run meowsky audit first.
-Use meowsky review --help for this page.
+meowsky review [<directory>] [--docs]
+meowsky review [<directory>] --complete [<json-file>]
+
+Run meowsky audit first. Review requires its current state and verified
+MAP.md and AUDIT.md. The directory defaults to the current location;
+Git is optional. Review launches the existing interactive Codex CLI with
+a read-only sandbox, no approval prompts, and hooks, plugins, and apps
+disabled. It does not run project tools or modify application source.
+
+Codex returns a structured JSON handoff in the interactive session. Copy
+the complete JSON to the clipboard and run meowsky review --complete in
+the same workspace. You may instead save JSON outside the project and
+pass that file to --complete. The command validates paths, line bounds,
+session identity, map references, and audit freshness. Session exit alone
+never completes review. Interrupted or invalid handoffs remain pending.
+
+A completed full review enriches MAP.md and AUDIT.md and creates an
+unapproved PLAN.md. Zero justified findings are valid. The proposed plan
+does not authorize any refactoring.
+
+--docs limits investigation to architecture and documentation. It updates
+the documentation review portions of MAP.md and AUDIT.md without writing
+a plan or changing existing valid review approval state.
+
+--help shows this page when used alone.
