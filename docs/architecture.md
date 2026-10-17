@@ -6,7 +6,7 @@
 
 Each PowerShell feature owns implementation, `help.txt` and `feature.psd1`. Manifest fields are `Name`, `Command`, `Aliases`, `EntryPoint`, `Handler`, `Help`, and `Description`. `Handler` names a function accepting `Target` and `WorkRoot`. Color is an explanatory compatibility command; project color overrides are retired.
 
-Identity opts into two optional manifest flags: `SkipWorkRoot` bypasses work-root creation and passes no work root; `AcceptsArguments` forwards trailing CLI tokens in the handler's `Arguments` array. Features without those flags retain their existing dispatch behavior. `SkipWorkRoot` describes dispatch only; Identity may install a theme when explicitly requested without `--dry-run`.
+Identity and Audit use two optional manifest flags: `SkipWorkRoot` bypasses work-root creation and passes no work root; `AcceptsArguments` forwards trailing CLI tokens in the handler's `Arguments` array. Features without those flags retain their existing dispatch behavior. `SkipWorkRoot` describes dispatch only; Identity may install a theme when explicitly requested without `--dry-run`.
 
 The loader validates resource paths, handlers and duplicate commands. Registration is explicit in `core/feature-loader.ps1`; there is no auto-discovery. Loading defines functions; the handler executes the command.
 
@@ -24,10 +24,13 @@ Folder names do not create commands: tree remains `ptree`, workspace remains `.`
 | launchpad | Income exploration district command, help, and startup context | workspace, paths |
 | color | Explain retirement of project color overrides | none |
 | identity | Semantic theme loading, validation, planning, Windows/Terminal/VS Code UI/syntax adapters, and help | feature-loader (help resource) |
+| audit | Filesystem discovery, static checks, bounded Codex review, report/map rendering, and selected-finding prompt | feature-loader (help resource), Codex executable (semantic review only) |
 | matrix | Animation | terminal |
 | workspace | Layout and status banner | feature-loader, terminal, git |
 
 For a feature change, read that directory and the listed core files. Tree and Codex share enumeration but retain separate rendering. Terminal core only restores terminal-default foreground/background with ANSI SGR 39/49. Theme definitions own colors. Runtime panels use standard ANSI roles from the active palette: green Matrix glyphs/header, blue folders, cyan project path, and green/yellow clean/dirty working-tree status. Each colored segment restores the default foreground; panels do not load project colors. No generic configuration or event framework is introduced.
+
+Audit's `audit.ps1` handles CLI options and dispatch. `discovery.ps1` inventories filesystem paths without Git, `static-checks.ps1` emits verified issues, review candidates, and coverage limits, and `semantic.ps1` runs a bounded, read-only Codex review with a validated structured response. `report.ps1` and `map.ps1` render linked Markdown only for explicit `--refresh`; `refactor-prompt.ps1` prints an approval-gated plan prompt for selected saved finding IDs. Normal audits keep results in memory and do not write project files. The generated map is a snapshot, not a live index.
 
 Workspace is the composition exception: it uses Codex context/launch functions, the tree panel and matrix dispatch. It checks those features before opening a window. All workspace panes restore terminal defaults on startup. Tree and Matrix no longer poll project-color files. Files, tree connectors, and ordinary Git metadata retain the default foreground.
 
@@ -59,6 +62,8 @@ powershell -NoProfile -File tests/verify-vscode.ps1
 powershell -NoProfile -File tests/verify-vscode-syntax.ps1
 powershell -NoProfile -File tests/verify-identity-apply.ps1
 powershell -NoProfile -File tests/verify-windows-normal.ps1
+powershell -NoProfile -File tests/verify-audit.ps1
+powershell -NoProfile -File tests/verify-audit-e2e.ps1
 ```
 
 ```bash

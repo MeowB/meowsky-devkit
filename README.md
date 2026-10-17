@@ -164,6 +164,10 @@ When `meowsky ./` runs in any folder, it opens a fullscreen Windows Terminal lay
 | `meowsky <directory>` | Change to a directory, checking the current location and then the work root. |
 | `meowsky .` or `meowsky ./` | Open the fullscreen Windows Terminal layout in the current directory. |
 | `meowsky codex [directory]` | Start Codex with the Meowsky orientation prompt; defaults to the current directory. |
+| `meowsky audit [directory]` | Inspect the workspace with filesystem discovery, static checks, and a bounded Codex review; defaults to the current directory. |
+| `meowsky audit [directory] --quick` | Run discovery and static checks without Codex. |
+| `meowsky audit [directory] --refresh` | Save the current audit and compact map under `.meowsky/`; add `--quick` to omit Codex. |
+| `meowsky audit [directory] --refactor-prompt 'V001,S002'` | Print an approval-gated planning prompt for selected saved finding IDs. |
 | `meowsky color` | Explain retired project color overrides; all panels inherit the active Terminal theme. |
 | `meowsky identity` | Describe the Identity system; no settings are applied. |
 | `meowsky identity list` | Discover available semantic identity themes. |
@@ -183,6 +187,12 @@ When `meowsky ./` runs in any folder, it opens a fullscreen Windows Terminal lay
 | `meowsky -h`, `meowsky -Help`, `meowsky help`, or `meowsky --help` | Print the built-in command manual. |
 
 `ptree [level]` also works as a standalone command. On Windows, the workspace defaults to `C:\meowsky`; an optional `WORK_HOME` override must be an absolute path. Bare `meowsky` and `meowsky dev` create only missing `dev/`, `bach/`, and `launchpad/` directories under it; they do not create repositories or records. Linux retains its existing work-root behavior. Run `meowsky -h` for the terminal manual.
+
+## Workspace Audit
+
+`meowsky audit` accepts any local directory, including projects without Git. It reports verified static issues, investigation candidates, and coverage limits, then requests a bounded Codex review. `--quick` skips Codex. Normal audits write no project files; only explicit `--refresh` creates or updates `.meowsky/AUDIT.md` and `.meowsky/MAP.md`, preserving a changed existing output with a backup. Reports link to discovered source, tests, and documentation. These links confirm path existence at generation time, while architectural judgments still need human review.
+
+To plan a change, inspect the saved report and map, then run `meowsky audit <directory> --refactor-prompt 'V001,S002'` with the IDs you selected. Copy the printed prompt into an interactive `meowsky codex <directory>` session, or use the [manual template](features/audit/refactor-prompt.md). The workflow verifies current source and asks for a plan and explicit approval before any edits. Run `meowsky audit --help` for scan limits and other coverage details. The six-fixture Windows validation is `powershell -NoProfile -ExecutionPolicy Bypass -File tests/verify-audit-e2e.ps1`.
 
 ## Identity
 

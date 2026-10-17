@@ -2,6 +2,7 @@ meowsky audit [<directory>] [--quick] [--refresh]
 meowsky audit [<directory>] --refactor-prompt <ID[,ID...]>
 Validate a local workspace directory. Defaults to the current directory.
 The directory may be relative to the current location or an absolute path.
+Git is optional; discovery reads the filesystem directly.
 Options may appear before or after the directory.
 
 --quick    Show filesystem discovery and concise static findings without Codex.
@@ -50,6 +51,10 @@ against the discovery inventory at generation time; semantic claims still need
 human verification. The map links to inventoried source, tests, and docs and
 labels static candidates separately from bounded Codex interpretations. It
 is a snapshot from the last explicit --refresh; there are no update hooks.
+Valid report links establish that paths existed at generation time; they do
+not prove a semantic claim. The bounded review does not inspect every file.
+Codex failures or incomplete coverage are disclosed, not treated as success.
+Audit does not edit application source files.
 
 Refactoring workflow: run meowsky audit <directory> --refresh, review the two
 generated files, then select IDs shown in AUDIT.md. Run
