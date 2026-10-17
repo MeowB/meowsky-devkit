@@ -1,3 +1,5 @@
+. (Join-Path $PSScriptRoot 'discovery.ps1')
+
 function Invoke-MeowskyAuditFeature {
   param([string]$Target, [string]$WorkRoot, [string[]]$Arguments)
 
@@ -37,7 +39,23 @@ function Invoke-MeowskyAuditFeature {
   $resolved = Resolve-Path -LiteralPath $path
   if ($resolved.Provider.Name -ne 'FileSystem') { throw "Audit target is not a filesystem directory: $path" }
 
-  "Audit target: $($resolved.ProviderPath)"
+  $inventory = Get-MeowskyAuditInventory -Root $resolved.ProviderPath
+  "Audit target: $($inventory.Root)"
+  "Inventory: $($inventory.Files.Count) relevant files, $($inventory.Directories.Count) directories."
+  $groups = @($inventory.Files | Group-Object Category | Sort-Object Name | ForEach-Object { "$($_.Name) $($_.Count)" })
+  if ($groups.Count) { 'Types: ' + ($groups -join ', ') }
+  if ($inventory.Languages.Count) { 'Languages: ' + ($inventory.Languages -join ', ') }
+  if ($inventory.Indicators.Count) {
+    'Project indicators: ' + ((@($inventory.Indicators | ForEach-Object { "$($_.Name) ($($_.Path))" })) -join ', ')
+  }
+  if ($inventory.Incomplete) { 'Coverage: incomplete; review skipped entries and warnings.' }
+  else { 'Coverage: complete within the stated exclusions.' }
+  "Skipped: $($inventory.Skipped.Count) entry/entries."
+  foreach ($item in @($inventory.Skipped | Select-Object -First 8)) {
+    "  $($item.Kind) $($item.Path): $($item.Reason)"
+  }
+  if ($inventory.Skipped.Count -gt 8) { "  ... $($inventory.Skipped.Count - 8) more skipped entry/entries." }
+  foreach ($warning in $inventory.Warnings) { "Warning: $warning" }
   if ($quick) {
     'Quick analysis is not implemented yet.'
   } else {
