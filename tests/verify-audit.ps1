@@ -18,11 +18,15 @@ function Assert-Error([scriptblock]$Action, [string]$Pattern) {
 }
 
 function Get-FixtureEntries {
-  (@(Get-ChildItem -LiteralPath $fixture -Recurse -Force | ForEach-Object { $_.FullName.Substring($fixture.Length) }) | Sort-Object) -join "`n"
+  (@(Get-ChildItem -LiteralPath $fixture -Recurse -Force |
+    Where-Object { $_.FullName -notmatch '[\\/]\.meowsky(?:[\\/]|$)' } |
+    ForEach-Object { $_.FullName.Substring($fixture.Length) }) | Sort-Object) -join "`n"
 }
 
 function Get-FixtureContentHashes {
-  (@(Get-ChildItem -LiteralPath $fixture -Recurse -File -Force | ForEach-Object { "$($_.FullName.Substring($fixture.Length)):$((Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash)" }) | Sort-Object) -join "`n"
+  (@(Get-ChildItem -LiteralPath $fixture -Recurse -File -Force |
+    Where-Object { $_.FullName -notmatch '[\\/]\.meowsky[\\/]' } |
+    ForEach-Object { "$($_.FullName.Substring($fixture.Length)):$((Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash)" }) | Sort-Object) -join "`n"
 }
 
 try {
@@ -62,7 +66,7 @@ try {
     if ($script:auditMockMode -eq 'bad-line') {
       $findings = @(@{ category = 'Documentation'; path = 'README.md'; line = 9999; evidence = 'Evidence line fixture.'; recommendation = 'Inspect the file.'; priority = 'low' })
     }
-    $response = @{ status = $status; summary = 'Bounded sample reviewed.'; reviewed_paths = $reviewed; limitations = @(); findings = $findings }
+    $response = @{ status = $status; summary = 'Bounded sample reviewed.'; reviewed_paths = $reviewed; limitations = @(); map = $null; findings = $findings }
     if ($script:auditMockMode -in @('map', 'bad-map')) {
       $modulePath = if ($script:auditMockMode -eq 'bad-map') { 'outside' } else { 'scripts' }
       $response.map = @{
@@ -125,9 +129,9 @@ try {
 
   $default = (meowsky audit) -join "`n"
   Assert-Equal ($default.Contains("Audit target: $project")) $true 'Current directory is default target'
-  Assert-Equal ($default.Contains('Starting Codex review: read-only, requested sample of up to 12 files, 180-second timeout; Codex usage may apply.')) $true 'Semantic cost and scope are disclosed'
-  Assert-Equal ($default.Contains('Semantic evaluation: Complete.')) $true 'Default runs semantic evaluation'
-  Assert-Equal ($default.Contains('No material semantic findings in the bounded review.')) $true 'Empty semantic findings are valid'
+  Assert-Equal ($default.Contains('semantic review is pending. Codex was not invoked.')) $true 'Default audit is local and marks review pending'
+  Assert-Equal $script:auditInvocationCount 0 'Default audit never invokes Codex'
+  Assert-Equal (Test-Path -LiteralPath (Join-Path $project '.meowsky/state.json')) $true 'Default audit writes state'
 
   Set-Location $fixture
   $relative = (meowsky audit 'sample project') -join "`n"
@@ -167,7 +171,7 @@ try {
   Assert-Equal ($summary.Contains('Coverage: incomplete; review skipped entries and warnings.')) $true 'Limited coverage reported'
   Assert-Equal ($summary.Contains('Project indicators:')) $true 'Indicators summarized'
   Assert-Equal ($summary.Contains('Directory .meowsky:')) $true 'Skipped directory and reason shown'
-  Assert-Equal ($summary.Contains('Semantic evaluation: Complete.')) $true 'Gitless project accepts semantic review'
+  Assert-Equal ($summary.Contains('Audit state: complete; review pending.')) $true 'Gitless project completes local audit'
   $healthy = Get-MeowskyAuditStaticFindings -Inventory $inventory
   Assert-Equal "$($healthy.Verified.Count),$($healthy.Candidates.Count),$($healthy.Limitations.Count)" '0,0,3' 'Exclusions are coverage limits, not invented issues'
   $coverageInventory = Get-MeowskyAuditInventory -Root $coverageProject
@@ -186,36 +190,34 @@ try {
   Assert-Equal ($coverageReportText.Contains('Coverage: Incomplete.')) $true 'Saved report cannot claim complete coverage after unsupported source'
   Assert-Equal ($coverageReportText.Contains('src/main.rs') -and $coverageReportText.Contains('vendor')) $true 'Saved report names unsupported source and broad exclusion'
   $quickReportText = New-MeowskyAuditReport -Inventory $inventory -StaticReport $healthy -Quick
-  Assert-Equal ($quickReportText.Contains('Codex semantic assessment was skipped for architecture boundaries')) $true 'Quick report identifies skipped semantic domains'
+  Assert-Equal ($quickReportText.Contains('Semantic assessment is pending for architecture boundaries')) $true 'Quick report identifies pending semantic domains'
   Assert-Equal ($quickReportText.Contains('No findings from the checks performed in this category')) $true 'Quick report limits empty-section claim to performed checks'
   Assert-Equal ($quickReportText.Contains('No material findings in this category.')) $false 'Quick report avoids blanket no-issues claim'
   $failedSemantic = [pscustomobject]@{ State = 'Failed'; Reason = 'Codex authentication failed.'; Findings = @(); Limitations = @() }
   $failedReportText = New-MeowskyAuditReport -Inventory $inventory -StaticReport $healthy -Semantic $failedSemantic
   Assert-Equal ($failedReportText.Contains('Codex review: Failed: Codex authentication failed.')) $true 'Failed semantic review is explicit in report'
-  Assert-Equal ($failedReportText.Contains('Codex semantic assessment of this category did not run or finish.')) $true 'Failed review limits empty-section claim'
-  Assert-Equal ($script:auditLastArguments -join ' ') ('--ask-for-approval never exec -C ' + $plain + ' --sandbox read-only --disable hooks --disable plugins --disable apps --skip-git-repo-check --ephemeral --ignore-user-config --output-schema ' + (Join-Path $repo 'features/audit/semantic-schema.json') + ' --json') 'Semantic invocation enforces bounded read-only CLI options'
-  $realCodex = & $originalResolver
-  if ($realCodex) {
-    $parserOutput = (& $realCodex @script:auditLastArguments '--help' 2>&1 | Out-String)
-    Assert-Equal $LASTEXITCODE 0 'Real Codex CLI accepts Audit arguments without a model call'
-    Assert-Equal ($parserOutput.Contains('Run Codex non-interactively')) $true 'Real Codex CLI returned exec help'
-  } else { Write-Host 'SKIP: Codex CLI parser check needs an installed Codex executable.' }
-  Assert-Equal ($script:auditLastPrompt.Length -lt 10000) $true 'Discovery prompt is bounded'
-  Assert-Equal ($script:auditLastPrompt.Contains('Discovery incomplete: True.')) $true 'Prompt includes coverage status'
-  Assert-Equal ($script:auditLastPrompt.Contains('Skipped 1: Project exclusion: src/private')) $true 'Prompt includes exclusion reasons'
-  Assert-Equal ($script:auditLastPrompt.Contains('Static findings: 0 verified')) $true 'Prompt includes static findings summary'
-  Assert-Equal ($script:auditLastPrompt.Contains('compact optional map')) $false 'Normal audit avoids map request and extra token work'
+  Assert-Equal ($failedReportText.Contains('Semantic assessment of this category is pending or did not finish.')) $true 'Failed review limits empty-section claim'
+  Assert-Equal $script:auditInvocationCount 0 'Audit commands made no Codex process calls'
+  $semanticSchema = Get-Content -LiteralPath (Join-Path $repo 'features/audit/semantic-schema.json') -Raw | ConvertFrom-Json
+  Assert-Equal ((@($semanticSchema.properties.PSObject.Properties.Name | Where-Object { $_ -notin $semanticSchema.required })).Count) 0 'Every top-level schema property is required for Codex structured output'
+  Assert-Equal ($semanticSchema.properties.map.type -join ',') 'object,null' 'Map is nullable when not requested'
+  Assert-Equal $semanticSchema.additionalProperties $false 'Top-level schema rejects extra properties'
+  $preparedPrompt = New-MeowskyAuditSemanticPrompt -Inventory $inventory -StaticReport $healthy
+  Assert-Equal ($preparedPrompt.Length -lt 10000) $true 'Retained semantic prompt stays bounded'
+  Assert-Equal ($preparedPrompt.Contains('Discovery incomplete: True.')) $true 'Retained prompt includes coverage status'
+  Assert-Equal ($preparedPrompt.Contains('Skipped 1: Project exclusion: src/private')) $true 'Retained prompt includes exclusion reasons'
   $script:auditMockMode = 'finding'
   $semanticFinding = Invoke-MeowskyAuditSemantic -Inventory $inventory -StaticReport $healthy
   Assert-Equal $semanticFinding.State 'Complete' 'Structured semantic finding accepted'
+  Assert-Equal $semanticFinding.Map $null 'Normal semantic review accepts a null map'
   Assert-Equal $semanticFinding.Findings[0].path 'README.md' 'Semantic finding links to inventoried source'
   $semanticOutput = (meowsky audit $plain) -join "`n"
-  Assert-Equal ($semanticOutput.Contains('Recommendation: Check the documented command')) $true 'CLI displays source-linked semantic recommendation'
+  Assert-Equal ($semanticOutput.Contains('Recommendation: Check the documented command')) $false 'Audit does not claim semantic findings'
   $script:auditMockMode = 'incomplete'
   Assert-Equal (Invoke-MeowskyAuditSemantic -Inventory $inventory -StaticReport $healthy).State 'Incomplete' 'Model-declared incomplete review stays incomplete'
   $script:auditMockMode = 'auth'
   Assert-Equal (Invoke-MeowskyAuditSemantic -Inventory $inventory -StaticReport $healthy).Reason 'Codex authentication failed.' 'Authentication failure is explicit'
-  Assert-Equal (((meowsky audit $plain) -join "`n").Contains('Semantic evaluation: Failed. Codex authentication failed.')) $true 'CLI cannot silently claim successful review after authentication failure'
+  Assert-Equal (((meowsky audit $plain) -join "`n").Contains('Audit state: complete; review pending.')) $true 'Audit remains independent of Codex authentication'
   $script:auditMockMode = 'malformed'
   Assert-Equal (Invoke-MeowskyAuditSemantic -Inventory $inventory -StaticReport $healthy).State 'Failed' 'Malformed event stream fails review'
   $script:auditMockMode = 'bad-path'
@@ -233,7 +235,7 @@ try {
   Assert-Equal (Invoke-MeowskyAuditSemantic -Inventory $inventory -StaticReport $healthy).State 'Incomplete' 'Timed-out review cannot report success'
   $script:auditCodexAvailable = $false
   Assert-Equal (Invoke-MeowskyAuditSemantic -Inventory $inventory -StaticReport $healthy).State 'Unavailable' 'Missing Codex reports unavailable'
-  Assert-Equal (((meowsky audit $plain) -join "`n").Contains('Semantic evaluation: Unavailable. Codex CLI was not found.')) $true 'CLI labels missing Codex'
+  Assert-Equal (((meowsky audit $plain) -join "`n").Contains('Audit state: complete; review pending.')) $true 'Audit succeeds without Codex installed'
   $script:auditCodexAvailable = $true
   $script:auditMockMode = 'complete'
   $issueInventory = Get-MeowskyAuditInventory -Root $issues
@@ -290,16 +292,19 @@ try {
   Assert-Equal (Get-FixtureContentHashes) $beforeContent 'Audit commands did not change target file contents'
   Assert-Equal (Get-Content -Raw -LiteralPath (Join-Path $project 'keep.txt')) "original`r`n" 'Target content preserved'
   Assert-Equal (Test-Path -LiteralPath $env:WORK_HOME) $false 'Audit did not create unrelated work root'
-  Assert-Equal (Test-Path -LiteralPath (Join-Path $project '.meowsky')) $false 'Normal audit did not create report directory'
-  Assert-Equal (Test-Path -LiteralPath (Join-Path $issues '.meowsky/MAP.md')) $false 'Normal audit did not create a map'
+  Assert-Equal (Test-Path -LiteralPath (Join-Path $project '.meowsky/AUDIT.md')) $true 'Normal audit creates report'
+  Assert-Equal (Test-Path -LiteralPath (Join-Path $issues '.meowsky/MAP.md')) $true 'Normal audit creates map'
   Assert-Equal (Get-Location).Path $fixture 'Audit did not navigate away from current directory'
 
-  $sourceHashes = (@(Get-ChildItem -LiteralPath $issues -Recurse -File | ForEach-Object { "$($_.FullName):$((Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash)" }) | Sort-Object) -join "`n"
+  $sourceHashes = (@(Get-ChildItem -LiteralPath $issues -Recurse -File |
+    Where-Object { $_.FullName -notmatch '[\\/]\.meowsky[\\/]' } |
+    ForEach-Object { "$($_.FullName):$((Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash)" }) | Sort-Object) -join "`n"
   $script:auditMockMode = 'finding'
+  $beforeRefreshCalls = $script:auditInvocationCount
   $refresh = (meowsky audit $issues --refresh) -join "`n"
-  Assert-Equal ($script:auditLastPrompt.Contains('compact optional map')) $true 'Refresh requests bounded map context'
+  Assert-Equal $script:auditInvocationCount $beforeRefreshCalls 'Refresh does not invoke Codex'
   $reportPath = Join-Path $issues '.meowsky/AUDIT.md'
-  Assert-Equal ($refresh.Contains("Audit report: Created $reportPath")) $true 'Refresh creates a report'
+  Assert-Equal ($refresh.Contains("Audit report: ")) $true 'Refresh regenerates a report'
   Assert-Equal (Test-Path -LiteralPath $reportPath) $true 'Refresh report exists'
   $reportText = Get-Content -Raw -LiteralPath $reportPath
   Assert-Equal ($reportText.Contains('## Executive summary')) $true 'Report has executive summary'
@@ -311,7 +316,7 @@ try {
   Assert-Equal ($reportText.Contains('## Prioritized files for human inspection')) $true 'Report prioritizes inspection'
   Assert-Equal ($reportText.Contains('## Findings requiring manual verification')) $true 'Report labels manual verification'
   Assert-Equal ($reportText.Contains('[V001]')) $true 'Report retains static verified ID'
-  Assert-Equal ($reportText.Contains('[S001]')) $true 'Report assigns stable semantic ID'
+  Assert-Equal ($reportText.Contains('[S001]')) $false 'Audit report has no semantic findings'
   Assert-Equal ($reportText.Contains('Suggested improvement:')) $true 'Report includes proposals'
   Assert-Equal ($reportText.Contains('Confidence:')) $true 'Report includes confidence'
   Assert-Equal ($reportText.Contains('Expected impact:')) $true 'Report includes impact'
@@ -319,8 +324,8 @@ try {
   Assert-Equal ($reportText.Contains('Source links below confirm path existence at generation time.')) $true 'Report separates link validation from semantic truth'
   Assert-Equal ($reportText.Contains('](../README.md)')) $true 'Report links to existing relative source'
   $mapPath = Join-Path $issues '.meowsky/MAP.md'
-  Assert-Equal ($refresh.Contains("Workspace map: Created $mapPath")) $true 'Refresh creates a workspace map'
-  Assert-Equal (Test-Path -LiteralPath $mapPath) $true 'Map exists only after refresh'
+  Assert-Equal ($refresh.Contains("Workspace map: ")) $true 'Refresh regenerates a workspace map'
+  Assert-Equal (Test-Path -LiteralPath $mapPath) $true 'Map exists after audit'
   $mapText = Get-Content -Raw -LiteralPath $mapPath
   Assert-Equal ($mapText.Contains('## Purpose and technology')) $true 'Map includes project overview'
   Assert-Equal ($mapText.Contains('## Entry points')) $true 'Map includes entry navigation'
@@ -337,40 +342,16 @@ try {
     $relativePath = [Uri]::UnescapeDataString($link.Groups['path'].Value).Replace('/', '\')
     Assert-Equal (Test-Path -LiteralPath (Join-Path $issues $relativePath)) $true "Map link exists: $relativePath"
   }
-  $promptCalls = $script:auditInvocationCount
-  $beforePromptEntries = Get-FixtureEntries
-  $beforePromptHashes = Get-FixtureContentHashes
-  $planningPrompt = (meowsky audit $issues --refactor-prompt 'V001,S001') -join "`n"
-  Assert-Equal ($planningPrompt.Contains("Target workspace: $issues")) $true 'Prompt targets explicit workspace'
-  Assert-Equal ($planningPrompt.Contains('Selected audit finding IDs: V001, S001')) $true 'Prompt includes selected IDs'
-  Assert-Equal ($planningPrompt.Contains('Read `.meowsky/AUDIT.md` and `.meowsky/MAP.md` first.')) $true 'Prompt requires both saved artifacts'
-  Assert-Equal ($planningPrompt.Contains('Recheck each finding against current source.')) $true 'Prompt requires current evidence'
-  Assert-Equal ($planningPrompt.Contains('conventions/architecture.md')) $true 'Prompt points to architecture conventions'
-  Assert-Equal ($planningPrompt.Contains('conventions/filesystem.md')) $true 'Prompt points to filesystem conventions'
-  Assert-Equal ($planningPrompt.Contains('Preserve application behavior and public commands')) $true 'Prompt preserves behavior'
-  Assert-Equal ($planningPrompt.Contains('dependencies, expected benefit, regression risks')) $true 'Prompt requires scoped plan and risks'
-  Assert-Equal ($planningPrompt.Contains('Stop after the plan. Do not edit files')) $true 'Prompt requires edit approval'
-  Assert-Equal ($planningPrompt.Contains('run relevant tests or checks')) $true 'Prompt requires verification after approval'
-  Assert-Equal ($planningPrompt.Contains('resolved, unresolved, or invalidated')) $true 'Prompt tracks finding outcomes'
-  Assert-Equal ($planningPrompt.Contains('without Codex')) $true 'Template supports manual workflow'
-  Assert-Equal ($planningPrompt.Contains('{{FINDING_IDS}}')) $false 'Rendered prompt has no unresolved ID placeholder'
-  Assert-Equal $script:auditInvocationCount $promptCalls 'Prompt output does not invoke Codex'
-  Assert-Equal (Get-FixtureEntries) $beforePromptEntries 'Prompt output does not create project files'
-  Assert-Equal (Get-FixtureContentHashes) $beforePromptHashes 'Prompt output does not modify project files'
-  Assert-Equal (((meowsky audit --refactor-prompt ' V001 , S001 ' $issues) -join "`n").Contains('V001, S001')) $true 'Prompt option accepts trimmed IDs before target'
-  Assert-Error { meowsky audit $issues --refactor-prompt V999 } 'Finding ID(s) absent from saved AUDIT.md:*'
-  Assert-Error { meowsky audit $issues --refactor-prompt 'V001,V001' } 'Select 1 to 12 unique finding IDs*'
-  Assert-Error { meowsky audit $issues --refactor-prompt x001 } 'Select 1 to 12 unique finding IDs*'
-  Assert-Error { meowsky audit $issues --refactor-prompt '' } 'Select 1 to 12 unique finding IDs*'
+  Assert-Error { meowsky audit $issues --refactor-prompt V001 } 'Review is incomplete*'
   Assert-Error { meowsky audit $issues --refactor-prompt } 'Missing finding IDs after --refactor-prompt.*'
   Assert-Error { meowsky audit $issues --refactor-prompt V001 --quick } '--refactor-prompt cannot be combined*'
   Assert-Error { meowsky audit $issues --refactor-prompt V001 --refresh } '--refactor-prompt cannot be combined*'
   Assert-Error { meowsky audit $issues --refactor-prompt V001 --refactor-prompt S001 } 'Duplicate --refactor-prompt.*'
-  Assert-Error { meowsky audit $project --refactor-prompt V001 } 'The saved AUDIT.md and MAP.md are required*'
+  Assert-Error { meowsky audit $project --refactor-prompt V001 } 'Review is incomplete*'
   $missingMap = Join-Path $fixture 'missing-map project'
   New-Item -ItemType Directory -Path (Join-Path $missingMap '.meowsky') -Force | Out-Null
   Copy-Item -LiteralPath $reportPath -Destination (Join-Path $missingMap '.meowsky/AUDIT.md')
-  Assert-Error { meowsky audit $missingMap --refactor-prompt V001 } 'The saved AUDIT.md and MAP.md are required*'
+  Assert-Error { meowsky audit $missingMap --refactor-prompt V001 } 'Audit state is missing*'
   $manualTemplate = Get-Content -Raw -LiteralPath (Join-Path $repo 'features/audit/refactor-prompt.md')
   Assert-Equal ($manualTemplate.Contains('{{FINDING_IDS}}')) $true 'Reusable manual template retains selected-ID placeholder'
   $links = [regex]::Matches($reportText, '\]\(\.\./(?<path>[^)]+)\)')
@@ -382,9 +363,9 @@ try {
   $reportEntries = Get-FixtureEntries
   $reportHashes = Get-FixtureContentHashes
   $normalAfterRefresh = (meowsky audit $issues) -join "`n"
-  Assert-Equal ($normalAfterRefresh.Contains('Semantic evaluation: Complete.')) $true 'Normal audit still displays findings'
+  Assert-Equal ($normalAfterRefresh.Contains('Audit state: complete; review pending.')) $true 'Normal audit retains static workflow'
   Assert-Equal (Get-FixtureEntries) $reportEntries 'Normal audit after refresh does not change entries'
-  Assert-Equal (Get-FixtureContentHashes) $reportHashes 'Normal audit after refresh does not write files'
+  Assert-Equal (Get-FixtureContentHashes) $reportHashes 'Normal audit after refresh preserves application files'
   $script:auditMockMode = 'complete'
   $quickCalls = $script:auditInvocationCount
   $quickRefresh = (meowsky audit --refresh $issues --quick) -join "`n"
@@ -392,27 +373,29 @@ try {
   Assert-Equal $script:auditInvocationCount $quickCalls 'Quick refresh did not call Codex'
   $quickText = Get-Content -Raw -LiteralPath $reportPath
   $quickMap = Get-Content -Raw -LiteralPath $mapPath
-  Assert-Equal ($quickText.Contains('Codex review: Not run')) $true 'Quick report discloses absent semantic analysis'
+  Assert-Equal ($quickText.Contains('Codex review: Pending')) $true 'Quick report discloses pending semantic analysis'
   Assert-Equal ($quickText.Contains('this is a partial audit')) $true 'Quick report is labeled partial'
-  Assert-Equal ($quickMap.Contains('Semantic context unavailable:')) $true 'Quick map labels missing semantic context'
+  Assert-Equal ($quickMap.Contains('Semantic context pending:')) $true 'Quick map labels pending semantic context'
   Assert-Equal ($quickMap.Contains('Codex interpretation')) $false 'Quick map contains no invented semantic description'
   $quickMapHash = (Get-FileHash -LiteralPath $mapPath -Algorithm SHA256).Hash
   $sameMap = (meowsky audit $issues --quick --refresh) -join "`n"
   Assert-Equal ($sameMap.Contains('Workspace map: Unchanged')) $true 'Repeat quick refresh preserves identical map'
   Assert-Equal (Get-FileHash -LiteralPath $mapPath -Algorithm SHA256).Hash $quickMapHash 'Repeat generation keeps identical map bytes'
+  $changedText = $quickText.TrimEnd("`r", "`n") + "`n<!-- fixture change -->"
+  $null = Write-MeowskyAuditReport -Root $issues -Content $changedText
   $backup = @(Get-ChildItem -LiteralPath (Join-Path $issues '.meowsky') -Filter 'AUDIT-*.md.bak')
-  Assert-Equal $backup.Count 1 'Changed report creates one backup'
-  Assert-Equal (Get-FileHash -LiteralPath $backup[0].FullName -Algorithm SHA256).Hash $reportHash 'Backup retains prior report bytes'
-  $unchanged = Write-MeowskyAuditReport -Root $issues -Content $quickText.TrimEnd("`r", "`n")
+  Assert-Equal ($backup.Count -ge 1) $true 'Changed report creates a backup'
+  Assert-Equal (@($backup | Where-Object { (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash -eq $reportHash }).Count -ge 1) $true 'Backup retains prior report bytes'
+  $unchanged = Write-MeowskyAuditReport -Root $issues -Content $changedText
   Assert-Equal $unchanged.State 'Unchanged' 'Identical report content avoids replacement'
-  Assert-Equal @(Get-ChildItem -LiteralPath (Join-Path $issues '.meowsky') -Filter 'AUDIT-*.md.bak').Count 1 'Identical content avoids another backup'
+  Assert-Equal @(Get-ChildItem -LiteralPath (Join-Path $issues '.meowsky') -Filter 'AUDIT-*.md.bak').Count $backup.Count 'Identical content avoids another backup'
   $script:auditMockMode = 'timeout'
   $failedRefresh = (meowsky audit $issues --refresh) -join "`n"
-  Assert-Equal ($failedRefresh.Contains('Semantic evaluation: Incomplete.')) $true 'Timeout remains visible in CLI'
-  Assert-Equal ((Get-Content -Raw -LiteralPath $reportPath).Contains('Codex review: Incomplete:')) $true 'Report discloses incomplete semantic evaluation'
+  Assert-Equal ($failedRefresh.Contains('Audit state: complete; review pending.')) $true 'Audit does not invoke timed-out Codex mock'
+  Assert-Equal ((Get-Content -Raw -LiteralPath $reportPath).Contains('Codex review: Pending')) $true 'Report keeps semantic review pending'
   $script:auditMockMode = 'complete'
   $quickProject = (meowsky audit --refresh $project --quick) -join "`n"
-  Assert-Equal ($quickProject.Contains('Audit report: Created')) $true 'Combined options create report in explicit target'
+  Assert-Equal ($quickProject.Contains('Audit state: complete; review pending.')) $true 'Combined options complete audit in explicit target'
   Assert-Equal (Test-Path -LiteralPath (Join-Path $project 'keep.txt')) $true 'Target application file remains in place'
   Assert-Equal (Get-Content -Raw -LiteralPath (Join-Path $project 'keep.txt')) "original`r`n" 'Target application content remains unchanged'
   $sourceHashesAfter = (@(Get-ChildItem -LiteralPath $issues -Recurse -File | Where-Object { -not $_.FullName.StartsWith((Join-Path $issues '.meowsky') + '\') } | ForEach-Object { "$($_.FullName):$((Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash)" }) | Sort-Object) -join "`n"
@@ -427,10 +410,10 @@ try {
   $plainMapPath = Join-Path $plain '.meowsky/MAP.md'
   $plainMapHash = (Get-FileHash -LiteralPath $plainMapPath -Algorithm SHA256).Hash
   $plainRefresh = (meowsky audit $plain --quick --refresh) -join "`n"
-  Assert-Equal ($plainRefresh.Contains('Workspace map: Replaced')) $true 'Refresh replaces an existing map with backup'
+  Assert-Equal ($plainRefresh.Contains('Workspace map: Unchanged')) $true 'Unchanged map is preserved on refresh'
   $plainMapBackup = @(Get-ChildItem -LiteralPath (Join-Path $plain '.meowsky') -Filter 'MAP-*.md.bak')
-  Assert-Equal $plainMapBackup.Count 1 'Existing map is preserved in one backup'
-  Assert-Equal (Get-FileHash -LiteralPath $plainMapBackup[0].FullName -Algorithm SHA256).Hash $plainMapHash 'Map backup retains previous bytes'
+  Assert-Equal ($plainMapBackup.Count -ge 1) $true 'Preexisting map was preserved during first audit'
+  Assert-Equal (Get-FileHash -LiteralPath $plainMapPath -Algorithm SHA256).Hash $plainMapHash 'Map retains previous bytes'
   Assert-Equal (Test-Path -LiteralPath (Join-Path $plain '.meowskyignore')) $true 'Refresh preserves unrelated project exclusion configuration'
 
   $invalidFinding = [pscustomobject]@{ Id = 'V999'; Category = 'Markdown link'; Path = 'missing.md'; Evidence = 'Missing path fixture.'; Priority = 'Medium'; Method = 'Fixture' }
@@ -452,11 +435,57 @@ try {
   Assert-Equal ($semanticMap.Contains('](../scripts/used.ps1)')) $true 'Map links to reviewed script'
   Assert-Equal ($semanticMap.Contains('Follow the documented script link')) $true 'Map includes bounded workflow description'
   $mappedRefresh = (meowsky audit $issues --refresh) -join "`n"
-  Assert-Equal ($mappedRefresh.Contains('Workspace map: Replaced')) $true 'CLI refresh writes the semantic map'
-  Assert-Equal ((Get-Content -Raw -LiteralPath $mapPath).Contains('README links to the runner')) $true 'Persisted map includes validated semantic relationship'
+  Assert-Equal ($mappedRefresh.Contains('Workspace map: Unchanged')) $true 'CLI refresh does not write semantic map context'
+  Assert-Equal ((Get-Content -Raw -LiteralPath $mapPath).Contains('README links to the runner')) $false 'Persisted Audit map remains static'
   $script:auditMockMode = 'bad-map'
   Assert-Equal (Invoke-MeowskyAuditSemantic -Inventory $issueInventory -StaticReport $report -IncludeMap).State 'Failed' 'Uninventoried map path rejected'
   $script:auditMockMode = 'complete'
+
+  $statePath = Join-Path $issues '.meowsky/state.json'
+  $savedState = Get-Content -Raw -LiteralPath $statePath | ConvertFrom-Json
+  Assert-Equal $savedState.version 1 'State schema version is explicit'
+  Assert-Equal $savedState.audit.status 'complete' 'Successful audit records completion'
+  Assert-Equal $savedState.review.status 'pending' 'Review initially remains pending'
+  Assert-Equal $savedState.audit.coverage 'complete within exclusions' 'State records coverage'
+  Assert-Equal ($savedState.audit.fingerprint -match '^[A-F0-9]{64}$') $true 'Input fingerprint is SHA256'
+  Assert-Equal ((meowsky review $issues) -join "`n").Contains('Review is allowed') $true 'Review gate accepts current audit'
+  Set-Location $issues
+  Assert-Equal ((meowsky review) -join "`n").Contains('Review is allowed') $true 'Review defaults to current directory'
+  Set-Location $fixture
+  Assert-Error { meowsky refactor $issues } 'Review is incomplete*'
+  Assert-Error { meowsky review $missingMap } 'Audit state is missing*'
+  Assert-Error { meowsky review 'missing project' } 'Audit target was not found:*'
+  Assert-Equal ((meowsky review --help).Contains('does not launch Codex')) $true 'Review help states Chunk A limit'
+  Assert-Equal ((meowsky refactor --help).Contains('does not')) $true 'Refactor help states Chunk A limit'
+  Assert-Error { meowsky review $issues --unknown } 'Usage: meowsky review*'
+
+  $sourcePath = Join-Path $issues 'src/large.ps1'
+  $originalSource = [IO.File]::ReadAllBytes($sourcePath)
+  [IO.File]::AppendAllText($sourcePath, "`n# changed")
+  Assert-Error { meowsky review $issues } 'Audit is stale*'
+  Assert-Error { meowsky refactor $issues } 'Audit is stale*'
+  [IO.File]::WriteAllBytes($sourcePath, $originalSource)
+  Assert-Equal ((meowsky review $issues) -join "`n").Contains('Review is allowed') $true 'Restored input restores current fingerprint'
+
+  $excludePath = Join-Path $issues '.meowskyignore'
+  [IO.File]::WriteAllText($excludePath, 'src/large.ps1')
+  Assert-Error { meowsky review $issues } 'Audit is stale*'
+  Remove-Item -LiteralPath $excludePath -Force
+  Assert-Equal ((meowsky review $issues) -join "`n").Contains('Review is allowed') $true 'Restored exclusions restore current fingerprint'
+
+  $reportBytes = [IO.File]::ReadAllBytes($reportPath)
+  [IO.File]::AppendAllText($reportPath, "`n<!-- tampered -->")
+  Assert-Error { meowsky review $issues } 'Audit prerequisite could not be verified*'
+  [IO.File]::WriteAllBytes($reportPath, $reportBytes)
+
+  $originalMapFunction = (Get-Item Function:New-MeowskyAuditMap).ScriptBlock
+  function New-MeowskyAuditMap { throw 'fixture generation failure' }
+  Assert-Error { meowsky audit $issues } 'fixture generation failure'
+  Assert-Equal (Get-Content -Raw -LiteralPath $statePath | ConvertFrom-Json).audit.status 'pending' 'Failed generation never marks audit complete'
+  Assert-Error { meowsky review $issues } 'Audit is incomplete*'
+  Set-Item Function:New-MeowskyAuditMap $originalMapFunction
+  $null = meowsky audit $issues
+  Assert-Equal ((meowsky review $issues) -join "`n").Contains('Review is allowed') $true 'Successful retry restores review gate'
 
   $mockCli = Join-Path $fixture 'mock-codex.ps1'
   Set-Content -LiteralPath $mockCli -Value @('param($Mode, $Payload)', 'Write-Output $Payload', 'exit 0')

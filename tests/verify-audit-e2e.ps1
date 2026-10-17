@@ -100,8 +100,8 @@ try {
     if ($name -eq 'obsolete-candidate') {
       $findings = @(@{ category = 'Potentially obsolete functionality'; path = 'tests/legacy.test.ts'; line = 1; evidence = 'The legacy test has the same fixture assertion as the documented active test.'; recommendation = 'Check test runner configuration and coverage before removing either test.'; priority = 'low' })
     }
-    $response = @{ status = 'complete'; summary = 'Bounded fixture review.'; reviewed_paths = $reviewed; limitations = @(); findings = $findings }
-    if ($name -eq 'c-standalone' -and $Prompt.Contains('compact optional map')) {
+    $response = @{ status = 'complete'; summary = 'Bounded fixture review.'; reviewed_paths = $reviewed; limitations = @(); map = $null; findings = $findings }
+    if ($name -eq 'c-standalone' -and $Prompt.Contains('include a compact map')) {
       $response.map = @{
         purpose = 'README describes a small C tool'; purpose_path = 'README.md'
         entries = @(@{ path = 'src/main.c'; role = 'Program entry point' })
@@ -138,18 +138,19 @@ try {
   $tsQuick = (meowsky audit $ts --quick) -join "`n"
   Assert-Audit ($script:mockCalls -eq $callsBeforeQuick -and $tsQuick.Contains('Codex was not invoked')) 'Quick audit skips Codex'
   $cDefault = (meowsky audit $c) -join "`n"
-  Assert-Audit ($cDefault.Contains('Semantic evaluation: Complete') -and $script:mockCalls -gt $callsBeforeQuick) 'Default audit invokes bounded Codex review'
-  Assert-Audit (($script:mockArguments -join ' ').Contains('--sandbox read-only')) 'Codex invocation uses read-only sandbox'
+  Assert-Audit ($cDefault.Contains('Audit state: complete; review pending.') -and $script:mockCalls -eq $callsBeforeQuick) 'Default audit writes state without Codex'
+  Assert-Audit (((meowsky review $c) -join "`n").Contains('Review is allowed')) 'Gitless project reaches review gate'
+  try { $null = meowsky refactor $c; throw 'Refactor gate should have blocked.' }
+  catch { Assert-Audit ($_.Exception.Message -like 'Review is incomplete*') 'Refactor gate requires completed review' }
   $psDefault = (meowsky audit $ps) -join "`n"
-  Assert-Audit ($psDefault.Contains('Build and deployment commands share a long script')) 'Semantic script finding reaches CLI'
+  Assert-Audit ($psDefault.Contains('Source size')) 'Oversized script remains a static candidate'
   $obsoleteDefault = (meowsky audit $obsolete) -join "`n"
-  Assert-Audit ($obsoleteDefault.Contains('legacy test has the same fixture assertion')) 'Potentially obsolete finding reaches CLI'
+  Assert-Audit ($obsoleteDefault.Contains('Reference gap')) 'Potentially obsolete test remains a review candidate'
   $cleanDefault = (meowsky audit $clean) -join "`n"
-  Assert-Audit ($cleanDefault.Contains('No material semantic findings')) 'Clean project has no artificial semantic finding'
   Assert-Audit ($cleanDefault.Contains('Static checks: 0 verified issue(s), 0 investigation candidate(s)')) 'Clean project has no artificial static finding'
   $docsQuick = (meowsky audit $docs --quick) -join "`n"
   Assert-Audit ($docsQuick.Contains('Static checks: 2 verified issue(s)')) 'Broken docs links are verified'
-  foreach ($root in $roots) { Assert-Audit (-not (Test-Path -LiteralPath (Join-Path $root '.meowsky'))) "Normal audit made no project output: $root" }
+  foreach ($root in $roots) { Assert-Audit (Test-Path -LiteralPath (Join-Path $root '.meowsky/state.json')) "Normal audit wrote stage state: $root" }
 
   $null = meowsky audit $c --refresh
   $null = meowsky audit $ts --quick --refresh
@@ -160,7 +161,7 @@ try {
   foreach ($root in $roots) {
     $reportPath = Join-Path $root '.meowsky/AUDIT.md'
     $mapPath = Join-Path $root '.meowsky/MAP.md'
-    Assert-Audit ((Test-Path -LiteralPath $reportPath) -and (Test-Path -LiteralPath $mapPath)) "Refresh wrote two artifacts: $root"
+    Assert-Audit ((Test-Path -LiteralPath $reportPath) -and (Test-Path -LiteralPath $mapPath)) "Audit wrote two artifacts: $root"
     $reportText = Get-Content -Raw -LiteralPath $reportPath
     $mapText = Get-Content -Raw -LiteralPath $mapPath
     Assert-Audit ($reportText.Contains('## Executive summary') -and $reportText.Contains('Suggested improvement:') -or $reportText.Contains('No material findings')) "Report readable and actionable: $root"
@@ -170,24 +171,22 @@ try {
     Assert-Audit ((Get-ApplicationHashes $root) -eq $before[$root]) "Application files preserved: $root"
   }
   $cMap = Get-Content -Raw -LiteralPath (Join-Path $c '.meowsky/MAP.md')
-  Assert-Audit ($cMap.Contains('src/main.c') -and $cMap.Contains('src/sum.c') -and $cMap.Contains('Entry point calls')) 'C map includes evidenced workflow and relationship'
+  Assert-Audit ($cMap.Contains('src/main.c') -and $cMap.Contains('](../src)') -and $cMap.Contains('No module relationships or workflows were established')) 'C map is useful without fabricated relationships'
   $tsMap = Get-Content -Raw -LiteralPath (Join-Path $ts '.meowsky/MAP.md')
-  Assert-Audit ($tsMap.Contains('Semantic context unavailable') -and -not $tsMap.Contains('Codex interpretation')) 'Quick map avoids invented semantic claims'
+  Assert-Audit ($tsMap.Contains('Semantic context pending') -and -not $tsMap.Contains('Codex interpretation')) 'Quick map avoids invented semantic claims'
   $psReport = Get-Content -Raw -LiteralPath (Join-Path $ps '.meowsky/AUDIT.md')
-  Assert-Audit ($psReport.Contains('Source size') -and $psReport.Contains('Review cohesion before splitting')) 'Oversized file is advice, not a defect claim'
+  Assert-Audit ($psReport.Contains('Source size') -and $psReport.Contains('Inspect cohesion and change history')) 'Oversized file is advice, not a defect claim'
   $docsReport = Get-Content -Raw -LiteralPath (Join-Path $docs '.meowsky/AUDIT.md')
   Assert-Audit ($docsReport.Contains('docs/absent.md') -and $docsReport.Contains('docs/no-image.png')) 'Report explains broken targets'
   $obsoleteReport = Get-Content -Raw -LiteralPath (Join-Path $obsolete '.meowsky/AUDIT.md')
-  Assert-Audit ($obsoleteReport.Contains('Reference gap') -and $obsoleteReport.Contains('Check test runner configuration')) 'Potential obsolete test has proportionate recommendation'
+  Assert-Audit ($obsoleteReport.Contains('Reference gap') -and $obsoleteReport.Contains('Check callers, task scripts')) 'Potential obsolete test has proportionate recommendation'
   $cleanReport = Get-Content -Raw -LiteralPath (Join-Path $clean '.meowsky/AUDIT.md')
   Assert-Audit ($cleanReport.Contains('0 verified path issue(s), 0 static investigation candidate(s), 0 semantic finding(s)')) 'Healthy report does not invent issues'
 
   $script:mockMode = 'auth'
   $authOutput = (meowsky audit $c) -join "`n"
-  Assert-Audit ($authOutput.Contains('Semantic evaluation: Failed. Codex authentication failed')) 'Authentication failure is visible'
-  $null = meowsky audit $c --refresh
-  Assert-Audit ((Get-Content -Raw -LiteralPath (Join-Path $c '.meowsky/AUDIT.md')).Contains('Codex review: Failed:')) 'Failed semantic review disclosed in saved report'
-  Assert-Audit ((Get-ApplicationHashes $c) -eq $before[$c]) 'Failure path still preserves source'
+  Assert-Audit ($authOutput.Contains('Audit state: complete; review pending.') -and $script:mockCalls -eq $callsBeforeQuick) 'Audit remains independent of Codex authentication'
+  Assert-Audit ((Get-ApplicationHashes $c) -eq $before[$c]) 'Repeat audit preserves source'
   Write-Host "PASS: $checks Audit end-to-end checks across six Windows fixtures."
 } finally {
   Set-Location $originalLocation

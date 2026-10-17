@@ -89,7 +89,7 @@ function New-MeowskyAuditMap {
       }
     }
   }
-  if (-not $relationCount) { $lines.Add('No module relationships or workflows were established by the available reviewed source.') }
+  if (-not $relationCount) { $lines.Add('No module relationships or workflows were established by the available evidence.') }
   $lines.Add('')
   $lines.Add('## Tests and existing documentation')
   $lines.Add('')
@@ -113,13 +113,13 @@ function New-MeowskyAuditMap {
     $lines.Add("- Other exclusions or omissions: $($reasons -join '; ').")
   }
   foreach ($warning in @($Inventory.Warnings | Select-Object -First 3)) { $lines.Add("- Discovery warning: $(ConvertTo-MeowskyAuditMarkdownText $warning)") }
-  if ($Quick) { $lines.Add('- Semantic context unavailable: `--quick` skipped Codex. Responsibilities and relationships above are not inferred from filenames.') }
-  elseif (-not $Semantic -or $Semantic.State -notin @('Complete', 'Incomplete')) {
+  if ($Quick -or -not $Semantic) { $lines.Add('- Semantic context pending: run `meowsky review` after this audit. Responsibilities and relationships above are not inferred from filenames.') }
+  elseif ($Semantic.State -notin @('Complete', 'Incomplete')) {
     $state = if ($Semantic) { "$($Semantic.State): $($Semantic.Reason)" } else { 'not run' }
     $lines.Add("- Semantic context unavailable: $(ConvertTo-MeowskyAuditMarkdownText $state).")
   } elseif (-not $map) { $lines.Add('- The bounded Codex review returned no validated map context; structural navigation uses static discovery only.') }
   if ($Semantic -and $Semantic.State -eq 'Incomplete') { $lines.Add("- Codex review incomplete: $(ConvertTo-MeowskyAuditMarkdownText $Semantic.Reason).") }
-  $lines.Add('- This map is a snapshot from the last explicit `--refresh`. Recheck linked source before relying on it; no automatic synchronization runs.')
+  $lines.Add('- This map is a snapshot from the latest `meowsky audit`. Recheck linked source before relying on it; no automatic synchronization runs.')
   $lines.Add('')
   $lines -join "`r`n"
 }

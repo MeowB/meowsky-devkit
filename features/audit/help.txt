@@ -5,14 +5,11 @@ The directory may be relative to the current location or an absolute path.
 Git is optional; discovery reads the filesystem directly.
 Options may appear before or after the directory.
 
---quick    Show filesystem discovery and concise static findings without Codex.
---refresh  Write .meowsky/AUDIT.md and a compact .meowsky/MAP.md from the
-           current audit. Existing changed files are backed up before
-           replacement. With --quick, both outputs label absent Codex context.
+--quick    Compatibility option: run the same local discovery and static checks.
+--refresh  Compatibility option: regenerate outputs, as every audit now does.
 --refactor-prompt  Print a planning prompt for 1-12 comma-separated finding
-           IDs from the saved AUDIT.md; requires the saved MAP.md too. This
-           option reads files only, invokes no Codex session, and cannot be
-           combined with --quick or --refresh. Quote comma-separated IDs in
+           IDs after a completed review. This option reads files only and
+           cannot be combined with --quick or --refresh. Quote IDs in
            PowerShell so they remain one argument.
 --help     Show this help when used alone. -h and -Help also show feature help.
 
@@ -37,32 +34,21 @@ Markdown files over 1 MiB and complex link syntax are reported as coverage
 limits instead of being called broken links. Links outside the audited root
 and section anchors are not verified.
 
-Without --quick, Audit also runs a bounded Codex semantic review. It may incur
-Codex usage. The review samples relevant files and evaluates maintainability,
-architecture, naming, obsolete or redundant logic, and documentation. Findings
-must cite inspected source paths and recommend proportionate action. A clean
-review may have no findings. Failed or incomplete reviews are labeled clearly.
-
-Codex runs non-interactively with a read-only sandbox, no approval escalation,
-disabled hooks/plugins/apps, no user config, an ephemeral session, and a
-180-second timeout. The prompt forbids project tooling, tests, and edits; the
-sandbox enforces the target file-write boundary. The bounded summary and
-structured response stay in memory unless --refresh writes the Markdown report.
-Normal audits do not write project files. Report source links are checked
-against the discovery inventory at generation time; semantic claims still need
-human verification. The map links to inventoried source, tests, and docs and
-labels static candidates separately from bounded Codex interpretations. It
-is a snapshot from the last explicit --refresh; there are no update hooks.
+Audit does not invoke Codex. Semantic review is pending until the separate
+review stage is implemented and completed. Every audit writes .meowsky/AUDIT.md,
+.meowsky/MAP.md, and state.json, with changed prior outputs backed up. A
+failed or interrupted audit leaves state pending, blocking later stages.
+Audit never writes application source. Report source links are checked
+against the discovery inventory at generation time. The map links to inventoried
+source, tests, and docs and labels unavailable semantic context. It
+is a snapshot from the latest audit; there are no update hooks.
 Valid report links establish that paths existed at generation time; they do
-not prove a semantic claim. The bounded review does not inspect every file.
-Codex failures or incomplete coverage are disclosed, not treated as success.
+not prove a semantic claim. Audit does not perform semantic review.
+Incomplete discovery coverage is disclosed, not treated as full coverage.
 Audit does not edit application source files.
 
-Refactoring workflow: run meowsky audit <directory> --refresh, review the two
-generated files, then select IDs shown in AUDIT.md. Run
-meowsky audit <directory> --refactor-prompt 'V001,S002' and copy its output into
-an interactive meowsky codex <directory> session. In PowerShell, append
-| Set-Clipboard to the prompt command to copy it. Codex must verify the current
-source and present a scoped plan, then wait for explicit edit approval. The
-same template is in features/audit/refactor-prompt.md for manual use: replace
-its placeholders, verify the selected IDs, and follow its checklist yourself.
+Workflow: run meowsky audit <directory>, then meowsky review <directory> to
+check freshness. Interactive review and completion recording arrive in a later
+chunk. Until then, meowsky refactor and --refactor-prompt remain blocked by the
+pending review state. The manual planning template remains in
+features/audit/refactor-prompt.md.

@@ -1,0 +1,5 @@
+meowsky review [<directory>]
+Check that a saved local audit is complete and current. Defaults to the current
+directory; Git is not required. This Chunk A command does not launch Codex,
+record a review, or change application source. Run meowsky audit first.
+Use meowsky review --help for this page.

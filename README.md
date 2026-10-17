@@ -164,10 +164,12 @@ When `meowsky ./` runs in any folder, it opens a fullscreen Windows Terminal lay
 | `meowsky <directory>` | Change to a directory, checking the current location and then the work root. |
 | `meowsky .` or `meowsky ./` | Open the fullscreen Windows Terminal layout in the current directory. |
 | `meowsky codex [directory]` | Start Codex with the Meowsky orientation prompt; defaults to the current directory. |
-| `meowsky audit [directory]` | Inspect the workspace with filesystem discovery, static checks, and a bounded Codex review; defaults to the current directory. |
-| `meowsky audit [directory] --quick` | Run discovery and static checks without Codex. |
-| `meowsky audit [directory] --refresh` | Save the current audit and compact map under `.meowsky/`; add `--quick` to omit Codex. |
-| `meowsky audit [directory] --refactor-prompt 'V001,S002'` | Print an approval-gated planning prompt for selected saved finding IDs. |
+| `meowsky audit [directory]` | Run filesystem discovery and static checks, then write `.meowsky/MAP.md`, `AUDIT.md`, and `state.json`; no Codex invocation. |
+| `meowsky audit [directory] --quick` | Compatibility option for the same local audit. |
+| `meowsky audit [directory] --refresh` | Compatibility option; every audit now regenerates the artifacts. |
+| `meowsky review [directory]` | Check whether the saved audit is complete and current; interactive review is not yet implemented. |
+| `meowsky refactor [directory]` | Check review prerequisites; refactoring is not yet implemented. |
+| `meowsky audit [directory] --refactor-prompt 'V001,S002'` | Print the legacy planning prompt only after completed review. |
 | `meowsky color` | Explain retired project color overrides; all panels inherit the active Terminal theme. |
 | `meowsky identity` | Describe the Identity system; no settings are applied. |
 | `meowsky identity list` | Discover available semantic identity themes. |
@@ -190,9 +192,9 @@ When `meowsky ./` runs in any folder, it opens a fullscreen Windows Terminal lay
 
 ## Workspace Audit
 
-`meowsky audit` accepts any local directory, including projects without Git. It reports verified static issues, investigation candidates, and coverage limits, then requests a bounded Codex review. `--quick` skips Codex. Normal audits write no project files; only explicit `--refresh` creates or updates `.meowsky/AUDIT.md` and `.meowsky/MAP.md`, preserving a changed existing output with a backup. Reports link to discovered source, tests, and documentation. These links confirm path existence at generation time, while architectural judgments still need human review.
+`meowsky audit` accepts any local directory, including projects without Git. It reports verified static issues, investigation candidates, and coverage limits, then writes `.meowsky/AUDIT.md`, `.meowsky/MAP.md`, and `state.json`. It never invokes Codex or edits application source. Changed existing outputs receive backups. The report marks semantic review pending. Source links confirm path existence at generation time; they do not establish architectural truth. `--quick` and `--refresh` remain accepted as compatibility options.
 
-To plan a change, inspect the saved report and map, then run `meowsky audit <directory> --refactor-prompt 'V001,S002'` with the IDs you selected. Copy the printed prompt into an interactive `meowsky codex <directory>` session, or use the [manual template](features/audit/refactor-prompt.md). The workflow verifies current source and asks for a plan and explicit approval before any edits. Run `meowsky audit --help` for scan limits and other coverage details. The six-fixture Windows validation is `powershell -NoProfile -ExecutionPolicy Bypass -File tests/verify-audit-e2e.ps1`.
+`meowsky review` now checks for a current completed audit, and `meowsky refactor` checks for a completed review. They are prerequisite gates in this migration chunk: neither launches Codex or changes source yet. The existing [manual refactoring template](features/audit/refactor-prompt.md) remains available for later stages. Run `meowsky audit --help` for scan limits and coverage details. The six-fixture Windows validation is `powershell -NoProfile -ExecutionPolicy Bypass -File tests/verify-audit-e2e.ps1`.
 
 ## Identity
 

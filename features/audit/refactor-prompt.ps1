@@ -1,6 +1,8 @@
 function Get-MeowskyAuditRefactorPrompt {
   param([Parameter(Mandatory = $true)][string]$Root, [string]$Ids)
 
+  $null = Assert-MeowskyAuditPrerequisite -Root $Root -Stage refactor
+
   $selected = @($Ids -split ',' | ForEach-Object { $_.Trim().ToUpperInvariant() })
   if (-not $selected.Count -or $selected.Count -gt 12 -or
       @($selected | Where-Object { $_ -cnotmatch '^[VISC][0-9]{3}$' }).Count -or

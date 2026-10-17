@@ -1,0 +1,6 @@
+meowsky refactor [<directory>]
+Check that the local audit is current and semantic review is complete. Defaults
+to the current directory; Git is not required. This Chunk A command does not
+launch Codex, approve findings, or change application source. Review execution
+and approval are planned for later migration chunks.
+Use meowsky refactor --help for this page.

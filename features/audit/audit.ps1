@@ -4,6 +4,7 @@
 . (Join-Path $PSScriptRoot 'report.ps1')
 . (Join-Path $PSScriptRoot 'map.ps1')
 . (Join-Path $PSScriptRoot 'refactor-prompt.ps1')
+. (Join-Path $PSScriptRoot 'state.ps1')
 
 function Invoke-MeowskyAuditFeature {
   param([string]$Target, [string]$WorkRoot, [string[]]$Arguments)
@@ -53,15 +54,19 @@ function Invoke-MeowskyAuditFeature {
   if ($expectPromptIds) { throw "Missing finding IDs after --refactor-prompt. $usage" }
   if ($promptRequested -and ($quick -or $refresh)) { throw "--refactor-prompt cannot be combined with --quick or --refresh. $usage" }
 
-  $path = if ($directory) { $directory } else { (Get-Location).Path }
-  if (-not (Test-Path -LiteralPath $path)) { throw "Audit target was not found: $path" }
-  if (-not (Test-Path -LiteralPath $path -PathType Container)) { throw "Audit target is not a directory: $path" }
-  $resolved = Resolve-Path -LiteralPath $path
-  if ($resolved.Provider.Name -ne 'FileSystem') { throw "Audit target is not a filesystem directory: $path" }
+  $root = Resolve-MeowskyAuditTarget -Path $directory
 
-  if ($promptRequested) { return (Get-MeowskyAuditRefactorPrompt -Root $resolved.ProviderPath -Ids $promptIds) }
+  if ($promptRequested) { return (Get-MeowskyAuditRefactorPrompt -Root $root -Ids $promptIds) }
 
-  $inventory = Get-MeowskyAuditInventory -Root $resolved.ProviderPath
+  # Invalidate any previous completion before work that may fail or be interrupted.
+  $pending = [ordered]@{
+    version = 1; target = $root
+    audit = [ordered]@{ status = 'pending'; completedAt = ''; fingerprint = ''; coverage = 'unknown'; reportHash = ''; mapHash = '' }
+    review = [ordered]@{ status = 'pending' }
+  }
+  $null = Write-MeowskyAuditState -Root $root -State $pending
+  $inventory = Get-MeowskyAuditInventory -Root $root
+  $fingerprint = Get-MeowskyAuditFingerprint -Inventory $inventory
   "Audit target: $($inventory.Root)"
   "Inventory: $($inventory.Files.Count) relevant files, $($inventory.Directories.Count) directories."
   $groups = @($inventory.Files | Group-Object Category | Sort-Object Name | ForEach-Object { "$($_.Name) $($_.Count)" })
@@ -85,31 +90,25 @@ function Invoke-MeowskyAuditFeature {
     "  [$($finding.Id)] $($finding.Category) [$($finding.Priority)] $($finding.Path): $($finding.Evidence) (Method: $($finding.Method))"
   }
   if ($findings.Count -gt 8) { "  ... $($findings.Count - 8) more finding(s)." }
-  $semantic = $null
   if ($quick) { 'Quick static checks complete; Codex was not invoked.' }
-  else {
-    'Starting Codex review: read-only, requested sample of up to 12 files, 180-second timeout; Codex usage may apply.'
-    $semantic = Invoke-MeowskyAuditSemantic -Inventory $inventory -StaticReport $report -IncludeMap:$refresh
-    "Semantic evaluation: $($semantic.State). $($semantic.Reason)"
-    if ($semantic.State -eq 'Complete' -or $semantic.State -eq 'Incomplete') {
-      "Semantic findings: $($semantic.Findings.Count); inspected paths: $($semantic.ReviewedPaths.Count)."
-      if ($semantic.State -eq 'Complete' -and -not $semantic.Findings.Count) { 'No material semantic findings in the bounded review.' }
-      foreach ($finding in @($semantic.Findings | Select-Object -First 8)) {
-        $location = if ($finding.line -gt 0) { "$($finding.path):$($finding.line)" } else { $finding.path }
-        "  $($finding.priority) $($finding.category) $location`: $($finding.evidence) Recommendation: $($finding.recommendation)"
-      }
-      if ($semantic.Findings.Count -gt 8) { "  ... $($semantic.Findings.Count - 8) more semantic finding(s)." }
-      foreach ($limitation in $semantic.Limitations) { "  Review limitation: $limitation" }
-    }
-  }
-  if ($refresh) {
-    $content = New-MeowskyAuditReport -Inventory $inventory -StaticReport $report -Semantic $semantic -Quick:$quick
-    $mapContent = New-MeowskyAuditMap -Inventory $inventory -Semantic $semantic -Quick:$quick
-    $written = Write-MeowskyAuditReport -Root $inventory.Root -Content $content
-    "Audit report: $($written.State) $($written.Path)"
-    if ($written.Backup) { "Previous report backup: $($written.Backup)" }
-    $mapWritten = Write-MeowskyAuditReport -Root $inventory.Root -Content $mapContent -Name 'MAP.md'
-    "Workspace map: $($mapWritten.State) $($mapWritten.Path)"
-    if ($mapWritten.Backup) { "Previous map backup: $($mapWritten.Backup)" }
-  }
+  else { 'Static audit complete; semantic review is pending. Codex was not invoked.' }
+  if ($refresh) { 'Refresh requested; Audit regenerates its artifacts on every run.' }
+  $content = New-MeowskyAuditReport -Inventory $inventory -StaticReport $report -Quick
+  $mapContent = New-MeowskyAuditMap -Inventory $inventory -Quick
+  $written = Write-MeowskyAuditReport -Root $inventory.Root -Content $content
+  "Audit report: $($written.State) $($written.Path)"
+  if ($written.Backup) { "Previous report backup: $($written.Backup)" }
+  $mapWritten = Write-MeowskyAuditReport -Root $inventory.Root -Content $mapContent -Name 'MAP.md'
+  "Workspace map: $($mapWritten.State) $($mapWritten.Path)"
+  if ($mapWritten.Backup) { "Previous map backup: $($mapWritten.Backup)" }
+  $currentFingerprint = Get-MeowskyAuditFingerprint -Inventory (Get-MeowskyAuditInventory -Root $root)
+  if ($currentFingerprint -cne $fingerprint) { throw 'Workspace changed during audit generation. Run meowsky audit again.' }
+  $pending.audit.status = 'complete'
+  $pending.audit.completedAt = (Get-Date).ToString('o')
+  $pending.audit.fingerprint = $fingerprint
+  $pending.audit.coverage = if ($inventory.Incomplete) { 'incomplete' } else { 'complete within exclusions' }
+  $pending.audit.reportHash = Get-MeowskyAuditOutputHash -Path $written.Path
+  $pending.audit.mapHash = Get-MeowskyAuditOutputHash -Path $mapWritten.Path
+  $null = Write-MeowskyAuditState -Root $root -State $pending
+  'Audit state: complete; review pending.'
 }

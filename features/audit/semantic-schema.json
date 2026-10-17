@@ -6,7 +6,7 @@
     "reviewed_paths": { "type": "array", "items": { "type": "string" } },
     "limitations": { "type": "array", "items": { "type": "string" } },
     "map": {
-      "type": "object",
+      "type": ["object", "null"],
       "properties": {
         "purpose": { "type": "string" },
         "purpose_path": { "type": "string" },
@@ -50,6 +50,6 @@
       }
     }
   },
-  "required": ["status", "summary", "reviewed_paths", "limitations", "findings"],
+  "required": ["status", "summary", "reviewed_paths", "limitations", "map", "findings"],
   "additionalProperties": false
 }

@@ -79,22 +79,23 @@ function New-MeowskyAuditReport {
   $lines.Add("- Discovery: $($Inventory.Files.Count) relevant files, $($Inventory.Directories.Count) directories, $($Inventory.ScannedEntries) entries inspected.")
   $coverage = if ($Inventory.Incomplete) { 'Incomplete' } else { 'Complete within stated exclusions' }
   $lines.Add("- Coverage: $coverage.")
-  $reviewState = if ($Quick) { 'Not run (--quick)' } elseif ($Semantic) { "$($Semantic.State): $($Semantic.Reason)" } else { 'Not available' }
+  $reviewState = if ($Semantic) { "$($Semantic.State): $($Semantic.Reason)" } else { 'Pending (run meowsky review)' }
   $lines.Add("- Codex review: $(ConvertTo-MeowskyAuditMarkdownText $reviewState).")
   $lines.Add('')
   $lines.Add('## Executive summary')
   $lines.Add('')
   $lines.Add("$($StaticReport.Verified.Count) verified path issue(s), $($StaticReport.Candidates.Count) static investigation candidate(s), $(@($items | Where-Object Kind -eq 'Semantic').Count) semantic finding(s), and $($StaticReport.Limitations.Count) static coverage limitation(s).")
   if (-not $items.Count) { $lines.Add('No material findings from the checks that ran. This does not certify the whole workspace.') }
-  if ($Quick -or -not $Semantic -or $Semantic.State -ne 'Complete') { $lines.Add('Semantic analysis is incomplete or absent; this is a partial audit.') }
+  if ($Quick -or -not $Semantic -or $Semantic.State -ne 'Complete') { $lines.Add('Semantic analysis is pending or incomplete; this is a partial audit.') }
   if ($Quick -or -not $Semantic -or $Semantic.State -notin @('Complete', 'Incomplete')) {
-    $lines.Add('Codex semantic assessment was skipped for architecture boundaries, code quality and naming, potentially obsolete or redundant code, documentation accuracy and relevance, and maintainability and navigation.')
+    $lines.Add('Semantic assessment is pending for architecture boundaries, code quality and naming, potentially obsolete or redundant code, documentation accuracy and relevance, and maintainability and navigation.')
   }
   $lines.Add('Source links below confirm path existence at generation time. They do not confirm the correctness of a semantic claim.')
   $lines.Add('')
   $lines.Add('## Exclusions and analysis limitations')
   $lines.Add('')
-  $lines.Add('- Codex reviews at most 12 relevant files and 1200 lines. Complete means that bounded review finished, not that every file was analyzed.')
+  if ($Semantic) { $lines.Add('- Semantic findings reflect only the files recorded as reviewed; they do not certify the entire project.') }
+  else { $lines.Add('- Semantic review is pending; this report contains discovery and static checks only.') }
   $lines.Add('- Static link checks cover supported local Markdown targets; external URLs and section anchors are outside their verification scope.')
   if ($Inventory.Skipped.Count) {
     foreach ($group in @($Inventory.Skipped | Group-Object Reason | Sort-Object Name)) {
@@ -120,7 +121,7 @@ function New-MeowskyAuditReport {
     if (-not $group.Count) {
       $lines.Add('No findings from the checks performed in this category; this does not establish that the category is issue-free.')
       if ($Quick -or -not $Semantic -or $Semantic.State -notin @('Complete', 'Incomplete')) {
-        $lines.Add('Codex semantic assessment of this category did not run or finish.')
+        $lines.Add('Semantic assessment of this category is pending or did not finish.')
       } elseif ($Semantic.State -eq 'Incomplete') {
         $lines.Add('Codex semantic assessment of this category was incomplete.')
       }
@@ -184,7 +185,7 @@ function Write-MeowskyAuditReport {
   param(
     [Parameter(Mandatory = $true)][string]$Root,
     [Parameter(Mandatory = $true)][string]$Content,
-    [ValidateSet('AUDIT.md', 'MAP.md')][string]$Name = 'AUDIT.md'
+    [ValidateSet('AUDIT.md', 'MAP.md', 'state.json')][string]$Name = 'AUDIT.md'
   )
 
   $directory = Join-Path $Root '.meowsky'
@@ -214,7 +215,7 @@ function Write-MeowskyAuditReport {
   try {
     [IO.File]::WriteAllBytes($temp, $bytes)
     if ($existing) {
-      $backup = Join-Path $directory ($baseName + '-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '-' + [guid]::NewGuid().ToString('N') + '.md.bak')
+      $backup = Join-Path $directory ($baseName + '-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '-' + [guid]::NewGuid().ToString('N') + [IO.Path]::GetExtension($Name) + '.bak')
       [IO.File]::Copy($target, $backup, $false)
       if ((Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash -cne (Get-FileHash -LiteralPath $backup -Algorithm SHA256).Hash) {
         throw 'Audit report backup verification failed; existing report was preserved.'

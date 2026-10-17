@@ -24,13 +24,17 @@ Folder names do not create commands: tree remains `ptree`, workspace remains `.`
 | launchpad | Income exploration district command, help, and startup context | workspace, paths |
 | color | Explain retirement of project color overrides | none |
 | identity | Semantic theme loading, validation, planning, Windows/Terminal/VS Code UI/syntax adapters, and help | feature-loader (help resource) |
-| audit | Filesystem discovery, static checks, bounded Codex review, report/map rendering, and selected-finding prompt | feature-loader (help resource), Codex executable (semantic review only) |
+| audit | Filesystem discovery, static checks, report/map rendering, input fingerprints, and saved stage state | feature-loader (help resource) |
+| review | Validates current audit prerequisite; interactive review follows in a later chunk | audit discovery and state |
+| refactor | Validates completed review prerequisite; execution follows in a later chunk | audit discovery and state |
 | matrix | Animation | terminal |
 | workspace | Layout and status banner | feature-loader, terminal, git |
 
 For a feature change, read that directory and the listed core files. Tree and Codex share enumeration but retain separate rendering. Terminal core only restores terminal-default foreground/background with ANSI SGR 39/49. Theme definitions own colors. Runtime panels use standard ANSI roles from the active palette: green Matrix glyphs/header, blue folders, cyan project path, and green/yellow clean/dirty working-tree status. Each colored segment restores the default foreground; panels do not load project colors. No generic configuration or event framework is introduced.
 
-Audit's `audit.ps1` handles CLI options and dispatch. `discovery.ps1` inventories filesystem paths without Git, `static-checks.ps1` emits verified issues, review candidates, and coverage limits, and `semantic.ps1` runs a bounded, read-only Codex review with a validated structured response. `report.ps1` and `map.ps1` render linked Markdown only for explicit `--refresh`; `refactor-prompt.ps1` prints an approval-gated plan prompt for selected saved finding IDs. Normal audits keep results in memory and do not write project files. The generated map is a snapshot, not a live index.
+Audit's `audit.ps1` handles CLI options and dispatch. `discovery.ps1` inventories filesystem paths without Git, and `static-checks.ps1` emits verified issues, review candidates, and coverage limits. `report.ps1` and `map.ps1` render linked Markdown on every audit; `state.ps1` fingerprints relevant inventoried content and exclusions, then marks audit complete only after both outputs validate. A new audit first marks state pending. `review` and `refactor` are registered prerequisite gates; neither launches Codex or edits source in Chunk A. The old `semantic.ps1` remains loaded for migration and existing unit coverage but is not called by `meowsky audit`. The generated map is a snapshot, not a live index.
+
+`.meowsky/state.json` version 1 stores the resolved target, audit status, completion time, SHA-256 fingerprint, coverage label, output hashes, and pending review status. The fingerprint covers inventoried file contents and paths, directory paths, recorded skips, warnings, and exclusion rules through `.meowskyignore`. Review recomputes it without Git. Excluded directory contents are outside this fingerprint and remain a stated coverage limit.
 
 Workspace is the composition exception: it uses Codex context/launch functions, the tree panel and matrix dispatch. It checks those features before opening a window. All workspace panes restore terminal defaults on startup. Tree and Matrix no longer poll project-color files. Files, tree connectors, and ordinary Git metadata retain the default foreground.
 
