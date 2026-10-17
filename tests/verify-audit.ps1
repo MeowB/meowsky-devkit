@@ -37,6 +37,7 @@ try {
   $script:auditInvocationCount = 0
   $script:auditLastArguments = @()
   $script:auditLastPrompt = ''
+  $originalResolver = (Get-Item Function:Resolve-MeowskyCodexCommand).ScriptBlock
   $originalRunner = (Get-Item Function:Invoke-MeowskyAuditCodexProcess).ScriptBlock
   function Resolve-MeowskyCodexCommand { if ($script:auditCodexAvailable) { 'mock-codex.ps1' } }
   function Invoke-MeowskyAuditCodexProcess {
@@ -51,11 +52,15 @@ try {
     $reviewed = @()
     if ($Root -ne $project) { $reviewed = @('README.md') }
     if ($script:auditMockMode -eq 'bad-path') { $reviewed = @('outside.md') }
+    if ($script:auditMockMode -eq 'too-many-reviewed') { $reviewed = $script:auditTooManyPaths }
     if ($script:auditMockMode -in @('map', 'bad-map') -and $Root -eq $issues) { $reviewed = @('README.md', 'docs/guide.md', 'scripts/used.ps1') }
     $status = if ($script:auditMockMode -eq 'incomplete') { 'incomplete' } else { 'complete' }
     $findings = @()
     if ($script:auditMockMode -eq 'finding') {
       $findings = @(@{ category = 'Architecture'; path = 'README.md'; line = 1; evidence = 'The stated entry point differs from source.'; recommendation = 'Check the documented command and update the guide if needed.'; priority = 'medium' })
+    }
+    if ($script:auditMockMode -eq 'bad-line') {
+      $findings = @(@{ category = 'Documentation'; path = 'README.md'; line = 9999; evidence = 'Evidence line fixture.'; recommendation = 'Inspect the file.'; priority = 'low' })
     }
     $response = @{ status = $status; summary = 'Bounded sample reviewed.'; reviewed_paths = $reviewed; limitations = @(); findings = $findings }
     if ($script:auditMockMode -in @('map', 'bad-map')) {
@@ -107,6 +112,13 @@ try {
   Set-Content -LiteralPath (Join-Path $issues 'scripts/unlinked.ps1') -Value 'Write-Output unlinked'
   Set-Content -LiteralPath (Join-Path $issues 'tests/standalone.test.ps1') -Value 'Write-Output test'
   Set-Content -LiteralPath (Join-Path $issues 'root.test.ps1') -Value 'Write-Output test'
+  $coverageProject = Join-Path $fixture 'coverage project'
+  foreach ($directory in @('src', 'vendor', 'generated', 'node_modules')) {
+    New-Item -ItemType Directory -Path (Join-Path $coverageProject $directory) -Force | Out-Null
+  }
+  foreach ($file in @('README.md', 'src/main.rs', 'src/custom.xyz', 'image.png', 'vendor/authored.rs', 'generated/handwritten.ts', 'node_modules/dependency.js')) {
+    Set-Content -LiteralPath (Join-Path $coverageProject $file) -Value 'fixture'
+  }
   Assert-Equal (Test-Path -LiteralPath (Join-Path $plain '.git')) $false 'Discovery fixture has no Git repository'
   $before = Get-FixtureEntries
   $beforeContent = Get-FixtureContentHashes
@@ -131,7 +143,7 @@ try {
   $paths = @($inventory.Files | ForEach-Object { $_.Path })
   Assert-Equal ($paths -join ',') '.meowskyignore,CMakeLists.txt,docs/guide.md,package.json,pyproject.toml,README.md,src/deeper/helper.py,src/index.html,src/main.c,src/main.h,src/main.ts,src/style.css,src/tool.ps1,tests/main.test.ts,tsconfig.json' 'Relevant nested files use relative paths'
   Assert-Equal ($inventory.Directories -join ',') 'docs,src,src/deeper,tests' 'Only relevant directories are enumerated'
-  Assert-Equal $inventory.Incomplete $false 'Intentional exclusions preserve complete scoped coverage'
+  Assert-Equal $inventory.Incomplete $true 'Broad and project exclusions limit coverage'
   Assert-Equal ($inventory.Languages -join ',') 'C,CSS,HTML,PowerShell,Python,TypeScript' 'Languages detected from source and tests'
   Assert-Equal (@($inventory.Indicators | ForEach-Object { "$($_.Name):$($_.Path)" }) -join ',') 'CMake:CMakeLists.txt,Node.js:package.json,Python:pyproject.toml,TypeScript:tsconfig.json' 'Project indicators detected'
   Assert-Equal (@($inventory.Files | Where-Object { $_.Path -eq 'tests/main.test.ts' })[0].Category) 'Test' 'Test file classified'
@@ -140,6 +152,7 @@ try {
   Assert-Equal (@($inventory.Files | Where-Object { $_.Path -eq 'src/main.ts' })[0].Category) 'Source' 'Source file classified'
   Assert-Equal (@($inventory.Skipped | Where-Object { $_.Path -eq 'src/private' -and $_.Reason -like 'Project exclusion:*' }).Count) 1 'Custom directory excluded'
   Assert-Equal (@($inventory.Skipped | Where-Object { $_.Path -eq 'docs/draft.md' -and $_.Reason -like 'Project exclusion:*' }).Count) 1 'Custom file excluded'
+  Assert-Equal (@($inventory.Skipped | Where-Object { $_.Path -eq 'dist' -and $_.Reason -like 'Broad directory exclusion*authored source*' }).Count) 1 'Broad output name discloses possible authored code'
   Assert-Equal (@($inventory.Skipped | Where-Object { $_.Path -eq 'node_modules' -and $_.Kind -eq 'Directory' }).Count) 1 'Dependency directory pruned'
   Assert-Equal (@($inventory.Skipped | Where-Object { $_.Path -eq '.meowsky' -and $_.Kind -eq 'Directory' }).Count) 1 'Generated map directory pruned'
   Assert-Equal (@($inventory.Skipped | Where-Object { $_.Path -eq 'notes.tmp' -and $_.Kind -eq 'File' }).Count) 1 'Temporary file skipped'
@@ -151,15 +164,44 @@ try {
 
   $summary = (meowsky audit $plain) -join "`n"
   Assert-Equal ($summary.Contains('Inventory: 15 relevant files, 4 directories.')) $true 'Standalone fixture inventory summarized'
-  Assert-Equal ($summary.Contains('Coverage: complete within the stated exclusions.')) $true 'Scoped coverage reported'
+  Assert-Equal ($summary.Contains('Coverage: incomplete; review skipped entries and warnings.')) $true 'Limited coverage reported'
   Assert-Equal ($summary.Contains('Project indicators:')) $true 'Indicators summarized'
   Assert-Equal ($summary.Contains('Directory .meowsky:')) $true 'Skipped directory and reason shown'
   Assert-Equal ($summary.Contains('Semantic evaluation: Complete.')) $true 'Gitless project accepts semantic review'
   $healthy = Get-MeowskyAuditStaticFindings -Inventory $inventory
-  Assert-Equal "$($healthy.Verified.Count),$($healthy.Candidates.Count),$($healthy.Limitations.Count)" '0,0,0' 'Healthy fixture has no invented findings'
-  Assert-Equal ($script:auditLastArguments -join ' ') ('exec -C ' + $plain + ' --sandbox read-only --ask-for-approval never --disable hooks --disable plugins --disable apps --skip-git-repo-check --ephemeral --ignore-user-config --output-schema ' + (Join-Path $repo 'features/audit/semantic-schema.json') + ' --json') 'Semantic invocation enforces bounded read-only CLI options'
+  Assert-Equal "$($healthy.Verified.Count),$($healthy.Candidates.Count),$($healthy.Limitations.Count)" '0,0,3' 'Exclusions are coverage limits, not invented issues'
+  $coverageInventory = Get-MeowskyAuditInventory -Root $coverageProject
+  Assert-Equal $coverageInventory.Incomplete $true 'Unsupported source and broad exclusions prevent complete coverage'
+  Assert-Equal (@($coverageInventory.Skipped | Where-Object { $_.Path -eq 'src/main.rs' -and $_.Reason -like 'Unsupported or unclassified*' }).Count) 1 'Unfamiliar source extension is unclassified'
+  Assert-Equal (@($coverageInventory.Skipped | Where-Object { $_.Path -eq 'src/custom.xyz' -and $_.Reason -like 'Unsupported or unclassified*' }).Count) 1 'Unknown file type is not silently irrelevant'
+  Assert-Equal (@($coverageInventory.Skipped | Where-Object { $_.Path -eq 'vendor' -and $_.Reason -like 'Broad directory exclusion*' }).Count) 1 'Vendor exclusion discloses authored-source risk'
+  Assert-Equal (@($coverageInventory.Skipped | Where-Object { $_.Path -eq 'generated' -and $_.Reason -like 'Broad directory exclusion*' }).Count) 1 'Generated directory exclusion discloses authored-source risk'
+  Assert-Equal (@($coverageInventory.Skipped | Where-Object { $_.Path -eq 'image.png' -and $_.Reason -eq 'Known non-source media or font asset.' }).Count) 1 'Known raster asset distinguished from unknown source'
+  Assert-Equal (@($coverageInventory.Skipped | Where-Object { $_.Path -eq 'node_modules' -and $_.Reason -like 'Common dependency*' }).Count) 1 'Known dependency distinguished from broad exclusions'
+  $coverageFindings = Get-MeowskyAuditStaticFindings -Inventory $coverageInventory
+  Assert-Equal (@($coverageFindings.Limitations | Where-Object { $_.Path -eq 'src/main.rs' }).Count) 1 'Unsupported source becomes a coverage limitation'
+  Assert-Equal (@($coverageFindings.Limitations | Where-Object { $_.Path -eq 'vendor' }).Count) 1 'Broad exclusion becomes a coverage limitation'
+  Assert-Equal (((meowsky audit $coverageProject --quick) -join "`n").Contains('Coverage: incomplete')) $true 'CLI does not claim complete coverage for unsupported source'
+  $coverageReportText = New-MeowskyAuditReport -Inventory $coverageInventory -StaticReport $coverageFindings -Quick
+  Assert-Equal ($coverageReportText.Contains('Coverage: Incomplete.')) $true 'Saved report cannot claim complete coverage after unsupported source'
+  Assert-Equal ($coverageReportText.Contains('src/main.rs') -and $coverageReportText.Contains('vendor')) $true 'Saved report names unsupported source and broad exclusion'
+  $quickReportText = New-MeowskyAuditReport -Inventory $inventory -StaticReport $healthy -Quick
+  Assert-Equal ($quickReportText.Contains('Codex semantic assessment was skipped for architecture boundaries')) $true 'Quick report identifies skipped semantic domains'
+  Assert-Equal ($quickReportText.Contains('No findings from the checks performed in this category')) $true 'Quick report limits empty-section claim to performed checks'
+  Assert-Equal ($quickReportText.Contains('No material findings in this category.')) $false 'Quick report avoids blanket no-issues claim'
+  $failedSemantic = [pscustomobject]@{ State = 'Failed'; Reason = 'Codex authentication failed.'; Findings = @(); Limitations = @() }
+  $failedReportText = New-MeowskyAuditReport -Inventory $inventory -StaticReport $healthy -Semantic $failedSemantic
+  Assert-Equal ($failedReportText.Contains('Codex review: Failed: Codex authentication failed.')) $true 'Failed semantic review is explicit in report'
+  Assert-Equal ($failedReportText.Contains('Codex semantic assessment of this category did not run or finish.')) $true 'Failed review limits empty-section claim'
+  Assert-Equal ($script:auditLastArguments -join ' ') ('--ask-for-approval never exec -C ' + $plain + ' --sandbox read-only --disable hooks --disable plugins --disable apps --skip-git-repo-check --ephemeral --ignore-user-config --output-schema ' + (Join-Path $repo 'features/audit/semantic-schema.json') + ' --json') 'Semantic invocation enforces bounded read-only CLI options'
+  $realCodex = & $originalResolver
+  if ($realCodex) {
+    $parserOutput = (& $realCodex @script:auditLastArguments '--help' 2>&1 | Out-String)
+    Assert-Equal $LASTEXITCODE 0 'Real Codex CLI accepts Audit arguments without a model call'
+    Assert-Equal ($parserOutput.Contains('Run Codex non-interactively')) $true 'Real Codex CLI returned exec help'
+  } else { Write-Host 'SKIP: Codex CLI parser check needs an installed Codex executable.' }
   Assert-Equal ($script:auditLastPrompt.Length -lt 10000) $true 'Discovery prompt is bounded'
-  Assert-Equal ($script:auditLastPrompt.Contains('Discovery incomplete: False.')) $true 'Prompt includes coverage status'
+  Assert-Equal ($script:auditLastPrompt.Contains('Discovery incomplete: True.')) $true 'Prompt includes coverage status'
   Assert-Equal ($script:auditLastPrompt.Contains('Skipped 1: Project exclusion: src/private')) $true 'Prompt includes exclusion reasons'
   Assert-Equal ($script:auditLastPrompt.Contains('Static findings: 0 verified')) $true 'Prompt includes static findings summary'
   Assert-Equal ($script:auditLastPrompt.Contains('compact optional map')) $false 'Normal audit avoids map request and extra token work'
@@ -178,6 +220,13 @@ try {
   Assert-Equal (Invoke-MeowskyAuditSemantic -Inventory $inventory -StaticReport $healthy).State 'Failed' 'Malformed event stream fails review'
   $script:auditMockMode = 'bad-path'
   Assert-Equal (Invoke-MeowskyAuditSemantic -Inventory $inventory -StaticReport $healthy).State 'Failed' 'Uninventoried evidence path is rejected'
+  $script:auditTooManyPaths = @($inventory.Files | Select-Object -First 13 | ForEach-Object { $_.Path })
+  $script:auditMockMode = 'too-many-reviewed'
+  Assert-Equal (Invoke-MeowskyAuditSemantic -Inventory $inventory -StaticReport $healthy).State 'Failed' 'More than 12 claimed reviewed paths are rejected'
+  $script:auditMockMode = 'bad-line'
+  $badLineResult = Invoke-MeowskyAuditSemantic -Inventory $inventory -StaticReport $healthy
+  Assert-Equal $badLineResult.State 'Failed' 'Evidence line beyond file bounds is rejected'
+  Assert-Equal ($badLineResult.Reason -like '*beyond the end*') $true 'Out-of-range evidence line explains failure'
   $script:auditMockMode = 'no-completion'
   Assert-Equal (Invoke-MeowskyAuditSemantic -Inventory $inventory -StaticReport $healthy).State 'Incomplete' 'Missing completion event cannot report success'
   $script:auditMockMode = 'timeout'

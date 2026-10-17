@@ -151,7 +151,7 @@ function Invoke-MeowskyAuditSemantic {
   if (-not $codex) { return [pscustomobject]@{ State = 'Unavailable'; Reason = 'Codex CLI was not found.'; Findings = @(); ReviewedPaths = @(); Limitations = @() } }
 
   $schemaPath = Join-Path $PSScriptRoot 'semantic-schema.json'
-  $arguments = @('exec', '-C', $Inventory.Root, '--sandbox', 'read-only', '--ask-for-approval', 'never',
+  $arguments = @('--ask-for-approval', 'never', 'exec', '-C', $Inventory.Root, '--sandbox', 'read-only',
     '--disable', 'hooks', '--disable', 'plugins', '--disable', 'apps', '--skip-git-repo-check', '--ephemeral', '--ignore-user-config',
     '--output-schema', $schemaPath, '--json')
   $prompt = New-MeowskyAuditSemanticPrompt -Inventory $Inventory -StaticReport $StaticReport -IncludeMap:$IncludeMap
@@ -181,7 +181,7 @@ function Invoke-MeowskyAuditSemantic {
   if (@($required | Where-Object { $_ -notin $result.PSObject.Properties.Name }).Count -or
       $result.status -notin @('complete', 'incomplete') -or
       $result.summary -isnot [string] -or [string]::IsNullOrWhiteSpace($result.summary) -or $result.summary.Length -gt 1000 -or
-      $result.reviewed_paths -isnot [array] -or $result.reviewed_paths.Count -gt 30 -or
+      $result.reviewed_paths -isnot [array] -or $result.reviewed_paths.Count -gt 12 -or
       $result.limitations -isnot [array] -or $result.limitations.Count -gt 10 -or
       $result.findings -isnot [array] -or $result.findings.Count -gt 12) {
     return [pscustomobject]@{ State = 'Failed'; Reason = 'Codex result did not match the expected report shape.'; Findings = @(); ReviewedPaths = @(); Limitations = @() }
@@ -211,6 +211,23 @@ function Invoke-MeowskyAuditSemantic {
         [string]::IsNullOrWhiteSpace($finding.evidence) -or [string]::IsNullOrWhiteSpace($finding.recommendation) -or
         $finding.priority -notin @('high', 'medium', 'low')) {
       return [pscustomobject]@{ State = 'Failed'; Reason = 'Codex finding lacked valid source-linked evidence.'; Findings = @(); ReviewedPaths = @(); Limitations = @() }
+    }
+    if ($lineNumber -gt 0) {
+      $sourcePath = Join-Path $Inventory.Root ($finding.path.Replace('/', '\'))
+      try {
+        $sourceItem = Get-Item -LiteralPath $sourcePath -Force -ErrorAction Stop
+        if ($sourceItem.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Evidence path is a junction or symlink.' }
+        $reader = [IO.File]::OpenText($sourcePath)
+        $linesSeen = 0
+        try {
+          while ($linesSeen -lt $lineNumber -and $null -ne $reader.ReadLine()) { $linesSeen++ }
+        } finally { $reader.Dispose() }
+      } catch {
+        return [pscustomobject]@{ State = 'Failed'; Reason = "Could not validate Codex evidence line in '$($finding.path)': $($_.Exception.Message)"; Findings = @(); ReviewedPaths = @(); Limitations = @() }
+      }
+      if ($linesSeen -lt $lineNumber) {
+        return [pscustomobject]@{ State = 'Failed'; Reason = "Codex evidence line $lineNumber is beyond the end of '$($finding.path)'."; Findings = @(); ReviewedPaths = @(); Limitations = @() }
+      }
     }
   }
   $map = $null

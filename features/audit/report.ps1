@@ -87,6 +87,9 @@ function New-MeowskyAuditReport {
   $lines.Add("$($StaticReport.Verified.Count) verified path issue(s), $($StaticReport.Candidates.Count) static investigation candidate(s), $(@($items | Where-Object Kind -eq 'Semantic').Count) semantic finding(s), and $($StaticReport.Limitations.Count) static coverage limitation(s).")
   if (-not $items.Count) { $lines.Add('No material findings from the checks that ran. This does not certify the whole workspace.') }
   if ($Quick -or -not $Semantic -or $Semantic.State -ne 'Complete') { $lines.Add('Semantic analysis is incomplete or absent; this is a partial audit.') }
+  if ($Quick -or -not $Semantic -or $Semantic.State -notin @('Complete', 'Incomplete')) {
+    $lines.Add('Codex semantic assessment was skipped for architecture boundaries, code quality and naming, potentially obsolete or redundant code, documentation accuracy and relevance, and maintainability and navigation.')
+  }
   $lines.Add('Source links below confirm path existence at generation time. They do not confirm the correctness of a semantic claim.')
   $lines.Add('')
   $lines.Add('## Exclusions and analysis limitations')
@@ -114,7 +117,16 @@ function New-MeowskyAuditReport {
     $lines.Add("## $section")
     $lines.Add('')
     $group = @($items | Where-Object { (Get-MeowskyAuditReportSection $_.Finding.category) -eq $section } | Sort-Object Id)
-    if (-not $group.Count) { $lines.Add('No material findings in this category.'); $lines.Add(''); continue }
+    if (-not $group.Count) {
+      $lines.Add('No findings from the checks performed in this category; this does not establish that the category is issue-free.')
+      if ($Quick -or -not $Semantic -or $Semantic.State -notin @('Complete', 'Incomplete')) {
+        $lines.Add('Codex semantic assessment of this category did not run or finish.')
+      } elseif ($Semantic.State -eq 'Incomplete') {
+        $lines.Add('Codex semantic assessment of this category was incomplete.')
+      }
+      $lines.Add('')
+      continue
+    }
     foreach ($item in $group) {
       $finding = $item.Finding
       $path = if ($item.Kind -eq 'Semantic') { [string]$finding.path } else { [string]$finding.Path }

@@ -155,7 +155,7 @@ function Get-MeowskyAuditStaticFindings {
   }
 
   foreach ($skipped in $Inventory.Skipped) {
-    if ($skipped.Reason -match '^(Common dependency|Project exclusion|Temporary, generated|File type is outside)') { continue }
+    if ($skipped.Reason -match '^(Common dependency|Temporary, generated|Known non-source media)') { continue }
     $limitations.Add([pscustomobject]@{ Category = 'Discovery coverage'; Path = $skipped.Path; Evidence = $skipped.Reason; Priority = 'Review'; Method = 'Discovery skip record' })
   }
   foreach ($warning in $Inventory.Warnings) {

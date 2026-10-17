@@ -72,6 +72,9 @@ function Get-MeowskyAuditInventory {
     '.cache', '.pytest_cache', '.mypy_cache', '.ruff_cache', '.tox', '.gradle',
     '__generated__', 'generated', 'tmp', 'temp'
   )
+  # These names often mean output, but can also contain authored project code.
+  $broadIgnoredDirectories = @('vendor', 'dist', 'build', 'out', '__generated__', 'generated', 'tmp', 'temp')
+  $nonSourceAssets = @('.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.ico', '.bmp', '.woff', '.woff2', '.ttf', '.otf', '.mp3', '.mp4', '.wav', '.ogg', '.webm')
   $languageByExtension = @{
     '.c' = 'C'; '.h' = 'C'; '.cpp' = 'C++'; '.hpp' = 'C++'
     '.py' = 'Python'; '.pyi' = 'Python'; '.ts' = 'TypeScript'; '.tsx' = 'TypeScript'
@@ -120,7 +123,8 @@ function Get-MeowskyAuditInventory {
           }
         }
         if ($customRule) {
-          $skipped.Add([pscustomobject]@{ Path = $relative; Kind = $kind; Reason = "Project exclusion: $customRule" })
+          $skipped.Add([pscustomobject]@{ Path = $relative; Kind = $kind; Reason = "Project exclusion: $customRule; relevant content may be omitted." })
+          $incomplete = $true
           continue
         }
         if ($entry.Attributes -band [IO.FileAttributes]::ReparsePoint) {
@@ -130,7 +134,12 @@ function Get-MeowskyAuditInventory {
         }
         if ($entry.PSIsContainer) {
           if ($ignoredDirectories -icontains $entry.Name) {
-            $skipped.Add([pscustomobject]@{ Path = $relative; Kind = 'Directory'; Reason = 'Common dependency, generated, cache, or temporary directory.' })
+            if ($broadIgnoredDirectories -icontains $entry.Name) {
+              $skipped.Add([pscustomobject]@{ Path = $relative; Kind = 'Directory'; Reason = "Broad directory exclusion ($($entry.Name)); authored source may be omitted." })
+              $incomplete = $true
+            } else {
+              $skipped.Add([pscustomobject]@{ Path = $relative; Kind = 'Directory'; Reason = 'Common dependency, generated, cache, or temporary directory.' })
+            }
           } elseif ($current.Depth + 1 -gt $MaxDepth) {
             $skipped.Add([pscustomobject]@{ Path = $relative; Kind = 'Directory'; Reason = 'Depth limit reached.' })
             $incomplete = $true
@@ -149,7 +158,13 @@ function Get-MeowskyAuditInventory {
         }
         $category = Get-MeowskyAuditCategory -Path $relative
         if (-not $category) {
-          $skipped.Add([pscustomobject]@{ Path = $relative; Kind = 'File'; Reason = 'File type is outside the source, test, configuration, and documentation inventory.' })
+          $extension = [IO.Path]::GetExtension($entry.Name).ToLowerInvariant()
+          if ($nonSourceAssets -contains $extension) {
+            $skipped.Add([pscustomobject]@{ Path = $relative; Kind = 'File'; Reason = 'Known non-source media or font asset.' })
+          } else {
+            $skipped.Add([pscustomobject]@{ Path = $relative; Kind = 'File'; Reason = 'Unsupported or unclassified file type; source, configuration, or documentation may be omitted.' })
+            $incomplete = $true
+          }
           continue
         }
         try { $bytes = $entry.Length } catch {

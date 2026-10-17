@@ -20,6 +20,8 @@ Discovery lists relevant source, test, configuration, and documentation files.
 It excludes common dependencies, generated output, caches, temporary files, and
 .meowsky/. Optional .meowskyignore lines name exact project-relative files or
 directories (including their contents); blank lines and # comments are ignored.
+Unfamiliar file types, project exclusions, and broad names such as dist/ or
+vendor/ are reported as coverage limits because they may hide relevant source.
 Wildcards and parent paths are not supported. Scan limits are 20,000 entries,
 30 directory levels, and 30 seconds. Skipped paths and incomplete coverage are
 reported; the command does not follow junctions or symlinks.
