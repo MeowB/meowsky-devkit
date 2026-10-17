@@ -8,7 +8,7 @@
 . (Join-Path $PSScriptRoot 'plan.ps1')
 
 function New-MeowskyReviewPrompt {
-  param($Inventory, $StaticReport, [string]$Mode, [string]$SessionId)
+  param($Inventory, $StaticReport, [string]$Mode, [string]$SessionId, $History)
   $lines = New-Object 'System.Collections.Generic.List[string]'
   $lines.Add("Files: $($Inventory.Files.Count); directories: $($Inventory.Directories.Count); coverage incomplete: $($Inventory.Incomplete).")
   $lines.Add("Languages: $($Inventory.Languages -join ', ').")
@@ -24,7 +24,68 @@ function New-MeowskyReviewPrompt {
   }
   $summary = $lines -join "`n"
   if ($summary.Length -gt 6500) { $summary = $summary.Substring(0, 6500) + "`n[Summary truncated. Inspect the workspace when necessary.]" }
-  (Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot 'review-prompt.md')).Replace('$mode', $Mode).Replace('$session', $SessionId).Replace('$root', $Inventory.Root).Replace('$summary', $summary)
+  $previous = @($History | Where-Object { $null -ne $_ } | Select-Object -Last 30 | ForEach-Object {
+    "$($_.id) [$($_.status)] $($_.path): $($_.evidence) Decision: $($_.rationale)"
+  }) -join "`n"
+  if (-not $previous) { $previous = 'No previous full-review findings are recorded.' }
+  if ($previous.Length -gt 8000) { $previous = $previous.Substring(0, 8000) + "`n[History truncated; inspect state.json for older decisions.]" }
+  (Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot 'review-prompt.md')).Replace('$mode', $Mode).Replace('$session', $SessionId).Replace('$root', $Inventory.Root).Replace('$summary', $summary).Replace('$history', $previous)
+}
+
+function Set-MeowskyReviewHistory {
+  param($State, $Handoff)
+  $history = New-Object 'System.Collections.Generic.List[object]'
+  foreach ($item in @($State.history | Where-Object { $null -ne $_ })) { $history.Add($item) }
+  foreach ($finding in $Handoff.findings) {
+    $previous = @($history | Where-Object id -CEQ $finding.id)
+    $status = 'open'
+    $rationale = 'Recommended by full review.'
+    if ($previous.Count) {
+      if ($previous[0].status -eq 'accepted') {
+        $status = 'accepted'
+        $rationale = [string]$previous[0].rationale
+      } elseif ($previous[0].status -in @('rejected','resolved','invalidated')) {
+        $rationale = "Previous $($previous[0].status): $($previous[0].rationale) Reopened: $($finding.reopen_reason)"
+      } elseif ($previous[0].status -eq 'deferred') {
+        $status = 'deferred'
+        $rationale = [string]$previous[0].rationale
+      }
+    }
+    if ($previous.Count) { $history.Remove($previous[0]) | Out-Null }
+    $history.Add([pscustomobject]@{ id = $finding.id; category = $finding.category; path = $finding.path; line = $finding.line;
+      evidence = $finding.evidence; recommendation = $finding.recommendation; status = $status;
+      rationale = $rationale; fingerprint = $State.audit.fingerprint })
+  }
+  $State | Add-Member -NotePropertyName history -NotePropertyValue @($history.ToArray()) -Force
+}
+
+function Set-MeowskyReviewDecision {
+  param([string]$Root, [string]$Path)
+  $state = Assert-MeowskyAuditPrerequisite -Root $Root -Stage refactor
+  if ($state.refactor -and $state.refactor.status -notin @('complete')) {
+    throw 'A refactor is already approved or in progress; finish it before recording a review decision.'
+  }
+  $decision = Read-MeowskyReviewHandoff -Path $Path
+  if ($decision -isnot [pscustomobject] -or $decision.version -ne 1 -or
+      $decision.id -isnot [string] -or $decision.id -cnotmatch '^S[0-9]{3}$' -or
+      $decision.status -cnotin @('rejected','deferred') -or
+      $decision.rationale -isnot [string] -or [string]::IsNullOrWhiteSpace($decision.rationale) -or
+      $decision.rationale.Length -gt 1000) { throw 'Review decision requires version 1, a finding ID, rejected or deferred status, and a rationale.' }
+  $items = Get-MeowskyReviewPlanIds -Root $Root
+  if ($decision.id -cnotin $items) { throw 'Review decision ID is absent from the current full-review plan.' }
+  $entry = @($state.history | Where-Object id -CEQ $decision.id)
+  if ($entry.Count -ne 1) { throw 'Review decision has no matching history entry.' }
+  $entry[0].status = $decision.status
+  $entry[0].rationale = $decision.rationale
+  $entry[0].fingerprint = $state.audit.fingerprint
+  $null = Write-MeowskyAuditState -Root $Root -State $state
+  "Review decision recorded: $($decision.id) $($decision.status)."
+}
+
+function Get-MeowskyReviewPlanIds {
+  param([string]$Root)
+  $plan = Get-Content -Raw -LiteralPath (Join-Path $Root '.meowsky/PLAN.md')
+  @([regex]::Matches($plan, '(?m)^## \[(S[0-9]{3})\]') | ForEach-Object { $_.Groups[1].Value })
 }
 
 function Set-MeowskyReviewDocumentationSection {
@@ -61,7 +122,7 @@ function Complete-MeowskyReview {
   if (-not $session -or -not $session.id -or $session.mode -notin @('full','docs') -or
       $session.auditFingerprint -cne $state.audit.fingerprint) { throw 'No active review session matches this audit. Start meowsky review again.' }
   $inventory = Get-MeowskyAuditInventory -Root $Root
-  $handoff = Assert-MeowskyReviewHandoff -Handoff (Read-MeowskyReviewHandoff -Path $HandoffPath) -Session $session -Inventory $inventory
+  $handoff = Assert-MeowskyReviewHandoff -Handoff (Read-MeowskyReviewHandoff -Path $HandoffPath) -Session $session -Inventory $inventory -History @($state.history) -Fingerprint $state.audit.fingerprint
   $static = Get-MeowskyAuditStaticFindings -Inventory $inventory
   $semantic = New-MeowskyReviewSemanticResult -Handoff $handoff
   if ($session.mode -eq 'full') {
@@ -111,6 +172,7 @@ function Complete-MeowskyReview {
   $reportWritten = Write-MeowskyAuditReport -Root $Root -Name 'AUDIT.md' -Content $report
   if ($session.mode -eq 'full') {
     $planWritten = Write-MeowskyAuditReport -Root $Root -Name 'PLAN.md' -Content $plan
+    Set-MeowskyReviewHistory -State $state -Handoff $handoff
     $state.review = [ordered]@{ status = 'complete'; completedAt = (Get-Date).ToString('o'); sessionId = $session.id;
       planHash = (Get-MeowskyAuditOutputHash -Path $planWritten.Path); approval = 'pending' }
   }
@@ -126,35 +188,40 @@ function Complete-MeowskyReview {
 
 function Invoke-MeowskyReviewFeature {
   param([string]$Target, [string]$WorkRoot, [string[]]$Arguments)
-  $usage = 'Usage: meowsky review [<directory>] [--docs] [--help] | meowsky review [<directory>] --complete [<json-file>]'
+  $usage = 'Usage: meowsky review [<directory>] [--docs] [--help] | meowsky review [<directory>] --complete [<json-file>] | meowsky review [<directory>] --decide <json-file>'
   $tokens = @()
   if ($Target) { $tokens += $Target }
   if ($Arguments) { $tokens += $Arguments }
   if ($tokens.Count -eq 1 -and $tokens[0] -eq '--help') {
     return (Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot 'help.txt'))
   }
-  $directory = ''; $mode = 'full'; $complete = $false; $handoffPath = ''
+  $directory = ''; $mode = 'full'; $complete = $false; $decide = $false; $handoffPath = ''
   foreach ($token in $tokens) {
     switch -CaseSensitive ($token) {
-      '--docs' { if ($mode -eq 'docs' -or $complete) { throw $usage }; $mode = 'docs' }
-      '--complete' { if ($complete -or $mode -eq 'docs') { throw $usage }; $complete = $true }
+      '--docs' { if ($mode -eq 'docs' -or $complete -or $decide) { throw $usage }; $mode = 'docs' }
+      '--complete' { if ($complete -or $decide -or $mode -eq 'docs') { throw $usage }; $complete = $true }
+      '--decide' { if ($complete -or $decide -or $mode -eq 'docs') { throw $usage }; $decide = $true }
       default {
         if ($token.StartsWith('-')) { throw $usage }
-        if ($complete -and -not $directory -and $token -match '(?i)\.json$' -and (Test-Path -LiteralPath $token -PathType Leaf)) { $handoffPath = $token; continue }
-        if ($complete -and $directory -and -not $handoffPath) { $handoffPath = $token }
+        if (($complete -or $decide) -and -not $directory -and $token -match '(?i)\.json$' -and (Test-Path -LiteralPath $token -PathType Leaf)) { $handoffPath = $token; continue }
+        if (($complete -or $decide) -and $directory -and -not $handoffPath) { $handoffPath = $token }
         elseif (-not $directory) { $directory = $token }
         else { throw $usage }
       }
     }
   }
   $root = Resolve-MeowskyAuditTarget -Path $directory
+  if ($decide) {
+    if (-not $handoffPath) { throw $usage }
+    return (Set-MeowskyReviewDecision -Root $root -Path $handoffPath)
+  }
   if ($complete) { return (Complete-MeowskyReview -Root $root -HandoffPath $handoffPath) }
   $state = Assert-MeowskyAuditPrerequisite -Root $root -Stage review
   if (-not (Resolve-MeowskyCodexCommand)) { throw 'Codex CLI was not found. Install or expose Codex before starting review.' }
   $inventory = Get-MeowskyAuditInventory -Root $root
   $static = Get-MeowskyAuditStaticFindings -Inventory $inventory
   $id = [guid]::NewGuid().ToString('N')
-  $prompt = New-MeowskyReviewPrompt -Inventory $inventory -StaticReport $static -Mode $mode -SessionId $id
+  $prompt = New-MeowskyReviewPrompt -Inventory $inventory -StaticReport $static -Mode $mode -SessionId $id -History @($state.history)
   $promptPath = New-MeowskyCodexPromptFile -Prompt $prompt
   if ($mode -eq 'full') {
     $state.review = [ordered]@{ status = 'pending' }

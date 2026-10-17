@@ -148,6 +148,77 @@ try {
   $state = Read-MeowskyAuditState -Root $project
   Assert-Refactor ($state.refactor.status -eq 'complete' -and $state.refactor.resolvedIds[0] -eq 'S001') 'Finding resolved only after verified handoff'
   Assert-Refactor ($state.audit.status -eq 'stale') 'Completed refactor does not silently rerun audit'
+  Assert-Refactor (@($state.history | Where-Object { $_.id -eq 'S001' -and $_.status -eq 'resolved' }).Count -eq 1) 'Resolved decision retained in state'
+  $null = meowsky audit $project
+  $state = Read-MeowskyAuditState -Root $project
+  Assert-Refactor (@($state.history | Where-Object id -EQ 'S001').Count -eq 1) 'New audit preserves finding history'
+  $null = meowsky review $project
+  Assert-Refactor ($script:launches[-1].Prompt.Contains('S001 [resolved]')) 'Next review receives resolved decision'
+  $review.session_id = (Read-MeowskyAuditState -Root $project).activeReview.id
+  $review.findings[0].evidence = 'The command emits the new value.'
+  $review | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $reviewFile
+  Assert-RefactorError { meowsky review $project --complete $reviewFile } 'Review finding S001 needs a concrete reason to reopen*'
+  $review.findings[0].reopen_reason = 'Reconsider the emitted value.'
+  $review | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $reviewFile
+  Assert-RefactorError { meowsky review $project --complete $reviewFile } 'Review finding S001 reopens a prior decision without changed workspace inputs*'
+  $review.findings[0].id = 'S002'
+  $review | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $reviewFile
+  Assert-RefactorError { meowsky review $project --complete $reviewFile } 'Review finding S002 may repackage prior decision S001*'
+  $review.findings = @()
+  $review.summary = 'No actionable findings in the inspected paths.'
+  $review | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $reviewFile
+  $null = meowsky review $project --complete $reviewFile
+  Assert-Refactor ((Get-Content -Raw -LiteralPath $planPath).Contains('No justified refactoring tasks')) 'Healthy repeat review has an empty actionable plan'
+  Assert-RefactorError { meowsky refactor $project --prepare S001 } 'Finding S001 is resolved*'
+
+  $null = meowsky audit $project
+  $null = meowsky review $project
+  $review.session_id = (Read-MeowskyAuditState -Root $project).activeReview.id
+  $review.summary = 'Found a concern in the other script.'
+  $review.reviewed_paths = @('README.md','src/other.ps1')
+  $review.findings = @(@{ id = 'S002'; category = 'Code quality'; path = 'src/other.ps1'; line = 1
+      evidence = 'The other script emits a value.'; recommendation = 'Consider changing the value.'
+      priority = 'low'; confidence = 'medium'; impact = 'Could improve output.'; risk = 'Output consumers may change.'
+      affected_paths = @('src/other.ps1'); dependencies = @(); verification = @('Check output.')
+      behavioral_constraints = @('Preserve the command.') })
+  $review | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $reviewFile
+  $null = meowsky review $project --complete $reviewFile
+  $decisionFile = Join-Path $fixture 'decision.json'
+  @{ version = 1; id = 'S002'; status = 'rejected'; rationale = 'The current output is intentional.' } |
+    ConvertTo-Json | Set-Content -LiteralPath $decisionFile
+  $null = meowsky review $project --decide $decisionFile
+  Assert-RefactorError { meowsky refactor $project --prepare S002 } 'Finding S002 is rejected*'
+  $null = meowsky audit $project
+  $null = meowsky review $project
+  Assert-Refactor ($script:launches[-1].Prompt.Contains('S002 [rejected]')) 'Rejected decision survives audit and appears in review prompt'
+  $review.session_id = (Read-MeowskyAuditState -Root $project).activeReview.id
+  $review | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $reviewFile
+  Assert-RefactorError { meowsky review $project --complete $reviewFile } 'Review finding S002 needs a concrete reason to reopen*'
+  $review.findings = @()
+  $review.summary = 'No actionable findings in the inspected paths.'
+  $review | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $reviewFile
+  $null = meowsky review $project --complete $reviewFile
+  Assert-Refactor ((Get-Content -Raw -LiteralPath $planPath).Contains('No justified refactoring tasks')) 'Rejected concern does not return in next plan'
+  [IO.File]::WriteAllText((Join-Path $project 'src/other.ps1'), "Write-Output 'changed'`n")
+  $null = meowsky audit $project
+  $null = meowsky review $project
+  $review.session_id = (Read-MeowskyAuditState -Root $project).activeReview.id
+  $review.findings = @(@{ id = 'S002'; category = 'Code quality'; path = 'src/other.ps1'; line = 1
+      evidence = 'The changed output now conflicts with the documented behavior.'; recommendation = 'Restore the documented output.'
+      reopen_reason = 'The implementation changed after rejection and now conflicts with the documented output.'
+      priority = 'medium'; confidence = 'high'; impact = 'Restore documented behavior.'; risk = 'Output consumers may change.'
+      affected_paths = @('src/other.ps1'); dependencies = @(); verification = @('Check output.')
+      behavioral_constraints = @('Preserve the command.') })
+  $review.summary = 'Changed source justifies reconsideration.'
+  $review | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $reviewFile
+  $null = meowsky review $project --complete $reviewFile
+  $reopened = @((Read-MeowskyAuditState -Root $project).history | Where-Object id -EQ 'S002')[0]
+  Assert-Refactor ($reopened.status -eq 'open' -and $reopened.rationale.Contains('The current output is intentional.')) 'Reopening retains rejected rationale'
+  @{ version = 1; id = 'S002'; status = 'deferred'; rationale = 'Wait for the documented behavior to be confirmed.' } |
+    ConvertTo-Json | Set-Content -LiteralPath $decisionFile
+  $null = meowsky review $project --decide $decisionFile
+  $null = meowsky audit $project
+  Assert-Refactor (@((Read-MeowskyAuditState -Root $project).history | Where-Object { $_.id -eq 'S002' -and $_.status -eq 'deferred' }).Count -eq 1) 'Deferred decision survives audit'
   Write-Host "PASS: $checks controlled refactor workflow checks."
 } finally {
   Set-Location $originalLocation

@@ -182,6 +182,15 @@ function Complete-MeowskyRefactor {
   $state.refactor | Add-Member -NotePropertyName unresolvedIds -NotePropertyValue @($handoff.unresolved_ids) -Force
   $state.refactor | Add-Member -NotePropertyName invalidatedIds -NotePropertyValue @($handoff.invalidated_ids) -Force
   $state.refactor | Add-Member -NotePropertyName modifiedFiles -NotePropertyValue @($handoff.modified_files) -Force
+  foreach ($id in @($handoff.resolved_ids) + @($handoff.invalidated_ids)) {
+    $entry = @($state.history | Where-Object id -CEQ $id)
+    if ($entry.Count) {
+      $entry[0].status = if ($id -cin $handoff.resolved_ids) { 'resolved' } else { 'invalidated' }
+      $outcome = if ($id -cin $handoff.resolved_ids) { 'Validated refactor completion.' } else { 'Invalidated by validated refactor completion.' }
+      $entry[0].rationale = "$($entry[0].rationale) $outcome".Trim()
+      $entry[0].fingerprint = Get-MeowskyAuditFingerprint -Inventory $inventory
+    }
+  }
   if ($handoff.modified_files.Count) { $state.audit.status = 'stale' }
   $null = Write-MeowskyAuditState -Root $Root -State $state
   "Refactor completion validated. Resolved: $($handoff.resolved_ids -join ', '); audit status: $($state.audit.status)."
@@ -221,6 +230,13 @@ function Invoke-MeowskyRefactorFeature {
       Confirm-MeowskyRefactorPhrase -Phrase "APPROVE $($ids -join ',')"
       $state | Add-Member -NotePropertyName refactor -NotePropertyValue ([ordered]@{
         status = 'approved'; approval = $approval; planning = $null; concretePlan = $null; execution = $null }) -Force
+      foreach ($id in $ids) {
+        $entry = @($state.history | Where-Object id -CEQ $id)
+        if ($entry.Count) {
+          $entry[0].status = 'accepted'
+          $entry[0].rationale = @($approval.findings | Where-Object id -CEQ $id)[0].change_boundary
+        }
+      }
       $null = Write-MeowskyAuditState -Root $root -State $state
       return 'Finding scope approved. Run meowsky refactor to start read-only planning.'
     }

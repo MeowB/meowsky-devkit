@@ -1,5 +1,6 @@
 meowsky review [<directory>] [--docs]
 meowsky review [<directory>] --complete [<json-file>]
+meowsky review [<directory>] --decide <json-file>
 
 Run meowsky audit first. Review requires its current state and verified
 MAP.md and AUDIT.md. The directory defaults to the current location;
@@ -17,6 +18,13 @@ never completes review. Interrupted or invalid handoffs remain pending.
 A completed full review enriches MAP.md and AUDIT.md and creates an
 unapproved PLAN.md. Zero justified findings are valid. The proposed plan
 does not authorize any refactoring.
+
+Record a rejected or deferred full-review finding with --decide and a
+JSON file containing version (1), id (S001 etc.), status (rejected or
+deferred), and a concrete rationale. The decision is kept in workflow
+state across later audits and shown to future reviews. Changed workspace
+inputs and an explicit reopening reason are required to recommend a
+rejected or resolved finding again.
 
 --docs limits investigation to architecture and documentation. It updates
 the documentation review portions of MAP.md and AUDIT.md without writing

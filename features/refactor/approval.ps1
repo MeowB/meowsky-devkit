@@ -34,6 +34,10 @@ function New-MeowskyRefactorApprovalTemplate {
   $report = Get-Content -Raw -LiteralPath (Join-Path $Root '.meowsky/AUDIT.md')
   $findings = @()
   foreach ($id in $selected) {
+    $decision = @($state.history | Where-Object id -CEQ $id)
+    if ($decision.Count -and $decision[0].status -in @('rejected','deferred','resolved','invalidated')) {
+      throw "Finding $id is $($decision[0].status); a new full review must reopen it before refactoring."
+    }
     if (-not $items.ContainsKey($id) -or $report -notmatch "(?m)^### \[$id\]") {
       throw "Finding $id is absent from the validated full review and PLAN.md."
     }
@@ -64,6 +68,10 @@ function Assert-MeowskyRefactorApproval {
   $report = Get-Content -Raw -LiteralPath (Join-Path $Root '.meowsky/AUDIT.md')
   $seen = @{}
   foreach ($finding in $Approval.findings) {
+    $decision = @($State.history | Where-Object id -CEQ $finding.id)
+    if ($decision.Count -and $decision[0].status -in @('rejected','deferred','resolved','invalidated')) {
+      throw "Finding $($finding.id) is $($decision[0].status) and cannot be approved for refactoring."
+    }
     if ($finding -isnot [pscustomobject] -or $finding.id -isnot [string] -or $finding.id -cnotmatch '^S[0-9]{3}$' -or
         $seen.ContainsKey($finding.id) -or -not $items.ContainsKey($finding.id) -or
         $report -notmatch "(?m)^### \[$($finding.id)\]" -or $finding.approved -cne $true) {

@@ -58,11 +58,17 @@ function Invoke-MeowskyAuditFeature {
 
   if ($promptRequested) { return (Get-MeowskyAuditRefactorPrompt -Root $root -Ids $promptIds) }
 
+  $history = @()
+  try {
+    $previous = Read-MeowskyAuditState -Root $root
+    if ($previous.history -is [array]) { $history = @($previous.history) }
+  } catch { }
   # Invalidate any previous completion before work that may fail or be interrupted.
   $pending = [ordered]@{
     version = 1; target = $root
     audit = [ordered]@{ status = 'pending'; completedAt = ''; fingerprint = ''; coverage = 'unknown'; reportHash = ''; mapHash = '' }
     review = [ordered]@{ status = 'pending' }
+    history = $history
   }
   $null = Write-MeowskyAuditState -Root $root -State $pending
   $inventory = Get-MeowskyAuditInventory -Root $root

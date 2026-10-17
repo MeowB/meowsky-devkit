@@ -29,7 +29,7 @@ function Assert-MeowskyReviewTextArray {
 
 function Assert-MeowskyReviewHandoff {
   param([Parameter(Mandatory = $true)]$Handoff, [Parameter(Mandatory = $true)]$Session,
-    [Parameter(Mandatory = $true)]$Inventory)
+    [Parameter(Mandatory = $true)]$Inventory, $History, [string]$Fingerprint)
   $required = @('version','session_id','mode','status','summary','reviewed_paths','limitations','map','findings')
   if ($Handoff -isnot [pscustomobject] -or @($required | Where-Object { $_ -cnotin $Handoff.PSObject.Properties.Name }).Count) {
     throw 'Review handoff is missing required fields.'
@@ -55,6 +55,8 @@ function Assert-MeowskyReviewHandoff {
     throw 'Documentation review contains an out-of-scope finding.'
   }
   $ids = @{}
+  $priorIds = @{}
+  foreach ($item in @($History | Where-Object { $null -ne $_ })) { $priorIds[[string]$item.id] = $item }
   $prefix = if ($Session.mode -eq 'docs') { 'D' } else { 'S' }
   foreach ($finding in $Handoff.findings) {
     $fields = @('id','category','path','line','evidence','recommendation','priority','confidence','impact','risk','affected_paths','dependencies','verification','behavioral_constraints')
@@ -65,6 +67,21 @@ function Assert-MeowskyReviewHandoff {
       throw 'Review finding has an invalid or duplicate ID.'
     }
     $ids[$finding.id] = $true
+    if ($Session.mode -eq 'full' -and $priorIds.ContainsKey($finding.id)) {
+      $prior = $priorIds[$finding.id]
+      if ($finding.path -cne $prior.path -or $finding.category -cne $prior.category) {
+        throw "Review finding $($finding.id) changes the identity of a previous concern."
+      }
+      if ($prior.status -in @('rejected','resolved','invalidated')) {
+        if ($finding.reopen_reason -isnot [string] -or [string]::IsNullOrWhiteSpace($finding.reopen_reason) -or
+            $finding.reopen_reason.Length -gt 1000) {
+          throw "Review finding $($finding.id) needs a concrete reason to reopen a previous decision."
+        }
+        if ($prior.fingerprint -ceq $Fingerprint) {
+          throw "Review finding $($finding.id) reopens a prior decision without changed workspace inputs."
+        }
+      }
+    }
     foreach ($name in @('category','evidence','recommendation','impact','risk')) { Assert-MeowskyReviewText -Value $finding.$name -Name $name -Limit 1000 }
     if ($finding.priority -cnotin @('high','medium','low') -or $finding.confidence -cnotin @('high','medium','low')) {
       throw "Review finding $($finding.id) has invalid priority or confidence."
@@ -86,6 +103,18 @@ function Assert-MeowskyReviewHandoff {
     }
     foreach ($path in $finding.affected_paths) { if ($path -isnot [string] -or $path -cnotin $known) { throw "Review finding $($finding.id) has an unknown affected path." } }
     foreach ($name in @('dependencies','verification','behavioral_constraints')) { Assert-MeowskyReviewTextArray -Value $finding.$name -Name $name }
+  }
+  if ($Session.mode -eq 'full') {
+    foreach ($finding in $Handoff.findings) {
+      foreach ($prior in @($History | Where-Object { $null -ne $_ -and $_.id -cne $finding.id -and $_.status -in @('rejected','resolved','invalidated') })) {
+        if ($finding.path -ceq $prior.path -and $finding.category -ceq $prior.category -and
+            $finding.line -eq $prior.line -and
+            ($finding.evidence -ceq $prior.evidence -or $finding.recommendation -ceq $prior.recommendation) -and
+            $prior.fingerprint -ceq $Fingerprint) {
+          throw "Review finding $($finding.id) may repackage prior decision $($prior.id) on unchanged source."
+        }
+      }
+    }
   }
   if ($null -ne $Handoff.map -and -not (Test-MeowskyAuditSemanticMap -Map $Handoff.map -Inventory $Inventory -ReviewedPaths @($Handoff.reviewed_paths))) {
     throw 'Review map contains unsupported or unreviewed references.'
