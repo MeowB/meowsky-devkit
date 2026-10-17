@@ -3,7 +3,7 @@ Validate a local workspace directory. Defaults to the current directory.
 The directory may be relative to the current location or an absolute path.
 Options may appear before or after the directory.
 
---quick    Select quick analysis. Analysis is not implemented yet.
+--quick    Show filesystem discovery and concise static findings.
 --refresh  Request a workspace map refresh. Map generation is not implemented
            yet; this option does not write any files.
 --help     Show this help when used alone. -h and -Help also show feature help.
@@ -16,5 +16,16 @@ Wildcards and parent paths are not supported. Scan limits are 20,000 entries,
 30 directory levels, and 30 seconds. Skipped paths and incomplete coverage are
 reported; the command does not follow junctions or symlinks.
 
-The inventory stays in memory. Analysis, findings, Codex review, and map
-generation are not implemented yet. No target project files are changed.
+Static checks verify local Markdown links and image targets, and suggest review
+for source files over 500 lines or 64 KiB, or directories with over 40 direct
+source/test files. These thresholds can be changed when calling the checks
+function directly. A script or test without a Markdown link is flagged only
+when a peer in the same directory has a documented link. These are review
+candidates, not claims of dead code. Skipped or unreadable paths are reported
+as coverage limitations. Findings stay in memory and have stable report IDs.
+Markdown files over 1 MiB and complex link syntax are reported as coverage
+limits instead of being called broken links. Links outside the audited root
+and section anchors are not verified.
+
+Deep analysis, Codex review, and map generation are not implemented yet.
+No target project files are changed.

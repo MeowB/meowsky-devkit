@@ -1,4 +1,4 @@
-# Audit discovery and integration checks; analysis and map generation are absent.
+# Audit discovery and static-check integration checks; deep analysis and maps are absent.
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path $PSScriptRoot -Parent
 $fixture = Join-Path ([IO.Path]::GetTempPath()) ('meowsky-audit-tests-' + [guid]::NewGuid().ToString('N'))
@@ -19,6 +19,10 @@ function Assert-Error([scriptblock]$Action, [string]$Pattern) {
 
 function Get-FixtureEntries {
   (@(Get-ChildItem -LiteralPath $fixture -Recurse -Force | ForEach-Object { $_.FullName.Substring($fixture.Length) }) | Sort-Object) -join "`n"
+}
+
+function Get-FixtureContentHashes {
+  (@(Get-ChildItem -LiteralPath $fixture -Recurse -File -Force | ForEach-Object { "$($_.FullName.Substring($fixture.Length)):$((Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash)" }) | Sort-Object) -join "`n"
 }
 
 try {
@@ -45,12 +49,29 @@ try {
     Set-Content -LiteralPath (Join-Path $plain $file) -Value 'fixture'
   }
   Set-Content -LiteralPath (Join-Path $plain '.meowskyignore') -Value @('# project exclusions', 'src/private/', 'docs/draft.md')
+  $issues = Join-Path $fixture 'issues project'
+  foreach ($directory in @('docs', 'src', 'scripts', 'tests')) {
+    New-Item -ItemType Directory -Path (Join-Path $issues $directory) -Force | Out-Null
+  }
+  Set-Content -LiteralPath (Join-Path $issues 'README.md') -Value @(
+    '[guide](docs/guide.md)', '[runner](scripts/used.ps1)', '[missing][ref]', '[inline missing](docs/gone.md)',
+    '[ref]: docs/absent.md', '[external](https://example.com/absent.md)', '[anchor](#intro)',
+    '`[inline code](docs/not-real.md)`', '[unfinished](docs/not-real.md',
+    '```', '[example](docs/not-real.md)', '```'
+  )
+  Set-Content -LiteralPath (Join-Path $issues 'docs/guide.md') -Value '![missing image](missing.png)'
+  Set-Content -LiteralPath (Join-Path $issues 'src/large.ps1') -Value @('one', 'two', 'three', 'four')
+  Set-Content -LiteralPath (Join-Path $issues 'scripts/used.ps1') -Value 'Write-Output used'
+  Set-Content -LiteralPath (Join-Path $issues 'scripts/unlinked.ps1') -Value 'Write-Output unlinked'
+  Set-Content -LiteralPath (Join-Path $issues 'tests/standalone.test.ps1') -Value 'Write-Output test'
+  Set-Content -LiteralPath (Join-Path $issues 'root.test.ps1') -Value 'Write-Output test'
   Assert-Equal (Test-Path -LiteralPath (Join-Path $plain '.git')) $false 'Discovery fixture has no Git repository'
   $before = Get-FixtureEntries
+  $beforeContent = Get-FixtureContentHashes
 
   $default = (meowsky audit) -join "`n"
   Assert-Equal ($default.Contains("Audit target: $project")) $true 'Current directory is default target'
-  Assert-Equal ($default.Contains('Audit analysis is not implemented yet.')) $true 'Default reports placeholder status'
+  Assert-Equal ($default.Contains('Static checks complete; deeper analysis is not implemented yet.')) $true 'Default reports static status'
 
   Set-Location $fixture
   $relative = (meowsky audit 'sample project') -join "`n"
@@ -58,11 +79,11 @@ try {
   $absolute = (meowsky audit $project) -join "`n"
   Assert-Equal ($absolute.Contains("Audit target: $project")) $true 'Absolute directory with spaces resolves'
   $quick = (meowsky audit --quick 'sample project') -join "`n"
-  Assert-Equal ($quick.Contains('Quick analysis is not implemented yet.')) $true 'Quick option before directory recognized'
+  Assert-Equal ($quick.Contains('Quick static checks complete.')) $true 'Quick option before directory recognized'
   $refresh = (meowsky audit 'sample project' --refresh) -join "`n"
   Assert-Equal ($refresh.Contains('Map refresh is not implemented yet; no files were changed.')) $true 'Refresh option after directory recognized'
   $combined = (meowsky audit --refresh $project --quick) -join "`n"
-  Assert-Equal ($combined.Contains('Quick analysis is not implemented yet.')) $true 'Combined options recognized'
+  Assert-Equal ($combined.Contains('Quick static checks complete.')) $true 'Combined options recognized'
   Assert-Equal ($combined.Contains('Map refresh is not implemented yet; no files were changed.')) $true 'Combined refresh recognized'
 
   $inventory = Get-MeowskyAuditInventory -Root $plain
@@ -92,9 +113,35 @@ try {
   Assert-Equal ($summary.Contains('Coverage: complete within the stated exclusions.')) $true 'Scoped coverage reported'
   Assert-Equal ($summary.Contains('Project indicators:')) $true 'Indicators summarized'
   Assert-Equal ($summary.Contains('Directory .meowsky:')) $true 'Skipped directory and reason shown'
+  $healthy = Get-MeowskyAuditStaticFindings -Inventory $inventory
+  Assert-Equal "$($healthy.Verified.Count),$($healthy.Candidates.Count),$($healthy.Limitations.Count)" '0,0,0' 'Healthy fixture has no invented findings'
+  $issueInventory = Get-MeowskyAuditInventory -Root $issues
+  $report = Get-MeowskyAuditStaticFindings -Inventory $issueInventory -SourceLineThreshold 3 -SourceByteThreshold 1000 -DirectoryFileThreshold 1
+  Assert-Equal $report.Verified.Count 3 'Missing Markdown links and image are verified'
+  Assert-Equal (@($report.Verified | Where-Object { $_.Category -eq 'Markdown link' -and $_.Path -eq 'README.md' -and $_.Evidence -like '*docs/absent.md*' }).Count) 1 'Reference-style broken link detected'
+  Assert-Equal (@($report.Verified | Where-Object { $_.Category -eq 'Markdown link' -and $_.Path -eq 'README.md' -and $_.Evidence -like '*docs/gone.md*' }).Count) 1 'Inline broken link detected'
+  Assert-Equal (@($report.Verified | Where-Object { $_.Category -eq 'Local file reference' -and $_.Path -eq 'docs/guide.md' -and $_.Evidence -like '*missing.png*' }).Count) 1 'Missing image reference detected'
+  Assert-Equal (@($report.Candidates | Where-Object { $_.Category -eq 'Source size' -and $_.Path -eq 'src/large.ps1' }).Count) 1 'Large source is a review candidate'
+  $byteReport = Get-MeowskyAuditStaticFindings -Inventory $issueInventory -SourceLineThreshold 100 -SourceByteThreshold 4
+  Assert-Equal (@($byteReport.Candidates | Where-Object { $_.Category -eq 'Source size' -and $_.Path -eq 'src/large.ps1' -and $_.Evidence -like '*bytes exceeds 4*' }).Count) 1 'Byte threshold is configurable'
+  Assert-Equal (@($report.Candidates | Where-Object { $_.Category -eq 'Directory concentration' -and $_.Path -eq 'scripts' }).Count) 1 'Concentrated directory is a review candidate'
+  Assert-Equal (@($report.Candidates | Where-Object { $_.Category -eq 'Reference gap' -and $_.Path -eq 'scripts/unlinked.ps1' -and $_.Evidence -like "*scripts/used.ps1*" }).Count) 1 'Unlinked script has documented peer evidence'
+  Assert-Equal (@($report.Candidates | Where-Object { $_.Path -eq 'tests/standalone.test.ps1' }).Count) 0 'Test without documented peer is not called disconnected'
+  Assert-Equal (@($report.Candidates | Where-Object { $_.Path -eq 'root.test.ps1' }).Count) 0 'Root-level test without documented peer is not called disconnected'
+  Assert-Equal $report.Limitations.Count 0 'Fully scanned fixture has no coverage limitations'
+  $documentLimited = Get-MeowskyAuditStaticFindings -Inventory $issueInventory -MarkdownByteLimit 1
+  Assert-Equal (@($documentLimited.Limitations | Where-Object { $_.Method -eq 'Document size limit' }).Count -gt 0) $true 'Large Markdown is an explicit coverage limit'
+  Assert-Equal (@($report.Verified | Where-Object { $_.Id -match '^V\d{3}$' -and $_.Method -and $_.Priority }).Count) 3 'Verified findings carry report fields'
+  $again = Get-MeowskyAuditStaticFindings -Inventory $issueInventory -SourceLineThreshold 3 -SourceByteThreshold 1000 -DirectoryFileThreshold 1
+  Assert-Equal (($report.Verified + $report.Candidates + $report.Limitations | ConvertTo-Json -Depth 5) -join '') (($again.Verified + $again.Candidates + $again.Limitations | ConvertTo-Json -Depth 5) -join '') 'Unchanged input produces reproducible findings'
+  $quickIssues = (meowsky audit $issues --quick) -join "`n"
+  Assert-Equal ($quickIssues.Contains('Static checks: 3 verified issue(s)')) $true 'Quick output summarizes verified issues'
+  Assert-Equal ($quickIssues.Contains('[V001]')) $true 'Quick output includes stable finding ID'
   $depthLimited = Get-MeowskyAuditInventory -Root $plain -MaxDepth 0
   Assert-Equal $depthLimited.Incomplete $true 'Depth limit marks coverage incomplete'
   Assert-Equal (@($depthLimited.Skipped | Where-Object { $_.Path -eq 'src' -and $_.Reason -eq 'Depth limit reached.' }).Count) 1 'Depth skip identifies directory'
+  $limitedReport = Get-MeowskyAuditStaticFindings -Inventory $depthLimited
+  Assert-Equal ($limitedReport.Limitations.Count -gt 0) $true 'Incomplete scan becomes coverage limitation'
   $entryLimited = Get-MeowskyAuditInventory -Root $plain -MaxEntries 2
   Assert-Equal $entryLimited.Incomplete $true 'Entry limit marks coverage incomplete'
   Assert-Equal (@($entryLimited.Skipped | Where-Object { $_.Reason -like 'Entry limit reached*' }).Count) 1 'Entry limit explains omitted entries'
@@ -113,6 +160,7 @@ try {
   Assert-Error { meowsky audit --help --quick } 'Usage: meowsky audit*'
 
   Assert-Equal (Get-FixtureEntries) $before 'Audit commands did not change target entries'
+  Assert-Equal (Get-FixtureContentHashes) $beforeContent 'Audit commands did not change target file contents'
   Assert-Equal (Get-Content -Raw -LiteralPath (Join-Path $project 'keep.txt')) "original`r`n" 'Target content preserved'
   Assert-Equal (Test-Path -LiteralPath $env:WORK_HOME) $false 'Audit did not create unrelated work root'
   Assert-Equal (Test-Path -LiteralPath (Join-Path $project '.meowsky')) $false 'Refresh placeholder did not create map'

@@ -1,4 +1,5 @@
 . (Join-Path $PSScriptRoot 'discovery.ps1')
+. (Join-Path $PSScriptRoot 'static-checks.ps1')
 
 function Invoke-MeowskyAuditFeature {
   param([string]$Target, [string]$WorkRoot, [string[]]$Arguments)
@@ -56,10 +57,14 @@ function Invoke-MeowskyAuditFeature {
   }
   if ($inventory.Skipped.Count -gt 8) { "  ... $($inventory.Skipped.Count - 8) more skipped entry/entries." }
   foreach ($warning in $inventory.Warnings) { "Warning: $warning" }
-  if ($quick) {
-    'Quick analysis is not implemented yet.'
-  } else {
-    'Audit analysis is not implemented yet.'
+  $report = Get-MeowskyAuditStaticFindings -Inventory $inventory
+  "Static checks: $($report.Verified.Count) verified issue(s), $($report.Candidates.Count) investigation candidate(s), $($report.Limitations.Count) coverage limitation(s)."
+  $findings = @($report.Verified) + @($report.Candidates) + @($report.Limitations)
+  foreach ($finding in @($findings | Select-Object -First 8)) {
+    "  [$($finding.Id)] $($finding.Category) [$($finding.Priority)] $($finding.Path): $($finding.Evidence) (Method: $($finding.Method))"
   }
+  if ($findings.Count -gt 8) { "  ... $($findings.Count - 8) more finding(s)." }
+  if ($quick) { 'Quick static checks complete.' }
+  else { 'Static checks complete; deeper analysis is not implemented yet.' }
   if ($refresh) { 'Map refresh is not implemented yet; no files were changed.' }
 }
