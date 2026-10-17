@@ -1,5 +1,6 @@
 . (Join-Path $PSScriptRoot 'discovery.ps1')
 . (Join-Path $PSScriptRoot 'static-checks.ps1')
+. (Join-Path $PSScriptRoot 'semantic.ps1')
 
 function Invoke-MeowskyAuditFeature {
   param([string]$Target, [string]$WorkRoot, [string[]]$Arguments)
@@ -64,7 +65,21 @@ function Invoke-MeowskyAuditFeature {
     "  [$($finding.Id)] $($finding.Category) [$($finding.Priority)] $($finding.Path): $($finding.Evidence) (Method: $($finding.Method))"
   }
   if ($findings.Count -gt 8) { "  ... $($findings.Count - 8) more finding(s)." }
-  if ($quick) { 'Quick static checks complete.' }
-  else { 'Static checks complete; deeper analysis is not implemented yet.' }
+  if ($quick) { 'Quick static checks complete; Codex was not invoked.' }
+  else {
+    'Starting Codex review: read-only, requested sample of up to 12 files, 180-second timeout; Codex usage may apply.'
+    $semantic = Invoke-MeowskyAuditSemantic -Inventory $inventory -StaticReport $report
+    "Semantic evaluation: $($semantic.State). $($semantic.Reason)"
+    if ($semantic.State -eq 'Complete' -or $semantic.State -eq 'Incomplete') {
+      "Semantic findings: $($semantic.Findings.Count); inspected paths: $($semantic.ReviewedPaths.Count)."
+      if ($semantic.State -eq 'Complete' -and -not $semantic.Findings.Count) { 'No material semantic findings in the bounded review.' }
+      foreach ($finding in @($semantic.Findings | Select-Object -First 8)) {
+        $location = if ($finding.line -gt 0) { "$($finding.path):$($finding.line)" } else { $finding.path }
+        "  $($finding.priority) $($finding.category) $location`: $($finding.evidence) Recommendation: $($finding.recommendation)"
+      }
+      if ($semantic.Findings.Count -gt 8) { "  ... $($semantic.Findings.Count - 8) more semantic finding(s)." }
+      foreach ($limitation in $semantic.Limitations) { "  Review limitation: $limitation" }
+    }
+  }
   if ($refresh) { 'Map refresh is not implemented yet; no files were changed.' }
 }

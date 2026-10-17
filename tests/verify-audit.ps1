@@ -1,4 +1,4 @@
-# Audit discovery and static-check integration checks; deep analysis and maps are absent.
+# Audit discovery, static checks, and mocked Codex integration; maps are absent.
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path $PSScriptRoot -Parent
 $fixture = Join-Path ([IO.Path]::GetTempPath()) ('meowsky-audit-tests-' + [guid]::NewGuid().ToString('N'))
@@ -32,6 +32,35 @@ try {
   $env:WORK_HOME = Join-Path $fixture 'unrelated-work'
   Set-Location $project
   . (Join-Path $repo 'powershell/profile.ps1')
+  $script:auditCodexAvailable = $true
+  $script:auditMockMode = 'complete'
+  $script:auditInvocationCount = 0
+  $script:auditLastArguments = @()
+  $script:auditLastPrompt = ''
+  $originalRunner = (Get-Item Function:Invoke-MeowskyAuditCodexProcess).ScriptBlock
+  function Resolve-MeowskyCodexCommand { if ($script:auditCodexAvailable) { 'mock-codex.ps1' } }
+  function Invoke-MeowskyAuditCodexProcess {
+    param($Command, $Root, [string[]]$Arguments, $Prompt, $TimeoutSeconds)
+    $script:auditInvocationCount++
+    $script:auditLastArguments = $Arguments
+    $script:auditLastPrompt = $Prompt
+    if ($script:auditMockMode -eq 'auth') { return [pscustomobject]@{ ExitCode = 1; TimedOut = $false; StdOut = ''; StdErr = 'Not logged in' } }
+    if ($script:auditMockMode -eq 'timeout') { return [pscustomobject]@{ ExitCode = -1; TimedOut = $true; StdOut = ''; StdErr = '' } }
+    if ($script:auditMockMode -eq 'malformed') { return [pscustomobject]@{ ExitCode = 0; TimedOut = $false; StdOut = 'not-json'; StdErr = '' } }
+    if ($script:auditMockMode -eq 'no-completion') { return [pscustomobject]@{ ExitCode = 0; TimedOut = $false; StdOut = '{"type":"turn.started"}'; StdErr = '' } }
+    $reviewed = @()
+    if ($Root -ne $project) { $reviewed = @('README.md') }
+    if ($script:auditMockMode -eq 'bad-path') { $reviewed = @('outside.md') }
+    $status = if ($script:auditMockMode -eq 'incomplete') { 'incomplete' } else { 'complete' }
+    $findings = @()
+    if ($script:auditMockMode -eq 'finding') {
+      $findings = @(@{ category = 'Architecture'; path = 'README.md'; line = 1; evidence = 'The stated entry point differs from source.'; recommendation = 'Check the documented command and update the guide if needed.'; priority = 'medium' })
+    }
+    $message = @{ status = $status; summary = 'Bounded sample reviewed.'; reviewed_paths = $reviewed; limitations = @(); findings = $findings } | ConvertTo-Json -Compress -Depth 5
+    $item = @{ type = 'item.completed'; item = @{ type = 'agent_message'; text = $message } } | ConvertTo-Json -Compress -Depth 5
+    $events = $item + "`n" + '{"type":"turn.completed"}'
+    [pscustomobject]@{ ExitCode = 0; TimedOut = $false; StdOut = $events; StdErr = '' }
+  }
 
   Assert-Equal $script:MeowskyCommands['audit'].Handler 'Invoke-MeowskyAuditFeature' 'Audit dispatch'
   Assert-Equal $script:MeowskyCommands['audit'].SkipWorkRoot $true 'Audit does not create work root'
@@ -71,7 +100,9 @@ try {
 
   $default = (meowsky audit) -join "`n"
   Assert-Equal ($default.Contains("Audit target: $project")) $true 'Current directory is default target'
-  Assert-Equal ($default.Contains('Static checks complete; deeper analysis is not implemented yet.')) $true 'Default reports static status'
+  Assert-Equal ($default.Contains('Starting Codex review: read-only, requested sample of up to 12 files, 180-second timeout; Codex usage may apply.')) $true 'Semantic cost and scope are disclosed'
+  Assert-Equal ($default.Contains('Semantic evaluation: Complete.')) $true 'Default runs semantic evaluation'
+  Assert-Equal ($default.Contains('No material semantic findings in the bounded review.')) $true 'Empty semantic findings are valid'
 
   Set-Location $fixture
   $relative = (meowsky audit 'sample project') -join "`n"
@@ -79,11 +110,13 @@ try {
   $absolute = (meowsky audit $project) -join "`n"
   Assert-Equal ($absolute.Contains("Audit target: $project")) $true 'Absolute directory with spaces resolves'
   $quick = (meowsky audit --quick 'sample project') -join "`n"
-  Assert-Equal ($quick.Contains('Quick static checks complete.')) $true 'Quick option before directory recognized'
+  $callsBeforeQuick = $script:auditInvocationCount
+  Assert-Equal ($quick.Contains('Quick static checks complete; Codex was not invoked.')) $true 'Quick option before directory recognized'
+  Assert-Equal $script:auditInvocationCount $callsBeforeQuick 'Quick audit did not invoke Codex'
   $refresh = (meowsky audit 'sample project' --refresh) -join "`n"
   Assert-Equal ($refresh.Contains('Map refresh is not implemented yet; no files were changed.')) $true 'Refresh option after directory recognized'
   $combined = (meowsky audit --refresh $project --quick) -join "`n"
-  Assert-Equal ($combined.Contains('Quick static checks complete.')) $true 'Combined options recognized'
+  Assert-Equal ($combined.Contains('Quick static checks complete; Codex was not invoked.')) $true 'Combined options recognized'
   Assert-Equal ($combined.Contains('Map refresh is not implemented yet; no files were changed.')) $true 'Combined refresh recognized'
 
   $inventory = Get-MeowskyAuditInventory -Root $plain
@@ -113,10 +146,43 @@ try {
   Assert-Equal ($summary.Contains('Coverage: complete within the stated exclusions.')) $true 'Scoped coverage reported'
   Assert-Equal ($summary.Contains('Project indicators:')) $true 'Indicators summarized'
   Assert-Equal ($summary.Contains('Directory .meowsky:')) $true 'Skipped directory and reason shown'
+  Assert-Equal ($summary.Contains('Semantic evaluation: Complete.')) $true 'Gitless project accepts semantic review'
   $healthy = Get-MeowskyAuditStaticFindings -Inventory $inventory
   Assert-Equal "$($healthy.Verified.Count),$($healthy.Candidates.Count),$($healthy.Limitations.Count)" '0,0,0' 'Healthy fixture has no invented findings'
+  Assert-Equal ($script:auditLastArguments -join ' ') ('exec -C ' + $plain + ' --sandbox read-only --ask-for-approval never --disable hooks --disable plugins --disable apps --skip-git-repo-check --ephemeral --ignore-user-config --output-schema ' + (Join-Path $repo 'features/audit/semantic-schema.json') + ' --json') 'Semantic invocation enforces bounded read-only CLI options'
+  Assert-Equal ($script:auditLastPrompt.Length -lt 10000) $true 'Discovery prompt is bounded'
+  Assert-Equal ($script:auditLastPrompt.Contains('Discovery incomplete: False.')) $true 'Prompt includes coverage status'
+  Assert-Equal ($script:auditLastPrompt.Contains('Skipped 1: Project exclusion: src/private')) $true 'Prompt includes exclusion reasons'
+  Assert-Equal ($script:auditLastPrompt.Contains('Static findings: 0 verified')) $true 'Prompt includes static findings summary'
+  $script:auditMockMode = 'finding'
+  $semanticFinding = Invoke-MeowskyAuditSemantic -Inventory $inventory -StaticReport $healthy
+  Assert-Equal $semanticFinding.State 'Complete' 'Structured semantic finding accepted'
+  Assert-Equal $semanticFinding.Findings[0].path 'README.md' 'Semantic finding links to inventoried source'
+  $semanticOutput = (meowsky audit $plain) -join "`n"
+  Assert-Equal ($semanticOutput.Contains('Recommendation: Check the documented command')) $true 'CLI displays source-linked semantic recommendation'
+  $script:auditMockMode = 'incomplete'
+  Assert-Equal (Invoke-MeowskyAuditSemantic -Inventory $inventory -StaticReport $healthy).State 'Incomplete' 'Model-declared incomplete review stays incomplete'
+  $script:auditMockMode = 'auth'
+  Assert-Equal (Invoke-MeowskyAuditSemantic -Inventory $inventory -StaticReport $healthy).Reason 'Codex authentication failed.' 'Authentication failure is explicit'
+  Assert-Equal (((meowsky audit $plain) -join "`n").Contains('Semantic evaluation: Failed. Codex authentication failed.')) $true 'CLI cannot silently claim successful review after authentication failure'
+  $script:auditMockMode = 'malformed'
+  Assert-Equal (Invoke-MeowskyAuditSemantic -Inventory $inventory -StaticReport $healthy).State 'Failed' 'Malformed event stream fails review'
+  $script:auditMockMode = 'bad-path'
+  Assert-Equal (Invoke-MeowskyAuditSemantic -Inventory $inventory -StaticReport $healthy).State 'Failed' 'Uninventoried evidence path is rejected'
+  $script:auditMockMode = 'no-completion'
+  Assert-Equal (Invoke-MeowskyAuditSemantic -Inventory $inventory -StaticReport $healthy).State 'Incomplete' 'Missing completion event cannot report success'
+  $script:auditMockMode = 'timeout'
+  Assert-Equal (Invoke-MeowskyAuditSemantic -Inventory $inventory -StaticReport $healthy).State 'Incomplete' 'Timed-out review cannot report success'
+  $script:auditCodexAvailable = $false
+  Assert-Equal (Invoke-MeowskyAuditSemantic -Inventory $inventory -StaticReport $healthy).State 'Unavailable' 'Missing Codex reports unavailable'
+  Assert-Equal (((meowsky audit $plain) -join "`n").Contains('Semantic evaluation: Unavailable. Codex CLI was not found.')) $true 'CLI labels missing Codex'
+  $script:auditCodexAvailable = $true
+  $script:auditMockMode = 'complete'
   $issueInventory = Get-MeowskyAuditInventory -Root $issues
   $report = Get-MeowskyAuditStaticFindings -Inventory $issueInventory -SourceLineThreshold 3 -SourceByteThreshold 1000 -DirectoryFileThreshold 1
+  $issuePrompt = New-MeowskyAuditSemanticPrompt -Inventory $issueInventory -StaticReport $report
+  Assert-Equal ($issuePrompt.Contains('V001')) $true 'Semantic prompt includes static finding evidence'
+  Assert-Equal ($issuePrompt.Length -lt 10000) $true 'Prompt with static findings stays bounded'
   Assert-Equal $report.Verified.Count 3 'Missing Markdown links and image are verified'
   Assert-Equal (@($report.Verified | Where-Object { $_.Category -eq 'Markdown link' -and $_.Path -eq 'README.md' -and $_.Evidence -like '*docs/absent.md*' }).Count) 1 'Reference-style broken link detected'
   Assert-Equal (@($report.Verified | Where-Object { $_.Category -eq 'Markdown link' -and $_.Path -eq 'README.md' -and $_.Evidence -like '*docs/gone.md*' }).Count) 1 'Inline broken link detected'
@@ -142,6 +208,9 @@ try {
   Assert-Equal (@($depthLimited.Skipped | Where-Object { $_.Path -eq 'src' -and $_.Reason -eq 'Depth limit reached.' }).Count) 1 'Depth skip identifies directory'
   $limitedReport = Get-MeowskyAuditStaticFindings -Inventory $depthLimited
   Assert-Equal ($limitedReport.Limitations.Count -gt 0) $true 'Incomplete scan becomes coverage limitation'
+  $limitedPrompt = New-MeowskyAuditSemanticPrompt -Inventory $depthLimited -StaticReport $limitedReport
+  Assert-Equal ($limitedPrompt.Contains('Discovery incomplete: True.')) $true 'Semantic prompt declares incomplete scan'
+  Assert-Equal ($limitedPrompt.Contains('Depth limit reached.')) $true 'Semantic prompt includes omission reason'
   $entryLimited = Get-MeowskyAuditInventory -Root $plain -MaxEntries 2
   Assert-Equal $entryLimited.Incomplete $true 'Entry limit marks coverage incomplete'
   Assert-Equal (@($entryLimited.Skipped | Where-Object { $_.Reason -like 'Entry limit reached*' }).Count) 1 'Entry limit explains omitted entries'
@@ -165,6 +234,15 @@ try {
   Assert-Equal (Test-Path -LiteralPath $env:WORK_HOME) $false 'Audit did not create unrelated work root'
   Assert-Equal (Test-Path -LiteralPath (Join-Path $project '.meowsky')) $false 'Refresh placeholder did not create map'
   Assert-Equal (Get-Location).Path $fixture 'Audit did not navigate away from current directory'
+
+  $mockCli = Join-Path $fixture 'mock-codex.ps1'
+  Set-Content -LiteralPath $mockCli -Value @('param($Mode, $Payload)', 'Write-Output $Payload', 'exit 0')
+  $processResult = & $originalRunner -Command $mockCli -Root $fixture -Arguments @('exec') -Prompt 'fixture context' -TimeoutSeconds 15
+  Assert-Equal $processResult.ExitCode 0 'Bounded Windows process runner accepts a mock CLI'
+  Assert-Equal ($processResult.StdOut.Contains('fixture context')) $true 'Process runner passes the bounded prompt through stdin'
+  Set-Content -LiteralPath $mockCli -Value @('Start-Sleep -Seconds 10', 'exit 0')
+  $timedProcess = & $originalRunner -Command $mockCli -Root $fixture -Arguments @('exec') -Prompt 'fixture context' -TimeoutSeconds 1
+  Assert-Equal $timedProcess.TimedOut $true 'Process runner enforces its timeout'
 
   $outside = Join-Path $fixture 'outside-project'
   New-Item -ItemType Directory -Path $outside | Out-Null

@@ -1,0 +1,27 @@
+{
+  "type": "object",
+  "properties": {
+    "status": { "type": "string", "enum": ["complete", "incomplete"] },
+    "summary": { "type": "string" },
+    "reviewed_paths": { "type": "array", "items": { "type": "string" } },
+    "limitations": { "type": "array", "items": { "type": "string" } },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "category": { "type": "string" },
+          "path": { "type": "string" },
+          "line": { "type": "integer" },
+          "evidence": { "type": "string" },
+          "recommendation": { "type": "string" },
+          "priority": { "type": "string", "enum": ["high", "medium", "low"] }
+        },
+        "required": ["category", "path", "line", "evidence", "recommendation", "priority"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["status", "summary", "reviewed_paths", "limitations", "findings"],
+  "additionalProperties": false
+}

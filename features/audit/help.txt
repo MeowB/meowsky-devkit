@@ -3,7 +3,7 @@ Validate a local workspace directory. Defaults to the current directory.
 The directory may be relative to the current location or an absolute path.
 Options may appear before or after the directory.
 
---quick    Show filesystem discovery and concise static findings.
+--quick    Show filesystem discovery and concise static findings without Codex.
 --refresh  Request a workspace map refresh. Map generation is not implemented
            yet; this option does not write any files.
 --help     Show this help when used alone. -h and -Help also show feature help.
@@ -27,5 +27,14 @@ Markdown files over 1 MiB and complex link syntax are reported as coverage
 limits instead of being called broken links. Links outside the audited root
 and section anchors are not verified.
 
-Deep analysis, Codex review, and map generation are not implemented yet.
-No target project files are changed.
+Without --quick, Audit also runs a bounded Codex semantic review. It may incur
+Codex usage. The review samples relevant files and evaluates maintainability,
+architecture, naming, obsolete or redundant logic, and documentation. Findings
+must cite inspected source paths and recommend proportionate action. A clean
+review may have no findings. Failed or incomplete reviews are labeled clearly.
+
+Codex runs non-interactively with a read-only sandbox, no approval escalation,
+disabled hooks/plugins/apps, no user config, an ephemeral session, and a
+180-second timeout. The prompt forbids project tooling, tests, and edits; the
+sandbox enforces the target file-write boundary. The bounded summary and
+structured response stay in memory. Map generation is not implemented.
