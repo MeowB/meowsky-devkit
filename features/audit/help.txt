@@ -1,0 +1,12 @@
+meowsky audit [<directory>] [--quick] [--refresh]
+Validate a local workspace directory. Defaults to the current directory.
+The directory may be relative to the current location or an absolute path.
+Options may appear before or after the directory.
+
+--quick    Select quick analysis. Analysis is not implemented in Chunk 01.
+--refresh  Request a workspace map refresh. Map generation is not implemented
+           in Chunk 01; this option does not write any files yet.
+--help     Show this help when used alone. -h and -Help also show feature help.
+
+This command currently validates its target and reports placeholder status only.
+It does not scan files, run Codex, produce findings, or change the target.

@@ -65,12 +65,13 @@ try {
       Assert-Equal $inputColors.$name ([string][char]27 + '[' + $expectedInputColors[$name] + 'm') "PowerShell input $name follows ANSI palette"
     }
   }
-  Assert-Equal $script:MeowskyCommands.Count 12 'Registered commands and aliases'
+  Assert-Equal $script:MeowskyCommands.Count 13 'Registered commands and aliases'
   Assert-Equal ($script:MeowskyCommands['identity'].SkipWorkRoot) $true 'Identity skips work-root dispatch'
+  Assert-Equal ($script:MeowskyCommands['audit'].SkipWorkRoot) $true 'Audit skips work-root dispatch'
   Assert-Equal ($script:MeowskyCommands['.'].SkipWorkRoot) $true 'Current-directory workspace skips work-root dispatch'
-  Assert-Equal (@($script:MeowskyCommands.Values | Where-Object { $_.SkipWorkRoot }).Count) 5 'Identity, workspace, and districts skip work-root dispatch'
-  Assert-Equal (@($script:MeowskyCommands.Values | Where-Object { $_.AcceptsArguments }).Count) 1 'Only Identity opts into extra arguments'
-  foreach ($command in @('codex', 'color', 'identity', 'matrix', 'ptree', 'md', 'markdown', 'pdf', '.', './', 'bach', 'launchpad')) {
+  Assert-Equal (@($script:MeowskyCommands.Values | Where-Object { $_.SkipWorkRoot }).Count) 6 'Identity, Audit, workspace, and districts skip work-root dispatch'
+  Assert-Equal (@($script:MeowskyCommands.Values | Where-Object { $_.AcceptsArguments }).Count) 2 'Identity and Audit opt into extra arguments'
+  foreach ($command in @('codex', 'color', 'identity', 'audit', 'matrix', 'ptree', 'md', 'markdown', 'pdf', '.', './', 'bach', 'launchpad')) {
     $manifest = $script:MeowskyCommands[$command]
     $expectedHelp = (Get-Content -Raw (Join-Path $manifest.Directory $manifest.Help)).TrimEnd()
     Assert-Equal ((meowsky $command -h).TrimEnd()) $expectedHelp "$command -h"
@@ -131,10 +132,10 @@ try {
   $baseline = (& git -C $repo show "${BaselineRevision}:powershell/profile.ps1") -join "`n"
   $baselineAst = [Management.Automation.Language.Parser]::ParseInput($baseline, [ref]$null, [ref]$null)
   $oldHelp = $baselineAst.Find({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Show-MeowskyHelp' }, $true).Extent.Text
-  $legacyHelp = ($globalHelp -split "`r?`n" | Where-Object { $_ -notmatch '^\s+meowsky identity' }) -join "`n"
+  $legacyHelp = ($globalHelp -split "`r?`n" | Where-Object { $_ -notmatch '^\s+meowsky (identity|audit)' }) -join "`n"
   $expectedLegacyHelp = ((& { . ([scriptblock]::Create($oldHelp)); Show-MeowskyHelp }).TrimEnd()) -replace "`r`n", "`n"
   $filter = { $_ -notmatch '^\s+meowsky color|^\s+meowsky (dev|bach|launchpad)|^\s+meowsky\s+(Change to the work root|Ensure the workspace)|^\s+The work root is|^\s+otherwise \$HOME\\work|^\s+then under the work root|^\s+WORK_HOME must|^\s+Bare meowsky|^\s+dev/, bach/, and launchpad/|^\s+File and Codex paths|^\s+meowsky \. and ./ use|^\s+active identity theme|^\s+dev\s+Compatibility alias' }
-  Assert-Equal (($legacyHelp -split "`n" | Where-Object $filter) -join "`n") (($expectedLegacyHelp -split "`n" | Where-Object $filter) -join "`n") 'Global help preserved except retired colors and Identity'
+  Assert-Equal (($legacyHelp -split "`n" | Where-Object $filter) -join "`n") (($expectedLegacyHelp -split "`n" | Where-Object $filter) -join "`n") 'Global help preserved except retired colors, Identity, and Audit'
   Assert-Equal ($globalHelp -match '(?m)^\s+dev\s+Compatibility alias') $false 'Removed standalone dev alias absent from help'
   $oldTree = $baselineAst.Find({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'ptree' }, $true).Extent.Text
   foreach ($level in @(1, 2, 3, 15)) {
@@ -388,7 +389,7 @@ meowsky dev
 if ((Get-Location).Path -ne (Join-Path $env:WORK_HOME 'dev')) { throw 'meowsky dev did not enter dev/.' }
 if ($script:MeowskyCommands.ContainsKey('md') -or $script:MeowskyCommands.ContainsKey('markdown')) { throw 'Removed feature still registered.' }
 if (-not (meowsky pdf -h).Contains('meowsky pdf')) { throw 'Unrelated feature failed.' }
-if ($script:MeowskyCommands.Count -ne 10) { throw 'Unexpected command count after feature removal.' }
+if ($script:MeowskyCommands.Count -ne 11) { throw 'Unexpected command count after feature removal.' }
 '@ | Set-Content -LiteralPath (Join-Path $isolatedRuntime 'verify.ps1') -Encoding UTF8
   & powershell.exe -NoProfile -File (Join-Path $isolatedRuntime 'verify.ps1')
   Assert-Equal $LASTEXITCODE 0 'Fresh-profile feature removal without standalone dev alias'
