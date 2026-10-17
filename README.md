@@ -60,7 +60,12 @@ This setup is meant to feel like:
 `-- scripts/
     |-- install-windows.ps1          # Windows setup entry point
     |-- installer/
-    |   `-- windows-functions.ps1 # Windows installer support functions
+    |   |-- windows-features.psd1 # explicit installation order and prerequisites
+    |   |-- windows-environment.ps1 # PATH and environment operations
+    |   |-- windows-files.ps1 # guarded profile and Neovim file updates
+    |   |-- windows-process.ps1 # native commands and package operations
+    |   |-- windows-verification.ps1 # fresh-shell and editor checks
+    |   `-- features/       # package, compiler, Zig, Codex, Neovim, profile installers
     `-- install-linux.sh
 ```
 

@@ -1,7 +1,8 @@
 # Installer state transitions use only temporary profiles and mocked environment scopes.
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path $PSScriptRoot -Parent
-. (Join-Path $repo 'scripts/installer/windows-functions.ps1')
+. (Join-Path $repo 'scripts/installer/windows-environment.ps1')
+. (Join-Path $repo 'scripts/installer/windows-files.ps1')
 $fixture = Join-Path ([IO.Path]::GetTempPath()) ('meowsky-installer-tests-' + [guid]::NewGuid().ToString('N'))
 $checks = 0
 
@@ -139,19 +140,13 @@ try {
 
   $logRoot = Join-Path $fixture 'logs'
   New-Item -ItemType Directory -Path $logRoot | Out-Null
-  $installerSource = Get-Content -Raw -LiteralPath (Join-Path $repo 'scripts/install-windows.ps1')
-  $logFunction = [regex]::Match($installerSource, '(?s)function New-MeowskyLogPath \{.*?(?=\r?\nfunction Invoke-QuietNativeCommand)')
-  $nativeFunction = [regex]::Match($installerSource, '(?s)function Invoke-QuietNativeCommand \{.*?(?=\r?\nfunction Invoke-MeowskyFreshPowerShellCommand)')
-  Assert-True ($logFunction.Success -and $nativeFunction.Success) 'Native command logger found'
-  Invoke-Expression $logFunction.Value
-  Invoke-Expression $nativeFunction.Value
+  . (Join-Path $repo 'scripts/installer/windows-process.ps1')
+  Assert-True ((Get-Command Invoke-QuietNativeCommand -CommandType Function) -ne $null) 'Native command logger found'
   Assert-Throws { Invoke-QuietNativeCommand -Label 'empty-output' -FilePath 'powershell.exe' -Arguments @('-NoProfile', '-Command', 'exit 9') | Out-Null } 'Silent native failure is reported'
   $failureLog = Get-ChildItem -LiteralPath $logRoot -Filter '*empty-output.log' | Select-Object -First 1
   Assert-True ($failureLog -and ([IO.File]::ReadAllText($failureLog.FullName) -match 'Exit code: 9')) 'Silent native failure creates a useful log'
 
-  $freshFunction = [regex]::Match($installerSource, '(?s)function Invoke-MeowskyFreshPowerShellCommand \{.*?(?=\r?\nfunction Repair-NeovimRuntimeEnvironment)')
-  Assert-True $freshFunction.Success 'Fresh PowerShell verifier found'
-  Invoke-Expression $freshFunction.Value
+  Assert-True ((Get-Command Invoke-MeowskyFreshPowerShellCommand -CommandType Function) -ne $null) 'Fresh PowerShell verifier found'
   $script:pathState = @{ Machine = 'C:\Machine'; User = "$bin;C:\User"; Process = 'C:\Current' }
   $script:toolchainState = @{ User = $bin; Process = 'C:\Old' }
   function Invoke-QuietNativeCommand {
@@ -164,9 +159,7 @@ try {
   Assert-True ($script:pathState.Process -eq 'C:\Current' -and $script:toolchainState.Process -eq 'C:\Old') 'Installer process environment restored after fresh check'
 
   # Exercise the installer's real compiler decision function with side effects mocked.
-  $initializer = [regex]::Match($installerSource, '(?s)function Initialize-CCompiler \{.*?(?=\r?\nfunction Get-ZigPath)')
-  Assert-True $initializer.Success 'Compiler initializer found'
-  Invoke-Expression $initializer.Value
+  . (Join-Path $repo 'scripts/installer/features/compiler.ps1')
   $Msys2Root = ''
   $script:fakeCommandsPresent = $true
   $script:healthyPair = $true
@@ -192,6 +185,32 @@ try {
   $script:healthyPair = $false
   Assert-Throws { Initialize-CCompiler } 'Missing compiler and MSYS2 root fails clearly'
   Assert-True ($script:packageInstalls -eq 1) 'Missing toolchain tries package installation once'
+
+  $installerRoot = Join-Path $repo 'scripts/installer'
+  $manifest = Import-PowerShellDataFile (Join-Path $installerRoot 'windows-features.psd1')
+  Assert-True ($manifest.Version -eq 1 -and $manifest.Order.Count -eq 13) 'Windows installation manifest version and steps'
+  $seenSteps = @{}
+  $loadedModules = @{}
+  foreach ($name in $manifest.Order) {
+    Assert-True (-not $seenSteps.ContainsKey($name)) "Unique installation step $name"
+    Assert-True ($manifest.Steps.ContainsKey($name)) "Declared installation step $name"
+    $step = $manifest.Steps[$name]
+    foreach ($required in @($step.Requires)) {
+      Assert-True ($seenSteps.ContainsKey($required)) "Technical dependency $required precedes $name"
+    }
+    $module = Join-Path $installerRoot (Join-Path 'features' $step.Script)
+    Assert-True (Test-Path -LiteralPath $module -PathType Leaf) "Module exists for $name"
+    if (-not $loadedModules.ContainsKey($module)) {
+      . $module
+      $loadedModules[$module] = $true
+    }
+    Assert-True ((Get-Command $step.Handler -CommandType Function -ErrorAction SilentlyContinue) -ne $null) "Handler exists for $name"
+    $seenSteps[$name] = $true
+  }
+  Assert-True ($seenSteps.Count -eq $manifest.Steps.Count) 'Every manifest step is ordered'
+  $parseErrors = $null
+  [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $repo 'scripts/install-windows.ps1'), [ref]$null, [ref]$parseErrors) | Out-Null
+  Assert-True ($parseErrors.Count -eq 0) 'Windows installer parses in PowerShell'
   Write-Host "PASS: $checks Windows installer fixture checks."
 } finally {
   $tempRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\', '/')

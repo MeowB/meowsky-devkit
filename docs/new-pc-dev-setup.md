@@ -28,7 +28,7 @@ The Windows workspace defaults to `C:\meowsky` when `WORK_HOME` is unset. Option
 
 Open a new terminal so the setting is inherited. Use your own absolute path on another machine. The installer does not set `WORK_HOME` or create the workspace.
 
-For manual setup, the tool package list and Zig wrapper implementation are maintained in [scripts/install-windows.ps1](../scripts/install-windows.ps1). The wrappers live under `%LOCALAPPDATA%\nvim-tools` and remove incompatible compiler target arguments. Installing Zig alone does not create them.
+For manual setup, the tool package list is maintained in [scripts/installer/features/packages.ps1](../scripts/installer/features/packages.ps1), and the Zig wrapper implementation is in [scripts/installer/features/zig.ps1](../scripts/installer/features/zig.ps1). The wrappers live under `%LOCALAPPDATA%\nvim-tools` and remove incompatible compiler target arguments. Installing Zig alone does not create them.
 
 The installer handles the following steps automatically. If you need to inspect them, its managed profile import resolves the checkout from the script location; no machine-specific checkout path is required. The installed editor files are `%LOCALAPPDATA%\nvim\init.lua` and `%LOCALAPPDATA%\nvim\lua\meowsky\c.lua`.
 
@@ -53,7 +53,7 @@ where.exe gdb
 meowsky -h
 ```
 
-`gcc` and `gdb` should resolve to the same toolchain directory. For isolated checks of profile reconciliation and PATH logic without changing user configuration, run `powershell -NoProfile -File tests/verify-windows-installer.ps1` from this checkout. Rerun `scripts/install-windows.ps1` to repair or verify an existing installation; use `-Upgrade` only when you also want package upgrade checks.
+`gcc` and `gdb` should resolve to the same toolchain directory. For isolated checks of profile reconciliation, PATH logic, and installation module wiring without changing user configuration, run `powershell -NoProfile -File tests/verify-windows-installer.ps1` from this checkout. Rerun `scripts/install-windows.ps1` to repair or verify an existing installation; use `-Upgrade` only when you also want package upgrade checks.
 
 ## Daily Windows workflow
 
