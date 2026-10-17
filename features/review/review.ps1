@@ -156,7 +156,10 @@ function Invoke-MeowskyReviewFeature {
   $id = [guid]::NewGuid().ToString('N')
   $prompt = New-MeowskyReviewPrompt -Inventory $inventory -StaticReport $static -Mode $mode -SessionId $id
   $promptPath = New-MeowskyCodexPromptFile -Prompt $prompt
-  if ($mode -eq 'full') { $state.review = [ordered]@{ status = 'pending' } }
+  if ($mode -eq 'full') {
+    $state.review = [ordered]@{ status = 'pending' }
+    $state.PSObject.Properties.Remove('refactor')
+  }
   $state | Add-Member -NotePropertyName activeReview -NotePropertyValue ([ordered]@{
       id = $id; mode = $mode; auditFingerprint = $state.audit.fingerprint; startedAt = (Get-Date).ToString('o') }) -Force
   $null = Write-MeowskyAuditState -Root $root -State $state

@@ -22,6 +22,11 @@ SYNOPSIS
     meowsky review [<directory>] [--docs]
     meowsky review [<directory>] --complete [<json-file>]
     meowsky refactor [<directory>]
+    meowsky refactor [<directory>] --prepare '<S001[,S002...]>'
+    meowsky refactor [<directory>] --approve <approval.json>
+    meowsky refactor [<directory>] --plan-complete <plan.json>
+    meowsky refactor [<directory>] --execute
+    meowsky refactor [<directory>] --complete <completion.json>
     meowsky matrix
     meowsky ptree [<level>]
     meowsky md <file.md>
@@ -61,7 +66,12 @@ COMMANDS
     meowsky review [path]   Start an interactive read-only Codex review after audit.
     meowsky review --docs   Review architecture and documentation only.
     meowsky review --complete  Validate a copied JSON handoff and save outputs.
-    meowsky refactor [path] Check review and plan prerequisites; no execution yet.
+    meowsky refactor [path] Start read-only planning for approved findings.
+    meowsky refactor --prepare Print an unapproved scope template for S finding IDs.
+    meowsky refactor --approve Confirm exact finding and file scope in PowerShell.
+    meowsky refactor --plan-complete  Confirm a validated concrete plan.
+    meowsky refactor --execute Launch approved interactive Codex write session.
+    meowsky refactor --complete Validate changes and verification handoff.
     meowsky matrix          Run the animated matrix display; press Ctrl+C to stop.
     meowsky ptree [level]   Print the current directory tree to the given depth;
                             default is 3 levels. Level must be a positive integer.

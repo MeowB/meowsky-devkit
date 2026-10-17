@@ -469,7 +469,7 @@ try {
   Assert-Error { meowsky review $missingMap } 'Audit state is missing*'
   Assert-Error { meowsky review 'missing project' } 'Audit target was not found:*'
   Assert-Equal ((meowsky review --help).Contains('--complete')) $true 'Review help describes handoff'
-  Assert-Equal ((meowsky refactor --help).Contains('does not')) $true 'Refactor help states Chunk A limit'
+  Assert-Equal ((meowsky refactor --help).Contains('--plan-complete')) $true 'Refactor help describes concrete-plan gate'
   Assert-Error { meowsky review $issues --unknown } 'Usage: meowsky review*'
 
   $sourcePath = Join-Path $issues 'src/large.ps1'
@@ -535,7 +535,7 @@ try {
   Assert-Equal $reviewState.review.status 'complete' 'Validated handoff records completion'
   Assert-Equal $reviewState.review.approval 'pending' 'Plan remains unapproved'
   Assert-Equal ((Get-Content -Raw -LiteralPath (Join-Path $issues '.meowsky/PLAN.md')).Contains('No justified refactoring tasks')) $true 'Empty review creates no invented work'
-  Assert-Equal ((meowsky refactor $issues) -join "`n").Contains('Refactor prerequisite is satisfied') $true 'Refactor gate accepts completed review'
+  Assert-Error { meowsky refactor $issues } 'No findings are explicitly approved*'
   $null = meowsky review $issues
   $finding.line = 1
   $handoff.session_id = (Get-Content -Raw -LiteralPath $statePath | ConvertFrom-Json).activeReview.id

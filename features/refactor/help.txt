@@ -1,6 +1,42 @@
+meowsky refactor [<directory>] --prepare 'S001[,S002...]'
+meowsky refactor [<directory>] --approve <approval.json>
 meowsky refactor [<directory>]
-Check that the local audit is current, semantic review is complete, and the
-proposed PLAN.md still matches review state. Defaults to the current directory;
-Git is not required. Refactoring execution and approval are not implemented
-in Chunk B1. This command does not launch Codex or change application source.
+meowsky refactor [<directory>] --plan-complete <plan.json>
+meowsky refactor [<directory>] --execute
+meowsky refactor [<directory>] --complete <completion.json>
+
+Requires a current audit, a completed full review, and an unchanged PLAN.md.
+The directory defaults to the current location; Git is optional. A docs-only
+review cannot supply refactor approval. No selected or unapproved finding
+can launch Codex.
+
+1. --prepare prints an unapproved JSON template for selected S finding IDs.
+   Save it outside the project. Inspect each correction and permitted file,
+   fill in each exact change_boundary, and set the top-level and per-finding
+   approved fields to true only if you authorize them. You may narrow the
+   permitted files and add behavior or verification requirements. Describe any
+   specifically authorized behavior change in behavior_change. Expanded
+   files or changed corrections require a new full review and PLAN.md.
+   PLAN.md remains the proposal; approval is recorded separately in state.json.
+2. --approve validates the JSON against the current review, plan, and source
+   fingerprint. It displays the scope and requires a typed confirmation in
+   your PowerShell session. This approves planning for that scope, not edits.
+3. Plain meowsky refactor launches read-only interactive Codex planning.
+   Copy its final structured JSON to a file outside the project.
+4. --plan-complete validates the concrete plan and asks you to confirm it
+   explicitly. Only then can --execute launch Codex with workspace-write
+   sandboxing and on-request approval. The approved file list remains fixed.
+5. After the session, --complete validates its JSON handoff and compares
+   actual approved-file hashes plus a fingerprint of all other discovered
+   content. Successful resolution requires passing verification evidence.
+   Source changes mark the old audit stale; run meowsky audit again yourself.
+
+Session exit alone never proves completion. An interrupted session, changed
+prerequisite, failed check, or detected out-of-scope file change blocks
+resolution. The shell can detect changed files after execution, but cannot
+enforce a function-level edit boundary inside an approved file. Inspect the
+diff before accepting the result. Excluded or unclassified source remains
+outside the discovery fingerprint. No Git repository or new dependency is
+required. Refactor never commits or launches a new audit.
+
 Use meowsky refactor --help for this page.

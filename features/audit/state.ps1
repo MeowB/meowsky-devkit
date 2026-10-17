@@ -47,7 +47,10 @@ function Get-MeowskyAuditOutputHash {
 
 function Write-MeowskyAuditState {
   param([Parameter(Mandatory = $true)][string]$Root, [Parameter(Mandatory = $true)]$State)
-  $json = $State | ConvertTo-Json -Depth 6
+  $json = $State | ConvertTo-Json -Depth 10
+  if ([Text.Encoding]::UTF8.GetByteCount($json) -gt 64000) {
+    throw 'Workflow state exceeds the 64 KiB validation limit; narrow the approved refactor scope.'
+  }
   Write-MeowskyAuditReport -Root $Root -Name 'state.json' -Content $json
 }
 
@@ -60,7 +63,7 @@ function Read-MeowskyAuditState {
   try { $state = Get-Content -Raw -LiteralPath $path -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop }
   catch { throw 'Audit state is invalid. Run meowsky audit again.' }
   if ($null -eq $state -or $state.version -ne 1 -or $state.target -cne $Root -or
-      $state.audit.status -notin @('pending', 'complete') -or
+      $state.audit.status -notin @('pending', 'complete', 'stale') -or
       $state.review.status -notin @('pending', 'complete')) {
     throw 'Audit state is incompatible with this workspace. Run meowsky audit again.'
   }
@@ -70,6 +73,7 @@ function Read-MeowskyAuditState {
 function Assert-MeowskyAuditPrerequisite {
   param([Parameter(Mandatory = $true)][string]$Root, [ValidateSet('review', 'refactor')][string]$Stage)
   $state = Read-MeowskyAuditState -Root $Root
+  if ($state.audit.status -eq 'stale') { throw 'Audit is stale after source changes. Run meowsky audit again.' }
   if ($state.audit.status -ne 'complete') { throw 'Audit is incomplete. Run meowsky audit again.' }
   $reportPath = Join-Path $Root '.meowsky/AUDIT.md'
   $mapPath = Join-Path $Root '.meowsky/MAP.md'

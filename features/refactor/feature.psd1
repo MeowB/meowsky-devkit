@@ -5,7 +5,7 @@
     EntryPoint = 'refactor.ps1'
     Handler = 'Invoke-MeowskyRefactorFeature'
     Help = 'help.txt'
-    Description = 'Check audit and review prerequisites for selected refactoring'
+    Description = 'Plan, approve, execute, and verify selected reviewed refactoring'
     SkipWorkRoot = $true
     AcceptsArguments = $true
 }
