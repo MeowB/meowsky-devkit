@@ -5,6 +5,34 @@
     "summary": { "type": "string" },
     "reviewed_paths": { "type": "array", "items": { "type": "string" } },
     "limitations": { "type": "array", "items": { "type": "string" } },
+    "map": {
+      "type": "object",
+      "properties": {
+        "purpose": { "type": "string" },
+        "purpose_path": { "type": "string" },
+        "entries": { "type": "array", "items": {
+          "type": "object", "properties": { "path": { "type": "string" }, "role": { "type": "string" } },
+          "required": ["path", "role"], "additionalProperties": false
+        } },
+        "modules": { "type": "array", "items": {
+          "type": "object", "properties": { "path": { "type": "string" }, "role": { "type": "string" } },
+          "required": ["path", "role"], "additionalProperties": false
+        } },
+        "relationships": { "type": "array", "items": {
+          "type": "object", "properties": {
+            "from": { "type": "string" }, "to": { "type": "string" }, "description": { "type": "string" }
+          }, "required": ["from", "to", "description"], "additionalProperties": false
+        } },
+        "workflows": { "type": "array", "items": {
+          "type": "object", "properties": {
+            "name": { "type": "string" }, "description": { "type": "string" },
+            "paths": { "type": "array", "items": { "type": "string" } }
+          }, "required": ["name", "description", "paths"], "additionalProperties": false
+        } }
+      },
+      "required": ["purpose", "purpose_path", "entries", "modules", "relationships", "workflows"],
+      "additionalProperties": false
+    },
     "findings": {
       "type": "array",
       "items": {

@@ -2,6 +2,7 @@
 . (Join-Path $PSScriptRoot 'static-checks.ps1')
 . (Join-Path $PSScriptRoot 'semantic.ps1')
 . (Join-Path $PSScriptRoot 'report.ps1')
+. (Join-Path $PSScriptRoot 'map.ps1')
 
 function Invoke-MeowskyAuditFeature {
   param([string]$Target, [string]$WorkRoot, [string[]]$Arguments)
@@ -70,7 +71,7 @@ function Invoke-MeowskyAuditFeature {
   if ($quick) { 'Quick static checks complete; Codex was not invoked.' }
   else {
     'Starting Codex review: read-only, requested sample of up to 12 files, 180-second timeout; Codex usage may apply.'
-    $semantic = Invoke-MeowskyAuditSemantic -Inventory $inventory -StaticReport $report
+    $semantic = Invoke-MeowskyAuditSemantic -Inventory $inventory -StaticReport $report -IncludeMap:$refresh
     "Semantic evaluation: $($semantic.State). $($semantic.Reason)"
     if ($semantic.State -eq 'Complete' -or $semantic.State -eq 'Incomplete') {
       "Semantic findings: $($semantic.Findings.Count); inspected paths: $($semantic.ReviewedPaths.Count)."
@@ -85,8 +86,12 @@ function Invoke-MeowskyAuditFeature {
   }
   if ($refresh) {
     $content = New-MeowskyAuditReport -Inventory $inventory -StaticReport $report -Semantic $semantic -Quick:$quick
+    $mapContent = New-MeowskyAuditMap -Inventory $inventory -Semantic $semantic -Quick:$quick
     $written = Write-MeowskyAuditReport -Root $inventory.Root -Content $content
     "Audit report: $($written.State) $($written.Path)"
     if ($written.Backup) { "Previous report backup: $($written.Backup)" }
+    $mapWritten = Write-MeowskyAuditReport -Root $inventory.Root -Content $mapContent -Name 'MAP.md'
+    "Workspace map: $($mapWritten.State) $($mapWritten.Path)"
+    if ($mapWritten.Backup) { "Previous map backup: $($mapWritten.Backup)" }
   }
 }

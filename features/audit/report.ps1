@@ -169,7 +169,11 @@ function New-MeowskyAuditReport {
 }
 
 function Write-MeowskyAuditReport {
-  param([Parameter(Mandatory = $true)][string]$Root, [Parameter(Mandatory = $true)][string]$Content)
+  param(
+    [Parameter(Mandatory = $true)][string]$Root,
+    [Parameter(Mandatory = $true)][string]$Content,
+    [ValidateSet('AUDIT.md', 'MAP.md')][string]$Name = 'AUDIT.md'
+  )
 
   $directory = Join-Path $Root '.meowsky'
   if (Test-Path -LiteralPath $directory) {
@@ -178,26 +182,27 @@ function Write-MeowskyAuditReport {
       throw 'Audit output directory must be a regular directory, not a file, junction, or symlink.'
     }
   } else { $null = New-Item -ItemType Directory -Path $directory -ErrorAction Stop }
-  $target = Join-Path $directory 'AUDIT.md'
+  $target = Join-Path $directory $Name
   $encoding = [Text.UTF8Encoding]::new($false)
   $bytes = $encoding.GetBytes($Content.TrimEnd("`r", "`n") + "`r`n")
   $existing = Test-Path -LiteralPath $target
   if ($existing) {
     $item = Get-Item -LiteralPath $target -Force -ErrorAction Stop
     if ($item.PSIsContainer -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
-      throw 'Existing audit report must be a regular file, not a directory, junction, or symlink.'
+      throw 'Existing audit output must be a regular file, not a directory, junction, or symlink.'
     }
     $oldBytes = [IO.File]::ReadAllBytes($target)
     if ([Convert]::ToBase64String($oldBytes) -ceq [Convert]::ToBase64String($bytes)) {
       return [pscustomobject]@{ Path = $target; State = 'Unchanged'; Backup = '' }
     }
   }
-  $temp = Join-Path $directory ('.AUDIT-' + [guid]::NewGuid().ToString('N') + '.tmp')
+  $baseName = [IO.Path]::GetFileNameWithoutExtension($Name)
+  $temp = Join-Path $directory ('.' + $baseName + '-' + [guid]::NewGuid().ToString('N') + '.tmp')
   $backup = ''
   try {
     [IO.File]::WriteAllBytes($temp, $bytes)
     if ($existing) {
-      $backup = Join-Path $directory ('AUDIT-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '-' + [guid]::NewGuid().ToString('N') + '.md.bak')
+      $backup = Join-Path $directory ($baseName + '-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '-' + [guid]::NewGuid().ToString('N') + '.md.bak')
       [IO.File]::Copy($target, $backup, $false)
       if ((Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash -cne (Get-FileHash -LiteralPath $backup -Algorithm SHA256).Hash) {
         throw 'Audit report backup verification failed; existing report was preserved.'

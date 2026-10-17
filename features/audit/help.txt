@@ -4,9 +4,9 @@ The directory may be relative to the current location or an absolute path.
 Options may appear before or after the directory.
 
 --quick    Show filesystem discovery and concise static findings without Codex.
---refresh  Write .meowsky/AUDIT.md from the current audit. An existing changed
-           report is backed up before replacement. With --quick, the report
-           explicitly states that Codex analysis was not run.
+--refresh  Write .meowsky/AUDIT.md and a compact .meowsky/MAP.md from the
+           current audit. Existing changed files are backed up before
+           replacement. With --quick, both outputs label absent Codex context.
 --help     Show this help when used alone. -h and -Help also show feature help.
 
 Discovery lists relevant source, test, configuration, and documentation files.
@@ -41,4 +41,6 @@ sandbox enforces the target file-write boundary. The bounded summary and
 structured response stay in memory unless --refresh writes the Markdown report.
 Normal audits do not write project files. Report source links are checked
 against the discovery inventory at generation time; semantic claims still need
-human verification. Map generation is not implemented.
+human verification. The map links to inventoried source, tests, and docs and
+labels static candidates separately from bounded Codex interpretations. It
+is a snapshot from the last explicit --refresh; there are no update hooks.

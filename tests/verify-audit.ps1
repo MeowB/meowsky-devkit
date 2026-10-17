@@ -51,12 +51,25 @@ try {
     $reviewed = @()
     if ($Root -ne $project) { $reviewed = @('README.md') }
     if ($script:auditMockMode -eq 'bad-path') { $reviewed = @('outside.md') }
+    if ($script:auditMockMode -in @('map', 'bad-map') -and $Root -eq $issues) { $reviewed = @('README.md', 'docs/guide.md', 'scripts/used.ps1') }
     $status = if ($script:auditMockMode -eq 'incomplete') { 'incomplete' } else { 'complete' }
     $findings = @()
     if ($script:auditMockMode -eq 'finding') {
       $findings = @(@{ category = 'Architecture'; path = 'README.md'; line = 1; evidence = 'The stated entry point differs from source.'; recommendation = 'Check the documented command and update the guide if needed.'; priority = 'medium' })
     }
-    $message = @{ status = $status; summary = 'Bounded sample reviewed.'; reviewed_paths = $reviewed; limitations = @(); findings = $findings } | ConvertTo-Json -Compress -Depth 5
+    $response = @{ status = $status; summary = 'Bounded sample reviewed.'; reviewed_paths = $reviewed; limitations = @(); findings = $findings }
+    if ($script:auditMockMode -in @('map', 'bad-map')) {
+      $modulePath = if ($script:auditMockMode -eq 'bad-map') { 'outside' } else { 'scripts' }
+      $response.map = @{
+        purpose = 'README links to the documented runner'
+        purpose_path = 'README.md'
+        entries = @(@{ path = 'scripts/used.ps1'; role = 'Runner script linked from the README' })
+        modules = @(@{ path = $modulePath; role = 'Contains the documented runner' })
+        relationships = @(@{ from = 'README.md'; to = 'scripts/used.ps1'; description = 'README links to the runner' })
+        workflows = @(@{ name = 'Find the runner'; description = 'Follow the documented script link'; paths = @('README.md', 'scripts/used.ps1') })
+      }
+    }
+    $message = $response | ConvertTo-Json -Compress -Depth 8
     $item = @{ type = 'item.completed'; item = @{ type = 'agent_message'; text = $message } } | ConvertTo-Json -Compress -Depth 5
     $events = $item + "`n" + '{"type":"turn.completed"}'
     [pscustomobject]@{ ExitCode = 0; TimedOut = $false; StdOut = $events; StdErr = '' }
@@ -149,6 +162,7 @@ try {
   Assert-Equal ($script:auditLastPrompt.Contains('Discovery incomplete: False.')) $true 'Prompt includes coverage status'
   Assert-Equal ($script:auditLastPrompt.Contains('Skipped 1: Project exclusion: src/private')) $true 'Prompt includes exclusion reasons'
   Assert-Equal ($script:auditLastPrompt.Contains('Static findings: 0 verified')) $true 'Prompt includes static findings summary'
+  Assert-Equal ($script:auditLastPrompt.Contains('compact optional map')) $false 'Normal audit avoids map request and extra token work'
   $script:auditMockMode = 'finding'
   $semanticFinding = Invoke-MeowskyAuditSemantic -Inventory $inventory -StaticReport $healthy
   Assert-Equal $semanticFinding.State 'Complete' 'Structured semantic finding accepted'
@@ -228,11 +242,13 @@ try {
   Assert-Equal (Get-Content -Raw -LiteralPath (Join-Path $project 'keep.txt')) "original`r`n" 'Target content preserved'
   Assert-Equal (Test-Path -LiteralPath $env:WORK_HOME) $false 'Audit did not create unrelated work root'
   Assert-Equal (Test-Path -LiteralPath (Join-Path $project '.meowsky')) $false 'Normal audit did not create report directory'
+  Assert-Equal (Test-Path -LiteralPath (Join-Path $issues '.meowsky/MAP.md')) $false 'Normal audit did not create a map'
   Assert-Equal (Get-Location).Path $fixture 'Audit did not navigate away from current directory'
 
   $sourceHashes = (@(Get-ChildItem -LiteralPath $issues -Recurse -File | ForEach-Object { "$($_.FullName):$((Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash)" }) | Sort-Object) -join "`n"
   $script:auditMockMode = 'finding'
   $refresh = (meowsky audit $issues --refresh) -join "`n"
+  Assert-Equal ($script:auditLastPrompt.Contains('compact optional map')) $true 'Refresh requests bounded map context'
   $reportPath = Join-Path $issues '.meowsky/AUDIT.md'
   Assert-Equal ($refresh.Contains("Audit report: Created $reportPath")) $true 'Refresh creates a report'
   Assert-Equal (Test-Path -LiteralPath $reportPath) $true 'Refresh report exists'
@@ -253,6 +269,25 @@ try {
   Assert-Equal ($reportText.Contains('Regression risk:')) $true 'Report includes regression risk'
   Assert-Equal ($reportText.Contains('Source links below confirm path existence at generation time.')) $true 'Report separates link validation from semantic truth'
   Assert-Equal ($reportText.Contains('](../README.md)')) $true 'Report links to existing relative source'
+  $mapPath = Join-Path $issues '.meowsky/MAP.md'
+  Assert-Equal ($refresh.Contains("Workspace map: Created $mapPath")) $true 'Refresh creates a workspace map'
+  Assert-Equal (Test-Path -LiteralPath $mapPath) $true 'Map exists only after refresh'
+  $mapText = Get-Content -Raw -LiteralPath $mapPath
+  Assert-Equal ($mapText.Contains('## Purpose and technology')) $true 'Map includes project overview'
+  Assert-Equal ($mapText.Contains('## Entry points')) $true 'Map includes entry navigation'
+  Assert-Equal ($mapText.Contains('## Modules and responsibilities')) $true 'Map includes module navigation'
+  Assert-Equal ($mapText.Contains('## Relationships and workflows')) $true 'Map includes relationship scope'
+  Assert-Equal ($mapText.Contains('## Tests and existing documentation')) $true 'Map links tests and docs'
+  Assert-Equal ($mapText.Contains('## Source scope and freshness')) $true 'Map discloses snapshot freshness'
+  Assert-Equal ($mapText.Contains('filename suggests an entry point')) $false 'Map does not invent entry points for arbitrary scripts'
+  Assert-Equal ($mapText.Contains('No module responsibilities were established')) $true 'Map labels missing semantic responsibilities'
+  Assert-Equal ($mapText.Contains('](../scripts)')) $true 'Map links source location beyond a flat tree'
+  Assert-Equal ($mapText.Contains('](../docs/guide.md)')) $true 'Map links existing documentation'
+  $mapLinks = [regex]::Matches($mapText, '\]\(\.\./(?<path>[^)]+)\)')
+  foreach ($link in $mapLinks) {
+    $relativePath = [Uri]::UnescapeDataString($link.Groups['path'].Value).Replace('/', '\')
+    Assert-Equal (Test-Path -LiteralPath (Join-Path $issues $relativePath)) $true "Map link exists: $relativePath"
+  }
   $links = [regex]::Matches($reportText, '\]\(\.\./(?<path>[^)]+)\)')
   foreach ($link in $links) {
     $relativePath = [Uri]::UnescapeDataString($link.Groups['path'].Value).Replace('/', '\')
@@ -271,14 +306,21 @@ try {
   Assert-Equal ($quickRefresh.Contains('Quick static checks complete; Codex was not invoked.')) $true 'Quick refresh skips Codex'
   Assert-Equal $script:auditInvocationCount $quickCalls 'Quick refresh did not call Codex'
   $quickText = Get-Content -Raw -LiteralPath $reportPath
+  $quickMap = Get-Content -Raw -LiteralPath $mapPath
   Assert-Equal ($quickText.Contains('Codex review: Not run')) $true 'Quick report discloses absent semantic analysis'
   Assert-Equal ($quickText.Contains('this is a partial audit')) $true 'Quick report is labeled partial'
-  $backup = @(Get-ChildItem -LiteralPath (Join-Path $issues '.meowsky') -Filter '*.md.bak')
+  Assert-Equal ($quickMap.Contains('Semantic context unavailable:')) $true 'Quick map labels missing semantic context'
+  Assert-Equal ($quickMap.Contains('Codex interpretation')) $false 'Quick map contains no invented semantic description'
+  $quickMapHash = (Get-FileHash -LiteralPath $mapPath -Algorithm SHA256).Hash
+  $sameMap = (meowsky audit $issues --quick --refresh) -join "`n"
+  Assert-Equal ($sameMap.Contains('Workspace map: Unchanged')) $true 'Repeat quick refresh preserves identical map'
+  Assert-Equal (Get-FileHash -LiteralPath $mapPath -Algorithm SHA256).Hash $quickMapHash 'Repeat generation keeps identical map bytes'
+  $backup = @(Get-ChildItem -LiteralPath (Join-Path $issues '.meowsky') -Filter 'AUDIT-*.md.bak')
   Assert-Equal $backup.Count 1 'Changed report creates one backup'
   Assert-Equal (Get-FileHash -LiteralPath $backup[0].FullName -Algorithm SHA256).Hash $reportHash 'Backup retains prior report bytes'
   $unchanged = Write-MeowskyAuditReport -Root $issues -Content $quickText.TrimEnd("`r", "`n")
   Assert-Equal $unchanged.State 'Unchanged' 'Identical report content avoids replacement'
-  Assert-Equal @(Get-ChildItem -LiteralPath (Join-Path $issues '.meowsky') -Filter '*.md.bak').Count 1 'Identical content avoids another backup'
+  Assert-Equal @(Get-ChildItem -LiteralPath (Join-Path $issues '.meowsky') -Filter 'AUDIT-*.md.bak').Count 1 'Identical content avoids another backup'
   $script:auditMockMode = 'timeout'
   $failedRefresh = (meowsky audit $issues --refresh) -join "`n"
   Assert-Equal ($failedRefresh.Contains('Semantic evaluation: Incomplete.')) $true 'Timeout remains visible in CLI'
@@ -297,11 +339,39 @@ try {
   Assert-Error { Write-MeowskyAuditReport -Root $blocked -Content 'fixture' } 'Audit output directory must be a regular directory*'
   Assert-Equal (Get-Content -Raw -LiteralPath (Join-Path $blocked '.meowsky')) "owned file`r`n" 'Blocked output path is preserved'
 
+  $plainMapPath = Join-Path $plain '.meowsky/MAP.md'
+  $plainMapHash = (Get-FileHash -LiteralPath $plainMapPath -Algorithm SHA256).Hash
+  $plainRefresh = (meowsky audit $plain --quick --refresh) -join "`n"
+  Assert-Equal ($plainRefresh.Contains('Workspace map: Replaced')) $true 'Refresh replaces an existing map with backup'
+  $plainMapBackup = @(Get-ChildItem -LiteralPath (Join-Path $plain '.meowsky') -Filter 'MAP-*.md.bak')
+  Assert-Equal $plainMapBackup.Count 1 'Existing map is preserved in one backup'
+  Assert-Equal (Get-FileHash -LiteralPath $plainMapBackup[0].FullName -Algorithm SHA256).Hash $plainMapHash 'Map backup retains previous bytes'
+  Assert-Equal (Test-Path -LiteralPath (Join-Path $plain '.meowskyignore')) $true 'Refresh preserves unrelated project exclusion configuration'
+
   $invalidFinding = [pscustomobject]@{ Id = 'V999'; Category = 'Markdown link'; Path = 'missing.md'; Evidence = 'Missing path fixture.'; Priority = 'Medium'; Method = 'Fixture' }
   $invalidStatic = [pscustomobject]@{ Verified = @($invalidFinding); Candidates = @(); Limitations = @() }
   $invalidText = New-MeowskyAuditReport -Inventory $issueInventory -StaticReport $invalidStatic -Quick
   Assert-Equal ($invalidText.Contains('missing.md)')) $false 'Uninventoried source does not become a link'
   Assert-Equal ($invalidText.Contains('unlinked; path was not confirmed')) $true 'Missing source is labeled unlinked'
+
+  $firstMap = New-MeowskyAuditMap -Inventory $issueInventory -Quick
+  $secondMap = New-MeowskyAuditMap -Inventory $issueInventory -Quick
+  Assert-Equal $firstMap $secondMap 'Identical analysis data yields identical map content'
+  Assert-Equal (($firstMap -split "`n").Count -lt 80) $true 'Small fixture map stays concise'
+  $script:auditMockMode = 'map'
+  $mapped = Invoke-MeowskyAuditSemantic -Inventory $issueInventory -StaticReport $report -IncludeMap
+  Assert-Equal $mapped.State 'Complete' 'Validated semantic map context accepted'
+  $semanticMap = New-MeowskyAuditMap -Inventory $issueInventory -Semantic $mapped
+  Assert-Equal ($semanticMap.Contains('bounded Codex interpretation from [README.md](../README.md)')) $true 'Purpose has a reviewed source link'
+  Assert-Equal ($semanticMap.Contains('README links to the runner')) $true 'Map uses source-linked relationship evidence'
+  Assert-Equal ($semanticMap.Contains('](../scripts/used.ps1)')) $true 'Map links to reviewed script'
+  Assert-Equal ($semanticMap.Contains('Follow the documented script link')) $true 'Map includes bounded workflow description'
+  $mappedRefresh = (meowsky audit $issues --refresh) -join "`n"
+  Assert-Equal ($mappedRefresh.Contains('Workspace map: Replaced')) $true 'CLI refresh writes the semantic map'
+  Assert-Equal ((Get-Content -Raw -LiteralPath $mapPath).Contains('README links to the runner')) $true 'Persisted map includes validated semantic relationship'
+  $script:auditMockMode = 'bad-map'
+  Assert-Equal (Invoke-MeowskyAuditSemantic -Inventory $issueInventory -StaticReport $report -IncludeMap).State 'Failed' 'Uninventoried map path rejected'
+  $script:auditMockMode = 'complete'
 
   $mockCli = Join-Path $fixture 'mock-codex.ps1'
   Set-Content -LiteralPath $mockCli -Value @('param($Mode, $Payload)', 'Write-Output $Payload', 'exit 0')
