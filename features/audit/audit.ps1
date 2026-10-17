@@ -3,11 +3,12 @@
 . (Join-Path $PSScriptRoot 'semantic.ps1')
 . (Join-Path $PSScriptRoot 'report.ps1')
 . (Join-Path $PSScriptRoot 'map.ps1')
+. (Join-Path $PSScriptRoot 'refactor-prompt.ps1')
 
 function Invoke-MeowskyAuditFeature {
   param([string]$Target, [string]$WorkRoot, [string[]]$Arguments)
 
-  $usage = 'Usage: meowsky audit [<directory>] [--quick] [--refresh] [--help]'
+  $usage = 'Usage: meowsky audit [<directory>] [--quick] [--refresh] [--help] | meowsky audit [<directory>] --refactor-prompt <ID[,ID...]>'
   $tokens = @()
   if ($Target) { $tokens += $Target }
   if ($Arguments) { $tokens += $Arguments }
@@ -15,7 +16,15 @@ function Invoke-MeowskyAuditFeature {
   $directory = ''
   $quick = $false
   $refresh = $false
+  $promptIds = ''
+  $promptRequested = $false
+  $expectPromptIds = $false
   foreach ($token in $tokens) {
+    if ($expectPromptIds) {
+      $promptIds = $token
+      $expectPromptIds = $false
+      continue
+    }
     switch -CaseSensitive ($token) {
       '--help' {
         if ($tokens.Count -ne 1) { throw $usage }
@@ -29,6 +38,11 @@ function Invoke-MeowskyAuditFeature {
         if ($refresh) { throw "Duplicate --refresh. $usage" }
         $refresh = $true
       }
+      '--refactor-prompt' {
+        if ($promptRequested) { throw "Duplicate --refactor-prompt. $usage" }
+        $promptRequested = $true
+        $expectPromptIds = $true
+      }
       default {
         if ($token.StartsWith('-')) { throw "Unknown audit option '$token'. $usage" }
         if ($directory) { throw "Only one audit directory may be specified. $usage" }
@@ -36,12 +50,16 @@ function Invoke-MeowskyAuditFeature {
       }
     }
   }
+  if ($expectPromptIds) { throw "Missing finding IDs after --refactor-prompt. $usage" }
+  if ($promptRequested -and ($quick -or $refresh)) { throw "--refactor-prompt cannot be combined with --quick or --refresh. $usage" }
 
   $path = if ($directory) { $directory } else { (Get-Location).Path }
   if (-not (Test-Path -LiteralPath $path)) { throw "Audit target was not found: $path" }
   if (-not (Test-Path -LiteralPath $path -PathType Container)) { throw "Audit target is not a directory: $path" }
   $resolved = Resolve-Path -LiteralPath $path
   if ($resolved.Provider.Name -ne 'FileSystem') { throw "Audit target is not a filesystem directory: $path" }
+
+  if ($promptRequested) { return (Get-MeowskyAuditRefactorPrompt -Root $resolved.ProviderPath -Ids $promptIds) }
 
   $inventory = Get-MeowskyAuditInventory -Root $resolved.ProviderPath
   "Audit target: $($inventory.Root)"

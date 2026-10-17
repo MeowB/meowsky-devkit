@@ -288,6 +288,42 @@ try {
     $relativePath = [Uri]::UnescapeDataString($link.Groups['path'].Value).Replace('/', '\')
     Assert-Equal (Test-Path -LiteralPath (Join-Path $issues $relativePath)) $true "Map link exists: $relativePath"
   }
+  $promptCalls = $script:auditInvocationCount
+  $beforePromptEntries = Get-FixtureEntries
+  $beforePromptHashes = Get-FixtureContentHashes
+  $planningPrompt = (meowsky audit $issues --refactor-prompt 'V001,S001') -join "`n"
+  Assert-Equal ($planningPrompt.Contains("Target workspace: $issues")) $true 'Prompt targets explicit workspace'
+  Assert-Equal ($planningPrompt.Contains('Selected audit finding IDs: V001, S001')) $true 'Prompt includes selected IDs'
+  Assert-Equal ($planningPrompt.Contains('Read `.meowsky/AUDIT.md` and `.meowsky/MAP.md` first.')) $true 'Prompt requires both saved artifacts'
+  Assert-Equal ($planningPrompt.Contains('Recheck each finding against current source.')) $true 'Prompt requires current evidence'
+  Assert-Equal ($planningPrompt.Contains('conventions/architecture.md')) $true 'Prompt points to architecture conventions'
+  Assert-Equal ($planningPrompt.Contains('conventions/filesystem.md')) $true 'Prompt points to filesystem conventions'
+  Assert-Equal ($planningPrompt.Contains('Preserve application behavior and public commands')) $true 'Prompt preserves behavior'
+  Assert-Equal ($planningPrompt.Contains('dependencies, expected benefit, regression risks')) $true 'Prompt requires scoped plan and risks'
+  Assert-Equal ($planningPrompt.Contains('Stop after the plan. Do not edit files')) $true 'Prompt requires edit approval'
+  Assert-Equal ($planningPrompt.Contains('run relevant tests or checks')) $true 'Prompt requires verification after approval'
+  Assert-Equal ($planningPrompt.Contains('resolved, unresolved, or invalidated')) $true 'Prompt tracks finding outcomes'
+  Assert-Equal ($planningPrompt.Contains('without Codex')) $true 'Template supports manual workflow'
+  Assert-Equal ($planningPrompt.Contains('{{FINDING_IDS}}')) $false 'Rendered prompt has no unresolved ID placeholder'
+  Assert-Equal $script:auditInvocationCount $promptCalls 'Prompt output does not invoke Codex'
+  Assert-Equal (Get-FixtureEntries) $beforePromptEntries 'Prompt output does not create project files'
+  Assert-Equal (Get-FixtureContentHashes) $beforePromptHashes 'Prompt output does not modify project files'
+  Assert-Equal (((meowsky audit --refactor-prompt ' V001 , S001 ' $issues) -join "`n").Contains('V001, S001')) $true 'Prompt option accepts trimmed IDs before target'
+  Assert-Error { meowsky audit $issues --refactor-prompt V999 } 'Finding ID(s) absent from saved AUDIT.md:*'
+  Assert-Error { meowsky audit $issues --refactor-prompt 'V001,V001' } 'Select 1 to 12 unique finding IDs*'
+  Assert-Error { meowsky audit $issues --refactor-prompt x001 } 'Select 1 to 12 unique finding IDs*'
+  Assert-Error { meowsky audit $issues --refactor-prompt '' } 'Select 1 to 12 unique finding IDs*'
+  Assert-Error { meowsky audit $issues --refactor-prompt } 'Missing finding IDs after --refactor-prompt.*'
+  Assert-Error { meowsky audit $issues --refactor-prompt V001 --quick } '--refactor-prompt cannot be combined*'
+  Assert-Error { meowsky audit $issues --refactor-prompt V001 --refresh } '--refactor-prompt cannot be combined*'
+  Assert-Error { meowsky audit $issues --refactor-prompt V001 --refactor-prompt S001 } 'Duplicate --refactor-prompt.*'
+  Assert-Error { meowsky audit $project --refactor-prompt V001 } 'The saved AUDIT.md and MAP.md are required*'
+  $missingMap = Join-Path $fixture 'missing-map project'
+  New-Item -ItemType Directory -Path (Join-Path $missingMap '.meowsky') -Force | Out-Null
+  Copy-Item -LiteralPath $reportPath -Destination (Join-Path $missingMap '.meowsky/AUDIT.md')
+  Assert-Error { meowsky audit $missingMap --refactor-prompt V001 } 'The saved AUDIT.md and MAP.md are required*'
+  $manualTemplate = Get-Content -Raw -LiteralPath (Join-Path $repo 'features/audit/refactor-prompt.md')
+  Assert-Equal ($manualTemplate.Contains('{{FINDING_IDS}}')) $true 'Reusable manual template retains selected-ID placeholder'
   $links = [regex]::Matches($reportText, '\]\(\.\./(?<path>[^)]+)\)')
   foreach ($link in $links) {
     $relativePath = [Uri]::UnescapeDataString($link.Groups['path'].Value).Replace('/', '\')

@@ -1,4 +1,5 @@
 meowsky audit [<directory>] [--quick] [--refresh]
+meowsky audit [<directory>] --refactor-prompt <ID[,ID...]>
 Validate a local workspace directory. Defaults to the current directory.
 The directory may be relative to the current location or an absolute path.
 Options may appear before or after the directory.
@@ -7,6 +8,11 @@ Options may appear before or after the directory.
 --refresh  Write .meowsky/AUDIT.md and a compact .meowsky/MAP.md from the
            current audit. Existing changed files are backed up before
            replacement. With --quick, both outputs label absent Codex context.
+--refactor-prompt  Print a planning prompt for 1-12 comma-separated finding
+           IDs from the saved AUDIT.md; requires the saved MAP.md too. This
+           option reads files only, invokes no Codex session, and cannot be
+           combined with --quick or --refresh. Quote comma-separated IDs in
+           PowerShell so they remain one argument.
 --help     Show this help when used alone. -h and -Help also show feature help.
 
 Discovery lists relevant source, test, configuration, and documentation files.
@@ -44,3 +50,12 @@ against the discovery inventory at generation time; semantic claims still need
 human verification. The map links to inventoried source, tests, and docs and
 labels static candidates separately from bounded Codex interpretations. It
 is a snapshot from the last explicit --refresh; there are no update hooks.
+
+Refactoring workflow: run meowsky audit <directory> --refresh, review the two
+generated files, then select IDs shown in AUDIT.md. Run
+meowsky audit <directory> --refactor-prompt 'V001,S002' and copy its output into
+an interactive meowsky codex <directory> session. In PowerShell, append
+| Set-Clipboard to the prompt command to copy it. Codex must verify the current
+source and present a scoped plan, then wait for explicit edit approval. The
+same template is in features/audit/refactor-prompt.md for manual use: replace
+its placeholders, verify the selected IDs, and follow its checklist yourself.
