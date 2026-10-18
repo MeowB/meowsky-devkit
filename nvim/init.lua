@@ -230,8 +230,19 @@ local clangd_config = {
 }
 local gcc_path = vim.fn.exepath('gcc')
 if gcc_path ~= '' then
-  -- Permit clangd to query the selected MinGW compiler when a project names it.
+  -- Project compile commands can name GCC; simple C files also need its target and toolchain.
   clangd_config.cmd = { 'clangd', '--query-driver=' .. gcc_path }
+  local target_result = vim.system({ gcc_path, '-dumpmachine' }, { text = true }):wait()
+  if target_result.code == 0 then
+    local target = vim.trim(target_result.stdout or '')
+    if target:match('^[%w_%-]+$') then
+      clangd_config.init_options.fallbackFlags = {
+        '-std=c11',
+        '--target=' .. target,
+        '--gcc-toolchain=' .. vim.fn.fnamemodify(gcc_path, ':h:h'),
+      }
+    end
+  end
 end
 vim.lsp.config('clangd', clangd_config)
 

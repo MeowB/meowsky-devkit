@@ -85,7 +85,7 @@ function Test-MeowskyWindowsInstallation {
   try {
     $cFile = Join-Path $fixture 'main.c'
     $tsFile = Join-Path $fixture 'app.ts'
-    [IO.File]::WriteAllText($cFile, "int main(void) { int value = 5; return value - 5; }`n")
+    [IO.File]::WriteAllText($cFile, "#include <stdio.h>`nint main(void) { int value = 5; return value - 5; }`n")
     [IO.File]::WriteAllText($tsFile, "const value: number = 5;`nconsole.log(value);`n")
     $exe = Join-Path $fixture 'main.exe'
     Invoke-QuietNativeCommand -Label 'verify-c-build' -FilePath (Join-Path $script:cCompilerBin 'gcc.exe') `
@@ -131,6 +131,20 @@ assert(vim.wait(15000, function()
   end
   return false
 end, 200), 'clangd did not attach')
+vim.api.nvim_buf_set_lines(cbuf, 0, -1, false, {
+  '#include <stdio.h>',
+  'int main(void) { int value = 5; return missing_value; }',
+})
+assert(vim.wait(15000, function()
+  for _, diagnostic in ipairs(vim.diagnostic.get(cbuf, { severity = vim.diagnostic.severity.ERROR })) do
+    if diagnostic.message:find('missing_value', 1, true) then return true end
+  end
+  return false
+end, 200), 'clangd did not report an undeclared C variable')
+local c_errors = vim.diagnostic.get(cbuf, { severity = vim.diagnostic.severity.ERROR })
+assert(#c_errors == 1 and c_errors[1].message:find('missing_value', 1, true),
+  'clangd reported unexpected C errors, possibly missing system headers')
+assert(vim.diagnostic.config().underline, 'C diagnostic underlines are disabled')
 assert(package.loaded['cmp'] ~= nil, 'completion not configured')
 vim.cmd('edit ' .. vim.fn.fnameescape(vim.g.meowsky_ts_path))
 local tsbuf = vim.api.nvim_get_current_buf()
