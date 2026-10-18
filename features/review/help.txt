@@ -5,18 +5,21 @@ meowsky review [<directory>] --decide <json-file>
 
 Run meowsky audit first. Review requires its current state and verified
 MAP.md and AUDIT.md. The directory defaults to the current location;
-Git is optional. Review runs Codex without a UI, shows brief progress,
-validates its handoff, and writes the reviewed artifacts in one command.
-It uses a read-only sandbox, no approval prompts, and disables hooks,
-plugins, and apps. It does not run project tools or modify application source.
+Git is optional. Review opens the Codex UI from an isolated scratch directory.
+Codex may request approval to read project files. It writes a JSON handoff
+inside scratch; after you exit the UI with /exit, Meowsky validates it and
+writes the reviewed artifacts in the same command. --interactive is an alias
+for this default flow. Hooks, plugins, and apps are disabled. Do not approve
+requests to write application source or run project tools.
 
 Full review requires the discovered source, test, and configuration files
 to be inspected, plus related documentation. Its claimed reviewed paths,
 source references, session identity, and audit freshness are validated.
 The path list cannot prove what Codex actually read. Interrupted, partial,
 or invalid handoffs remain pending; process exit alone does not complete
-review. --interactive retains the manual Codex UI and clipboard handoff;
-use --complete with clipboard JSON or a JSON file to finish that session.
+review. If the UI exits before writing a valid handoff, Review stays pending.
+--complete remains available to validate clipboard JSON or an external JSON
+file from an active session when recovery is needed.
 
 A completed full review enriches MAP.md and AUDIT.md and creates an
 unapproved PLAN.md. Zero justified findings are valid. The proposed plan

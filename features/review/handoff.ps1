@@ -37,7 +37,6 @@ function Assert-MeowskyReviewHandoff {
   if ($Handoff.version -ne 1 -or $Handoff.session_id -cne $Session.id -or $Handoff.mode -cne $Session.mode) {
     throw 'Review handoff does not match the active review session.'
   }
-  if ($Handoff.status -cne 'complete') { throw 'Review handoff is incomplete; review state remains pending.' }
   Assert-MeowskyReviewText -Value $Handoff.summary -Name 'summary' -Limit 1000
   Assert-MeowskyReviewTextArray -Value $Handoff.limitations -Name 'limitations'
   if ($Handoff.reviewed_paths -isnot [array] -or $Handoff.reviewed_paths.Count -gt 1000) {
@@ -48,6 +47,20 @@ function Assert-MeowskyReviewHandoff {
   foreach ($path in $Handoff.reviewed_paths) {
     if ($path -isnot [string] -or $path -cnotin $known -or $reviewed.ContainsKey($path)) { throw "Review handoff has an invalid or duplicate reviewed path: $path" }
     $reviewed[$path] = $true
+  }
+  if ($Handoff.status -cne 'complete') {
+    $details = @('Review handoff is incomplete; review state remains pending.', "Summary: $($Handoff.summary)")
+    if ($Handoff.limitations.Count) {
+      $shown = @($Handoff.limitations | Select-Object -First 3)
+      $details += "Limitations: $($shown -join '; ')"
+      if ($Handoff.limitations.Count -gt $shown.Count) { $details += "$($Handoff.limitations.Count - $shown.Count) more limitation(s) reported." }
+    }
+    if ($Session.mode -eq 'full') {
+      $requiredPaths = @($Inventory.Files | Where-Object { $_.Category -in @('Source','Test','Configuration') } | ForEach-Object Path)
+      $requiredReviewed = @($requiredPaths | Where-Object { $reviewed.ContainsKey($_) }).Count
+      $details += "Reviewed $requiredReviewed of $($requiredPaths.Count) required source, test, and configuration files."
+    }
+    throw ($details -join "`n")
   }
   if (-not $reviewed.Count) { throw 'A completed review must identify at least one inspected file.' }
   if ($Session.mode -eq 'full') {

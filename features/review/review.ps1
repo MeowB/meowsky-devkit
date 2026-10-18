@@ -190,7 +190,15 @@ function Complete-MeowskyReview {
   }
   $state.PSObject.Properties.Remove('activeReview')
   $null = Write-MeowskyAuditState -Root $Root -State $state
-  "Review complete ($($session.mode)); artifacts validated. Plan approval: pending."
+  if ($session.mode -eq 'full') {
+    'Review complete (full); artifacts validated. Plan approval: pending.'
+    "Plan: $($planWritten.Path)"
+    if ($handoff.findings.Count) { 'Next: inspect the plan, then use meowsky refactor --prepare for findings you choose to approve.' }
+    else { 'Next: no refactoring approval is needed; the reviewed scope had no actionable findings.' }
+  } else {
+    'Review complete (docs); artifacts validated. Existing plan approval is unchanged.'
+    'Next: inspect the updated MAP.md and AUDIT.md.'
+  }
 }
 
 function Invoke-MeowskyReviewFeature {
@@ -230,6 +238,15 @@ function Invoke-MeowskyReviewFeature {
   $static = Get-MeowskyAuditStaticFindings -Inventory $inventory
   $id = [guid]::NewGuid().ToString('N')
   $prompt = New-MeowskyReviewPrompt -Inventory $inventory -StaticReport $static -Mode $mode -SessionId $id -History @($state.history)
+  $tempRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\', '/')
+  $scratchRoot = [IO.Path]::GetFullPath((Join-Path $tempRoot ("meowsky-review-work-$id")))
+  if (-not $scratchRoot.StartsWith($tempRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase) -or
+      $scratchRoot.Equals($root, [StringComparison]::OrdinalIgnoreCase) -or
+      $scratchRoot.StartsWith($root.TrimEnd('\', '/') + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+    throw 'Review could not create an isolated working directory outside the project.'
+  }
+  $handoffPath = Join-Path $scratchRoot 'review-handoff.json'
+  $prompt += "`n`nHandoff destination: $handoffPath`nWrite the final JSON object to this file before exiting Codex. Then tell the user: Review handoff written. Type /exit to validate and finish. Wait for the user to exit.`n"
   if ($mode -eq 'full') {
     $state.review = [ordered]@{ status = 'pending' }
     $state.PSObject.Properties.Remove('refactor')
@@ -237,30 +254,27 @@ function Invoke-MeowskyReviewFeature {
   $state | Add-Member -NotePropertyName activeReview -NotePropertyValue ([ordered]@{
       id = $id; mode = $mode; auditFingerprint = $state.audit.fingerprint; startedAt = (Get-Date).ToString('o') }) -Force
   $null = Write-MeowskyAuditState -Root $root -State $state
-  if ($interactive) {
-    $promptPath = New-MeowskyCodexPromptFile -Prompt $prompt
-    Write-Host "Interactive $mode review started. Session $id. Copy its final JSON to clipboard, then run meowsky review --complete."
-    Invoke-MeowskyCodex -Root $root -PromptPath $promptPath -Arguments @('--sandbox','read-only','--ask-for-approval','never',
-      '--disable','hooks','--disable','plugins','--disable','apps')
-    Write-Host 'Codex session ended. Review remains pending until meowsky review --complete validates its handoff.'
-    return
-  }
-  $outputPath = Join-Path ([IO.Path]::GetTempPath()) ("meowsky-review-$id.json")
   try {
-    Write-Host "Reviewing $root ($mode). Reading project files"
-    $run = Invoke-MeowskyAuditCodexProcess -Command (Resolve-MeowskyCodexCommand) -Root $root -Prompt $prompt -TimeoutSeconds 1800 -ProgressLabel 'Review' -Arguments @(
-      '--ask-for-approval','never','exec','--skip-git-repo-check','--ephemeral','--ignore-user-config',
-      '--sandbox','read-only','--disable','hooks','--disable','plugins','--disable','apps',
-      '--output-last-message',$outputPath)
-    if ($run.TimedOut) { throw 'Review timed out. Review remains pending; run meowsky review again.' }
-    if ($run.ExitCode -ne 0) {
-      $reason = ([string]$run.StdErr).Trim()
-      if ($reason.Length -gt 500) { $reason = $reason.Substring($reason.Length - 500) }
-      throw "Codex review failed with exit code $($run.ExitCode). $reason Review remains pending."
+    $null = New-Item -ItemType Directory -Path $scratchRoot -ErrorAction Stop
+    $promptPath = New-MeowskyCodexPromptFile -Prompt $prompt
+    Write-Host "Interactive $mode review started. Session $id. Exit Codex with /exit after it writes the handoff."
+    $global:LASTEXITCODE = 0
+    Invoke-MeowskyCodex -Root $scratchRoot -PromptPath $promptPath -Arguments @(
+      '--sandbox','workspace-write','--ask-for-approval','on-request',
+      '-c','sandbox_workspace_write.exclude_tmpdir_env_var=true',
+      '-c','sandbox_workspace_write.exclude_slash_tmp=true','-c','sandbox_workspace_write.network_access=false',
+      '--disable','hooks','--disable','plugins','--disable','apps')
+    if ($LASTEXITCODE -ne 0) { throw "Codex review exited with code $LASTEXITCODE. Review remains pending." }
+    if (-not (Test-Path -LiteralPath $handoffPath -PathType Leaf)) {
+      Write-Host 'Codex exited without a review handoff. Review remains pending; run meowsky review again.'
+      return
     }
-    if (-not (Test-Path -LiteralPath $outputPath -PathType Leaf)) { throw 'Codex returned no review handoff. Review remains pending.' }
-    Complete-MeowskyReview -Root $root -HandoffPath $outputPath
+    Complete-MeowskyReview -Root $root -HandoffPath $handoffPath
   } finally {
-    if (Test-Path -LiteralPath $outputPath) { Remove-Item -LiteralPath $outputPath -Force -ErrorAction SilentlyContinue }
+    if (Test-Path -LiteralPath $scratchRoot) {
+      $scratchItem = Get-Item -LiteralPath $scratchRoot -Force
+      if ($scratchItem.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Review scratch directory became a junction or symlink; remove it manually.' }
+      Remove-Item -LiteralPath $scratchRoot -Recurse -Force
+    }
   }
 }

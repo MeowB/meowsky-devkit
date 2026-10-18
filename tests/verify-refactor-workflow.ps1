@@ -30,13 +30,13 @@ try {
     param([string]$Root, [string]$PromptPath, [string[]]$Arguments)
     $script:launches += [pscustomobject]@{ Root = $Root; Arguments = @($Arguments); Prompt = (Get-Content -Raw -LiteralPath $PromptPath) }
     Remove-Item -LiteralPath $PromptPath -Force
-    if ($script:executionMode -eq 'change' -and $Arguments -contains 'workspace-write') {
+    if ($script:executionMode -eq 'change' -and $Root -eq $project -and $Arguments -contains 'workspace-write') {
       [IO.File]::WriteAllText((Join-Path $Root 'src/main.ps1'), "Write-Output 'new'`n")
     }
-    if ($script:executionMode -eq 'tamper' -and $Arguments -contains 'workspace-write') {
+    if ($script:executionMode -eq 'tamper' -and $Root -eq $project -and $Arguments -contains 'workspace-write') {
       [IO.File]::AppendAllText((Join-Path $Root '.meowsky/state.json'), ' ')
     }
-    if ($script:executionMode -eq 'interrupt' -and $Arguments -contains 'workspace-write') { throw 'mock interrupted' }
+    if ($script:executionMode -eq 'interrupt' -and $Root -eq $project -and $Arguments -contains 'workspace-write') { throw 'mock interrupted' }
   }
   $null = meowsky audit $project
   Assert-Refactor (-not (Test-Path (Join-Path $project '.git'))) 'Project has no Git repository'
