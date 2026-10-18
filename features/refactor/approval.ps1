@@ -25,10 +25,10 @@ function New-MeowskyRefactorApprovalTemplate {
   param([string]$Root, [string]$Ids)
   $state = Assert-MeowskyAuditPrerequisite -Root $Root -Stage refactor
   $selected = @($Ids -split ',' | ForEach-Object { $_.Trim().ToUpperInvariant() })
-  if (-not $selected.Count -or $selected.Count -gt 12 -or
+  if (-not $selected.Count -or $selected.Count -gt 30 -or
       @($selected | Where-Object { $_ -cnotmatch '^S[0-9]{3}$' }).Count -or
       @($selected | Select-Object -Unique).Count -ne $selected.Count) {
-    throw 'Select 1 to 12 unique full-review finding IDs, for example S001,S002.'
+    throw 'Select 1 to 30 unique full-review finding IDs, for example S001,S002.'
   }
   $items = Get-MeowskyRefactorPlanItems -Root $Root
   $report = Get-Content -Raw -LiteralPath (Join-Path $Root '.meowsky/AUDIT.md')
@@ -53,14 +53,14 @@ function New-MeowskyRefactorApprovalTemplate {
 
 function Assert-MeowskyRefactorApproval {
   param($Approval, $State, [string]$Root, $Inventory)
-  if ([Text.Encoding]::UTF8.GetByteCount(($Approval | ConvertTo-Json -Depth 8)) -gt 16000) {
+  if ([Text.Encoding]::UTF8.GetByteCount(($Approval | ConvertTo-Json -Depth 8)) -gt 65536) {
     throw 'Approval scope is too large for a focused refactor; select fewer findings.'
   }
   if ($Approval -isnot [pscustomobject] -or $Approval.version -ne 1 -or $Approval.approved -cne $true -or
       $Approval.review_session_id -cne $State.review.sessionId -or
       $Approval.plan_hash -cne $State.review.planHash -or
       $Approval.audit_fingerprint -cne $State.audit.fingerprint -or
-      $Approval.findings -isnot [array] -or -not $Approval.findings.Count -or $Approval.findings.Count -gt 12) {
+      $Approval.findings -isnot [array] -or -not $Approval.findings.Count -or $Approval.findings.Count -gt 30) {
     throw 'Approval does not match the current full review, plan, and audit.'
   }
   $items = Get-MeowskyRefactorPlanItems -Root $Root

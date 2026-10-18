@@ -17,6 +17,170 @@ function Confirm-MeowskyRefactorPhrase {
   if ($response -cne $Phrase) { throw 'Human approval was not confirmed. No permission was recorded.' }
 }
 
+function New-MeowskyRefactorScratch {
+  param([string]$Root, [string]$SessionId)
+  $tempRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\', '/')
+  $scratch = [IO.Path]::GetFullPath((Join-Path $tempRoot ("meowsky-refactor-work-$SessionId")))
+  if (-not $scratch.StartsWith($tempRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase) -or
+      $scratch.Equals($Root, [StringComparison]::OrdinalIgnoreCase) -or
+      $scratch.StartsWith($Root.TrimEnd('\', '/') + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+    throw 'Refactor could not create an isolated working directory outside the project.'
+  }
+  $null = New-Item -ItemType Directory -Path $scratch -ErrorAction Stop
+  $scratch
+}
+
+function Remove-MeowskyRefactorScratch {
+  param([string]$Path)
+  if (Test-Path -LiteralPath $Path) {
+    $item = Get-Item -LiteralPath $Path -Force
+    if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Refactor scratch directory became a junction or symlink; remove it manually.' }
+    Remove-Item -LiteralPath $Path -Recurse -Force
+  }
+}
+
+function Set-MeowskyRefactorAssessmentDecisions {
+  param($State, $Decisions)
+  foreach ($decision in $Decisions) {
+    $entry = @($State.history | Where-Object id -CEQ $decision.id)
+    if ($entry.Count -ne 1) { throw "Finding $($decision.id) has no history entry." }
+    $entry[0].status = if ($decision.status -eq 'approved') { 'accepted' } else { $decision.status }
+    $entry[0].rationale = $decision.rationale
+    $entry[0].fingerprint = $State.audit.fingerprint
+  }
+}
+
+function Get-MeowskyRefactorFindingSummary {
+  param([string]$Plan, [string]$Id)
+  $block = [regex]::Match($Plan, "(?ms)^## \[$Id\].*?(?=^## \[|\z)").Value
+  if (-not $block) { throw "Finding $Id is absent from PLAN.md." }
+  [pscustomobject]@{
+    evidence = [regex]::Match($block, '(?m)^- Evidence: (.+)\r?$').Groups[1].Value.Trim()
+    benefit = [regex]::Match($block, '(?m)^- Priority: (.+)\r?$').Groups[1].Value.Trim()
+    risk = [regex]::Match($block, '(?m)^- Regression risk: (.+)\r?$').Groups[1].Value.Trim()
+  }
+}
+
+function Start-MeowskyRefactorAutomatic {
+  param([string]$Root)
+  $state = Assert-MeowskyAuditPrerequisite -Root $Root -Stage refactor
+  $items = Get-MeowskyRefactorPlanItems -Root $Root
+  $eligible = @($items.Keys | Sort-Object | Where-Object {
+    $id = $_
+    -not @($state.history | Where-Object { $_.id -ceq $id -and $_.status -in @('rejected','deferred','resolved','invalidated') }).Count
+  })
+  if (-not $eligible.Count) { throw 'No findings are explicitly approved. No open findings require refactoring.' }
+  if (-not (Resolve-MeowskyCodexCommand)) { throw 'Codex CLI was not found.' }
+  $inventory = Get-MeowskyAuditInventory -Root $Root
+  $sessionId = [guid]::NewGuid().ToString('N')
+  $candidates = @($eligible | ForEach-Object {
+    $item = $items[$_]
+    [ordered]@{ id = $_; correction = $item.correction; permitted_files = @($item.permitted_files);
+      preserve = @($item.preserve); verification = @($item.verification) }
+  })
+  $candidateJson = ConvertTo-Json -InputObject $candidates -Depth 8
+  $scratch = New-MeowskyRefactorScratch -Root $Root -SessionId $sessionId
+  $handoffPath = Join-Path $scratch 'assessment.json'
+  $state | Add-Member -NotePropertyName refactor -NotePropertyValue ([ordered]@{
+    status = 'assessing'; approval = $null;
+    planning = [ordered]@{ id = $sessionId; status = 'pending'; startedAt = (Get-Date).ToString('o') };
+    concretePlan = $null; execution = $null }) -Force
+  $null = Write-MeowskyAuditState -Root $Root -State $state
+  $statePath = Join-Path $Root '.meowsky/state.json'
+  $stateHash = Get-MeowskyAuditOutputHash -Path $statePath
+  $prompt = @"
+Assess the current Meowsky refactoring plan with the user. Project root: $Root
+Read $Root\.meowsky\PLAN.md, $Root\.meowsky\AUDIT.md, and relevant source under the project root. This session starts in a separate scratch directory so its handoff can be written without granting project write access. Discuss which findings still justify change. Select only findings the user wants to pursue. Do not edit project files or run project code. This is assessment, not permission to implement.
+
+Eligible findings and immutable PLAN.md fields:
+$candidateJson
+
+Work through every eligible ID one at a time, in ID order. For each, show the user the evidence, intended edits, permitted files, expected benefit, risks, and verification from the reviewed plan and source. Ask for approve, reject, or defer and their rationale before moving to the next ID. Never choose on the user's behalf. If the conversation ends before every finding has a decision, do not write a ready handoff.
+
+Write one JSON object to $handoffPath before leaving Codex. Use version 1, session_id '$sessionId', status 'ready' or 'no_changes', and a decisions array with exactly one object per eligible ID, each with id, status ('approved', 'rejected', or 'deferred'), and the user's rationale. For no_changes, include a brief reason, no approval or plan, and no approved decisions. For ready, include:
+- approval: version 1, approved true, review_session_id '$($state.review.sessionId)', plan_hash '$($state.review.planHash)', audit_fingerprint '$($state.audit.fingerprint)', and findings array. Each selected finding needs id, approved true, correction exactly as above, permitted_files as a nonempty subset above, exact change_boundary, behavior_change (empty unless explicitly authorized), preserve and verification arrays containing the corresponding requirements above.
+- plan: version 1, session_id '$sessionId', status 'ready', limitations array, and findings array matching selected IDs. Each finding needs id, files within permitted_files, concrete changes, dependencies array, risks array, verification array containing every selected requirement, and behavior_preserved boolean. If false, include the exact authorized behavior_change text.
+Include only IDs with an approved decision in approval and plan. Do not add files or broaden corrections. The approval flags and Codex discussion are proposals only; Meowsky will require a separate typed PowerShell authorization for each approved finding before any write session. After writing the handoff, tell the user to type /exit so Meowsky can validate it.
+"@
+  try {
+    $promptPath = New-MeowskyCodexPromptFile -Prompt $prompt
+    Write-Host "Refactor assessment started. Session $sessionId. Discuss the plan, then exit Codex after it writes the handoff."
+    $global:LASTEXITCODE = 0
+    Invoke-MeowskyCodex -Root $scratch -PromptPath $promptPath -Arguments @(
+      '--sandbox','workspace-write','--ask-for-approval','on-request',
+      '-c','sandbox_workspace_write.exclude_tmpdir_env_var=true',
+      '-c','sandbox_workspace_write.exclude_slash_tmp=true','-c','sandbox_workspace_write.network_access=false',
+      '--disable','hooks','--disable','plugins','--disable','apps')
+    if ($LASTEXITCODE -ne 0) { throw "Codex assessment exited with code $LASTEXITCODE." }
+    if ((Get-MeowskyAuditOutputHash -Path $statePath) -cne $stateHash) { throw 'Workflow state changed during assessment.' }
+    $null = Assert-MeowskyAuditPrerequisite -Root $Root -Stage refactor
+    if (-not (Test-Path -LiteralPath $handoffPath -PathType Leaf)) { throw 'Codex exited without a refactor assessment handoff.' }
+    $handoff = Assert-MeowskyRefactorAssessmentHandoff -Handoff (Read-MeowskyReviewHandoff -Path $handoffPath) -State $state -Root $Root -Inventory $inventory
+    $otherDecisions = @($handoff.decisions | Where-Object status -CNE 'approved')
+    Set-MeowskyRefactorAssessmentDecisions -State $state -Decisions $otherDecisions
+    foreach ($decision in $otherDecisions) { Write-Host "  $($decision.id): $($decision.status) - $($decision.rationale)" }
+    if ($handoff.status -eq 'no_changes') {
+      $null = Assert-MeowskyAuditPrerequisite -Root $Root -Stage refactor
+      $state.PSObject.Properties.Remove('refactor')
+      $null = Write-MeowskyAuditState -Root $Root -State $state
+      return 'No refactor was approved or executed.'
+    }
+    $ids = @($handoff.approval.findings | ForEach-Object id)
+    $planText = Get-Content -Raw -LiteralPath (Join-Path $Root '.meowsky/PLAN.md')
+    Write-Host "Review each proposed finding separately. Nothing will be implemented until all are authorized."
+    foreach ($finding in $handoff.approval.findings) {
+      $detail = Get-MeowskyRefactorFindingSummary -Plan $planText -Id $finding.id
+      $planned = @($handoff.plan.findings | Where-Object id -CEQ $finding.id)[0]
+      $decision = @($handoff.decisions | Where-Object id -CEQ $finding.id)[0]
+      Write-Host "  $($finding.id): $($detail.evidence)"
+      Write-Host "    Expected benefit: $($detail.benefit)"
+      Write-Host "    Intended edits: $($planned.changes)"
+      Write-Host "    Boundary: $($finding.change_boundary)"
+      Write-Host "    Permitted files: $($finding.permitted_files -join ', ')"
+      Write-Host "    Risks: $($detail.risk); $($planned.risks -join '; ')"
+      Write-Host "    Verification: $($finding.verification -join '; ')"
+      if ($finding.behavior_change) { Write-Host "    Behavior change: $($finding.behavior_change)" }
+      Write-Host "    Assessment decision: $($decision.status) - $($decision.rationale)"
+      Confirm-MeowskyRefactorPhrase -Phrase "APPROVE $($finding.id) $sessionId"
+      Set-MeowskyRefactorAssessmentDecisions -State $state -Decisions @($decision)
+    }
+    $null = Assert-MeowskyAuditPrerequisite -Root $Root -Stage refactor
+    $null = Assert-MeowskyRefactorApproval -Approval $handoff.approval -State $state -Root $Root -Inventory (Get-MeowskyAuditInventory -Root $Root)
+    $state.refactor.approval = $handoff.approval
+    $state.refactor.concretePlan = $handoff.plan
+    $state.refactor.status = 'planned'
+    $null = Write-MeowskyAuditState -Root $Root -State $state
+  } finally {
+    if ((Get-MeowskyAuditOutputHash -Path $statePath) -ceq $stateHash) {
+      $pending = Read-MeowskyAuditState -Root $Root
+      if ($pending.refactor -and $pending.refactor.status -eq 'assessing' -and
+          $pending.refactor.planning.id -ceq $sessionId) {
+        $state.PSObject.Properties.Remove('refactor')
+        $null = Write-MeowskyAuditState -Root $Root -State $state
+      }
+    }
+    Remove-MeowskyRefactorScratch -Path $scratch
+  }
+  $executionId = [guid]::NewGuid().ToString('N')
+  $executionScratch = New-MeowskyRefactorScratch -Root $Root -SessionId $executionId
+  $completionPath = Join-Path $executionScratch 'completion.json'
+  $keepHandoff = $false
+  try {
+    Start-MeowskyRefactorExecution -Root $Root -HandoffPath $completionPath
+    if (-not (Test-Path -LiteralPath $completionPath -PathType Leaf)) {
+      Write-Host 'Codex exited without a completion handoff. Findings remain unresolved.'
+      return
+    }
+    $keepHandoff = $true
+    $result = Complete-MeowskyRefactor -Root $Root -Path $completionPath
+    $keepHandoff = $false
+    return $result
+  } finally {
+    if ($keepHandoff) { Write-Host "Completion handoff retained for recovery: $completionPath" }
+    else { Remove-MeowskyRefactorScratch -Path $executionScratch }
+  }
+}
+
 function Assert-MeowskyRefactorApprovedState {
   param($State, [string]$Root, $Inventory)
   if (-not $State.refactor -or -not $State.refactor.approval) {
@@ -102,7 +266,7 @@ function Approve-MeowskyRefactorPlan {
 }
 
 function Start-MeowskyRefactorExecution {
-  param([string]$Root)
+  param([string]$Root, [string]$HandoffPath)
   $state = Assert-MeowskyAuditPrerequisite -Root $Root -Stage refactor
   $inventory = Get-MeowskyAuditInventory -Root $Root
   Assert-MeowskyRefactorApprovedState -State $state -Root $Root -Inventory $inventory
@@ -125,6 +289,9 @@ function Start-MeowskyRefactorExecution {
   }
   $prompt = [regex]::Replace($template, '\{\{(TARGET|SESSION|IDS|APPROVAL|PLAN)\}\}',
     [Text.RegularExpressions.MatchEvaluator]{ param($match) [string]$promptValues[$match.Groups[1].Value] })
+  if ($HandoffPath) {
+    $prompt += "`n`nWrite the final completion JSON to $HandoffPath. Then tell the user to type /exit so Meowsky can validate it. Do not print the JSON as the final answer.`n"
+  }
   $promptPath = New-MeowskyCodexPromptFile -Prompt $prompt
   $state.refactor.execution = [ordered]@{ id = $sessionId; status = 'pending'; startedAt = (Get-Date).ToString('o');
     scopeFingerprint = (Get-MeowskyRefactorScopeFingerprint -Inventory $inventory -PermittedFiles $allowed);
@@ -138,8 +305,10 @@ function Start-MeowskyRefactorExecution {
   $stateTampered = $false
   try {
     $global:LASTEXITCODE = 0
-    Invoke-MeowskyCodex -Root $Root -PromptPath $promptPath -Arguments @('--sandbox','workspace-write',
-      '--ask-for-approval','on-request','--disable','hooks','--disable','plugins','--disable','apps')
+    $arguments = @('--sandbox','workspace-write','--ask-for-approval','on-request',
+      '--disable','hooks','--disable','plugins','--disable','apps')
+    if ($HandoffPath) { $arguments += @('--add-dir', (Split-Path $HandoffPath -Parent)) }
+    Invoke-MeowskyCodex -Root $Root -PromptPath $promptPath -Arguments $arguments
     if ($LASTEXITCODE -ne 0) { throw "Codex execution exited with code $LASTEXITCODE." }
   } catch {
     $launchFailure = $_.Exception.Message
@@ -158,7 +327,8 @@ function Start-MeowskyRefactorExecution {
   }
   if ($launchFailure) { throw $launchFailure }
   if ($stateTampered) { throw 'Workflow state changed during Codex execution; session is invalid and no finding was resolved.' }
-  Write-Host 'Execution session ended. Findings remain unresolved until --complete validates the handoff and observed files.'
+  if ($HandoffPath) { Write-Host 'Execution session ended. Validating the completion handoff and observed files.' }
+  else { Write-Host 'Execution session ended. Findings remain unresolved until --complete validates the handoff and observed files.' }
 }
 
 function Complete-MeowskyRefactor {
@@ -226,8 +396,10 @@ function Invoke-MeowskyRefactorFeature {
       $approval = Assert-MeowskyRefactorApproval -Approval (Read-MeowskyReviewHandoff -Path $operand) -State $state -Root $root -Inventory $inventory
       $ids = @($approval.findings | ForEach-Object id)
       Write-Host "Approval covers $($ids -join ', ') in $root."
-      foreach ($finding in $approval.findings) { Write-Host "  $($finding.id): $($finding.change_boundary) [$($finding.permitted_files -join ', ')]" }
-      Confirm-MeowskyRefactorPhrase -Phrase "APPROVE $($ids -join ',')"
+      foreach ($finding in $approval.findings) {
+        Write-Host "  $($finding.id): $($finding.change_boundary) [$($finding.permitted_files -join ', ')]"
+        Confirm-MeowskyRefactorPhrase -Phrase "APPROVE $($finding.id)"
+      }
       $state | Add-Member -NotePropertyName refactor -NotePropertyValue ([ordered]@{
         status = 'approved'; approval = $approval; planning = $null; concretePlan = $null; execution = $null }) -Force
       foreach ($id in $ids) {
@@ -243,6 +415,12 @@ function Invoke-MeowskyRefactorFeature {
     '--plan-complete' { return (Approve-MeowskyRefactorPlan -Root $root -Path $operand) }
     '--execute' { return (Start-MeowskyRefactorExecution -Root $root) }
     '--complete' { return (Complete-MeowskyRefactor -Root $root -Path $operand) }
-    default { return (Start-MeowskyRefactorPlanning -Root $root) }
+    default {
+      $state = Assert-MeowskyAuditPrerequisite -Root $root -Stage refactor
+      if ($state.refactor -and $state.refactor.status -eq 'approved') {
+        return (Start-MeowskyRefactorPlanning -Root $root)
+      }
+      return (Start-MeowskyRefactorAutomatic -Root $root)
+    }
   }
 }

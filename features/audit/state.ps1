@@ -48,8 +48,8 @@ function Get-MeowskyAuditOutputHash {
 function Write-MeowskyAuditState {
   param([Parameter(Mandatory = $true)][string]$Root, [Parameter(Mandatory = $true)]$State)
   $json = $State | ConvertTo-Json -Depth 10
-  if ([Text.Encoding]::UTF8.GetByteCount($json) -gt 64000) {
-    throw 'Workflow state exceeds the 64 KiB validation limit; narrow the approved refactor scope.'
+  if ([Text.Encoding]::UTF8.GetByteCount($json) -gt 262144) {
+    throw 'Workflow state exceeds the 256 KiB validation limit; narrow the approved refactor scope.'
   }
   Write-MeowskyAuditReport -Root $Root -Name 'state.json' -Content $json
 }
@@ -58,7 +58,7 @@ function Read-MeowskyAuditState {
   param([Parameter(Mandatory = $true)][string]$Root)
   $path = Join-Path $Root '.meowsky/state.json'
   if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw 'Audit state is missing. Run meowsky audit first.' }
-  if ((Get-Item -LiteralPath $path -Force).Length -gt 65536) { throw 'Audit state is too large to validate.' }
+  if ((Get-Item -LiteralPath $path -Force).Length -gt 262144) { throw 'Audit state is too large to validate.' }
   $null = Get-MeowskyAuditOutputHash -Path $path
   try { $state = Get-Content -Raw -LiteralPath $path -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop }
   catch { throw 'Audit state is invalid. Run meowsky audit again.' }

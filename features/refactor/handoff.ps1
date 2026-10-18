@@ -1,6 +1,56 @@
+function Assert-MeowskyRefactorAssessmentHandoff {
+  param($Handoff, $State, [string]$Root, $Inventory)
+  if ($Handoff -isnot [pscustomobject] -or $Handoff.version -ne 1 -or
+      $Handoff.session_id -cne $State.refactor.planning.id -or
+      $Handoff.status -cnotin @('ready', 'no_changes') -or $Handoff.decisions -isnot [array]) {
+    throw 'Refactor assessment handoff is incomplete or does not match the session.'
+  }
+  $items = Get-MeowskyRefactorPlanItems -Root $Root
+  $seen = @{}
+  $eligible = @($items.Keys | Where-Object {
+    $id = $_
+    -not @($State.history | Where-Object { $_.id -ceq $id -and $_.status -in @('rejected','deferred','resolved','invalidated') }).Count
+  })
+  if ($Handoff.decisions.Count -ne $eligible.Count) {
+    throw 'Refactor assessment must record one decision for every eligible finding.'
+  }
+  foreach ($decision in $Handoff.decisions) {
+    if ($decision -isnot [pscustomobject] -or $decision.id -isnot [string] -or
+        -not $items.ContainsKey($decision.id) -or $seen.ContainsKey($decision.id) -or
+        @($State.history | Where-Object { $_.id -ceq $decision.id -and $_.status -in @('rejected','deferred','resolved','invalidated') }).Count -or
+        $decision.status -cnotin @('approved','rejected','deferred') -or
+        $decision.rationale -isnot [string] -or [string]::IsNullOrWhiteSpace($decision.rationale) -or
+        $decision.rationale.Length -gt 1000) {
+      throw 'Refactor assessment has an invalid finding decision.'
+    }
+    $seen[$decision.id] = $true
+  }
+  if ($Handoff.status -eq 'no_changes') {
+    if (@($Handoff.decisions | Where-Object status -CEQ 'approved').Count -or $Handoff.approval -or $Handoff.plan) {
+      throw 'Refactor assessment with no changes cannot propose approved findings.'
+    }
+    if ($Handoff.reason -isnot [string] -or [string]::IsNullOrWhiteSpace($Handoff.reason) -or $Handoff.reason.Length -gt 500) {
+      throw 'Refactor assessment must explain why no changes are proposed.'
+    }
+    return $Handoff
+  }
+  $approval = Assert-MeowskyRefactorApproval -Approval $Handoff.approval -State $State -Root $Root -Inventory $Inventory
+  $approvedIds = @($Handoff.decisions | Where-Object status -CEQ 'approved' | ForEach-Object id)
+  if ($approval.findings.Count -ne $approvedIds.Count -or
+      @($approval.findings | Where-Object { $_.id -cnotin $approvedIds }).Count) {
+    throw 'Refactor assessment approval does not match individual decisions.'
+  }
+  $priorApproval = $State.refactor.approval
+  try {
+    $State.refactor.approval = $approval
+    $null = Assert-MeowskyRefactorPlanHandoff -Handoff $Handoff.plan -State $State
+  } finally { $State.refactor.approval = $priorApproval }
+  $Handoff
+}
+
 function Assert-MeowskyRefactorPlanHandoff {
   param($Handoff, $State)
-  if ([Text.Encoding]::UTF8.GetByteCount(($Handoff | ConvertTo-Json -Depth 8)) -gt 16000) {
+  if ([Text.Encoding]::UTF8.GetByteCount(($Handoff | ConvertTo-Json -Depth 8)) -gt 65536) {
     throw 'Concrete plan is too large for a focused refactor.'
   }
   $session = $State.refactor.planning

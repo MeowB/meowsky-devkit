@@ -1,15 +1,29 @@
+meowsky refactor [<directory>]
 meowsky refactor [<directory>] --prepare 'S001[,S002...]'
 meowsky refactor [<directory>] --approve <approval.json>
-meowsky refactor [<directory>]
 meowsky refactor [<directory>] --plan-complete <plan.json>
 meowsky refactor [<directory>] --execute
 meowsky refactor [<directory>] --complete <completion.json>
 
+The normal command opens an interactive Codex assessment of PLAN.md. Discuss
+each eligible finding in turn: evidence, edits, files, benefit, risks, and
+verification. Decide approve, reject, or defer with a rationale for each,
+then exit after Codex writes its handoff. Meowsky validates the handoff and
+displays each proposed approved finding separately. Type a distinct approval
+in PowerShell for each one. A refusal stops before implementation and retains
+confirmed decisions and rejections/deferrals in workflow history. Exit
+that session after Codex writes its completion handoff; Meowsky validates it
+and reports the outcome. No JSON copying is needed in this normal path.
+Do not approve source writes during assessment; project files are outside its
+writable sandbox unless you grant an escalation.
+
 Requires a current audit, a completed full review, and an unchanged PLAN.md.
 The directory defaults to the current location; Git is optional. A docs-only
-review cannot supply refactor approval. No selected or unapproved finding
-can launch Codex.
+review cannot supply refactor approval. No unapproved finding can launch
+the implementation session. The normal path supports up to 30 approved
+findings, subject to handoff and state size limits.
 
+Advanced/recovery commands:
 1. --prepare prints an unapproved JSON template for selected S finding IDs.
    Save it outside the project. Inspect each correction and permitted file,
    fill in each exact change_boundary, and set the top-level and per-finding
@@ -19,9 +33,10 @@ can launch Codex.
    files or changed corrections require a new full review and PLAN.md.
    PLAN.md remains the proposal; approval is recorded separately in state.json.
 2. --approve validates the JSON against the current review, plan, and source
-   fingerprint. It displays the scope and requires a typed confirmation in
-   your PowerShell session. This approves planning for that scope, not edits.
-3. Plain meowsky refactor launches read-only interactive Codex planning.
+   fingerprint. It displays the scope and requires a separate typed
+   confirmation for each finding in your PowerShell session. This approves
+   planning for that scope, not edits.
+3. After manual --approve, plain meowsky refactor launches read-only interactive Codex planning.
    Copy its final structured JSON to a file outside the project.
 4. --plan-complete validates the concrete plan and asks you to confirm it
    explicitly. Only then can --execute launch Codex with workspace-write
