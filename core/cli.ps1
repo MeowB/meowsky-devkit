@@ -9,6 +9,10 @@ function meowsky {
     [Alias('h', 'help')][switch]$ShowHelp
   )
   $feature = if ($Action) { $script:MeowskyCommands[$Action.ToLowerInvariant()] }
+  if ($feature -and $feature.CaseSensitive -and
+      (@($feature.Command) + @($feature.Aliases)) -cnotcontains $Action) {
+    throw "Use the exact command name: $($feature.Command) or $($feature.Aliases -join ', ')"
+  }
   if ($ShowHelp -or $Action -in @('help', '--help')) {
     if ($feature) {
       Get-Content -Raw -LiteralPath (Join-Path $feature.Directory $feature.Help)
@@ -25,7 +29,9 @@ function meowsky {
   # Features independent of project navigation must not create the work root.
   $workRoot = if (-not ($feature -and $feature.SkipWorkRoot)) { Get-WorkRoot }
   if ($feature) {
-    if ($feature.AcceptsArguments) {
+    if ($feature.AcceptsAction) {
+      & $feature.Handler -Action $Action -Target $Target -WorkRoot $workRoot -Arguments $args
+    } elseif ($feature.AcceptsArguments) {
       & $feature.Handler -Target $Target -WorkRoot $workRoot -Arguments $args
     } else {
       & $feature.Handler -Target $Target -WorkRoot $workRoot

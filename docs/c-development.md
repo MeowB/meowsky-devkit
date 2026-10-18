@@ -32,12 +32,14 @@ The Codex pane starts in that project and can read this guide through the absolu
 
 | Task | PowerShell | From a C buffer in Neovim |
 | --- | --- | --- |
-| Compile with warnings and debug symbols | `gcc -std=c11 -Wall -Wextra -Wpedantic -g .\main.c -o .\main.exe` | `:CBuild` (then `:copen` for compiler messages) |
-| Run the program | `.\main.exe` after building | `:CRun` builds, then runs in a terminal split |
+| Compile with warnings and debug symbols | `:CBuild` or `meowsky :CBuild` | `:CBuild` (opens quickfix on failure) |
+| Run the program | `:CRun` or `meowsky :CRun` | `:CRun` builds, then runs in a terminal split |
 | Debug the program | `gdb .\main.exe` after building | `:CDebug` builds, then opens GDB in a terminal split |
 | Navigate and inspect C diagnostics | — | `:CDefinition`, `:CReferences`, `:CDiagnostics` |
 
 For a program with multiple source files, pass each additional `.c` file to GCC or to `:CBuild`, `:CRun`, or `:CDebug` from the main source buffer. The commands below show the full sequence and GDB shortcuts.
+
+From PowerShell, `:CBuild` and `:CRun` (or `meowsky :CBuild` and `meowsky :CRun`) build `main.c` in the current directory by default. Give another entry file when needed, such as `:CRun exercise.c`, followed by any additional `.c` files. The executable takes the first file's name. These terminal commands use the same GCC warning flags as Neovim and print complete compiler messages. `:CRun` runs only after a successful build. Spell the commands exactly as shown, and open a new PowerShell session to load them. Neovim's commands still use the current C buffer.
 
 ## Your first exercise
 
@@ -54,7 +56,7 @@ gcc -std=c11 -Wall -Wextra -Wpedantic -g .\main.c -o .\main.exe
 .\main.exe
 ```
 
-Inside Neovim, `:CBuild` compiles the current `.c` file to a same-named `.exe`; `:CRun` builds it and opens the program in a terminal split. These commands save the current file before compiling. `:copen` shows compiler messages from the last build. Read warnings even when compilation succeeds: they often point to type, lifetime, or control-flow mistakes. Fix the cause, then build again.
+Inside Neovim, `:CBuild` compiles the current `.c` file to a same-named `.exe`; `:CRun` builds it and opens the program in a terminal split. These commands save the current file before compiling. A failed build opens the full compiler output in quickfix automatically. `:copen` reopens messages from the last build. Read warnings even when compilation succeeds: they often point to type, lifetime, or control-flow mistakes. Fix the cause, then build again.
 
 clangd supplies completion and live diagnostics through the existing Neovim setup. For small C files without a compilation database, it uses the selected GCC toolchain's target and system headers. An undeclared variable receives an error underline; use `:CDiagnostics` to read the message. Use `:CDefinition` and `:CReferences` to navigate symbols. The commands add no new key mappings.
 

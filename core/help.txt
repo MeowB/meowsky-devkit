@@ -32,6 +32,10 @@ SYNOPSIS
     meowsky md <file.md>
     meowsky markdown <file.md>
     meowsky pdf <file.pdf>
+    meowsky :CBuild [<file.c> [additional.c ...]]
+    meowsky :CRun [<file.c> [additional.c ...]]
+    :CBuild [<file.c> [additional.c ...]]
+    :CRun [<file.c> [additional.c ...]]
 
 COMMANDS
     meowsky                 Ensure the workspace directories and enter WORK_HOME.
@@ -79,6 +83,10 @@ COMMANDS
                             open it in the default browser.
     meowsky markdown <file> Same as md.
     meowsky pdf <file>      Open a PDF in the default viewer.
+    :CBuild [file.c ...]    Build main.c (or the given C sources) with GCC.
+    :CRun [file.c ...]      Build, then run only if compilation succeeds.
+    meowsky :CBuild        Same terminal build command; spelling is exact.
+    meowsky :CRun          Same terminal run command; spelling is exact.
 
 OPTIONS
     -h, -Help               Show this help page and exit.

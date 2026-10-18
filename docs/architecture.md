@@ -8,6 +8,8 @@ Each PowerShell feature owns implementation, `help.txt` and `feature.psd1`. Mani
 
 Identity and Audit use two optional manifest flags: `SkipWorkRoot` bypasses work-root creation and passes no work root; `AcceptsArguments` forwards trailing CLI tokens in the handler's `Arguments` array. Features without those flags retain their existing dispatch behavior. `SkipWorkRoot` describes dispatch only; Identity may install a theme when explicitly requested without `--dry-run`.
 
+The C feature uses `AcceptsAction` to receive the original command spelling, `CaseSensitive` to reject differently capitalized CLI actions, and `SkipWorkRoot` because builds act in the current directory. Its direct PowerShell functions check their own invocation spelling.
+
 The loader validates resource paths, handlers and duplicate commands. Registration is explicit in `core/feature-loader.ps1`; there is no auto-discovery. Loading defines functions; the handler executes the command.
 
 Folder names do not create commands: tree remains `ptree`, workspace remains `.` / `./`. Color owns `color`; Identity owns `identity`. Unknown actions still attempt directory navigation. Feature `-h` / `-Help` reads feature help; global help remains in `core/help.txt`. Identity also handles its positional `--help` through its feature handler.
@@ -18,6 +20,7 @@ Folder names do not create commands: tree remains `ptree`, workspace remains `.`
 | --- | --- | --- |
 | tree | Rendering and live panel | directory-tree, terminal |
 | md | Pandoc preview | paths |
+| c | GCC build and run commands in PowerShell | feature-loader |
 | pdf | Viewer launch | paths |
 | codex | Launchers, global instruction source, and primary/fallback session-context prompts | paths, git, directory-tree, terminal |
 | bach | Bachelor district command, help, and startup context | workspace, paths |
@@ -56,9 +59,12 @@ Linux has a `shell/meowsky.sh` bootstrap and `.sh` implementations beside their 
 
 `nvim/init.lua` owns shared editor setup. `nvim/lua/meowsky/c.lua` owns C-only build, run, navigation, and GDB commands. The Windows installer copies both files, reuses a healthy MinGW-w64 GCC/GDB pair or installs MSYS2 UCRT64, and adds clangd and the C Treesitter parser. Zig wrappers still serve Treesitter. See [C development](c-development.md) for the learning workflow.
 
+`features/c/` owns the PowerShell `:CBuild` and `:CRun` commands, both directly and through `meowsky`. The feature uses the current directory and GCC on PATH; it does not start Neovim. The CLI forwards the original action spelling for the feature's exact-case check. Neovim's same-named commands use the current buffer and retain editor quickfix output.
+
 ## Verification
 
 ```powershell
+powershell -NoProfile -File tests/verify-c.ps1
 powershell -NoProfile -File tests/verify-refactor.ps1
 powershell -NoProfile -File tests/verify-identity.ps1
 powershell -NoProfile -File tests/verify-terminal.ps1

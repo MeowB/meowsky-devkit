@@ -35,16 +35,19 @@ local function build(bufnr, extra_sources)
   vim.fn.setqflist({}, ' ', {
     title = 'C build',
     lines = lines,
-    efm = '%f:%l:%c: %t%*[^:]: %m,%f:%l: %t%*[^:]: %m,%-G%.%#',
+    efm = '%f:%l:%c: %t%*[^:]: %m,%f:%l: %t%*[^:]: %m,%m',
   })
 
-  if #lines > 0 then
+  if result.code ~= 0 and #lines == 0 then
+    vim.fn.setqflist({ { text = 'gcc exited with code ' .. result.code } }, 'a')
+  end
+  if #lines > 0 or result.code ~= 0 then
     local source_window = vim.api.nvim_get_current_win()
-    vim.cmd.cwindow()
+    vim.cmd(result.code ~= 0 and 'copen' or 'cwindow')
     vim.api.nvim_set_current_win(source_window)
   end
   if result.code ~= 0 then
-    error('C build failed; inspect :copen for compiler diagnostics')
+    error('C build failed; compiler output is open in quickfix')
   end
   vim.notify('Built ' .. executable, vim.log.levels.INFO)
   return executable, directory

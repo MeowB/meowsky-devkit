@@ -1,0 +1,15 @@
+NAME
+    :CBuild and :CRun - build and run C files with GCC
+
+SYNOPSIS
+    :CBuild [<file.c> [additional.c ...]]
+    :CRun [<file.c> [additional.c ...]]
+    meowsky :CBuild [<file.c> [additional.c ...]]
+    meowsky :CRun [<file.c> [additional.c ...]]
+
+DESCRIPTION
+    Without a file, use main.c in the current directory. Additional .c files
+    are compiled together. The executable is named after the first source file.
+    :CRun builds first and runs only after a successful build. GCC prints its
+    complete errors and warnings in the terminal. Command spelling is exact.
+    In Neovim, :CBuild and :CRun use the current C buffer instead.

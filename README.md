@@ -40,6 +40,7 @@ This setup is meant to feel like:
 |-- core/                   # shared runtime infrastructure and CLI
 |-- features/               # implementations, manifests and help
 |   |-- bach/
+|   |-- c/
 |   |-- codex/
 |   |-- color/
 |   |-- identity/
@@ -146,6 +147,8 @@ meowsky pdf .\docs\spec.pdf
 meowsky ptree 5
 ```
 
+For C programs in the current directory, run `:CBuild` or `:CRun` in PowerShell. `meowsky :CBuild` and `meowsky :CRun` are equivalent; pass a `.c` filename when the entry file is not `main.c`. See [docs/c-development.md](docs/c-development.md).
+
 When `meowsky ./` runs in any folder, it opens a fullscreen Windows Terminal layout with:
 
 - a Codex session given the dynamic context from [features/codex/codex-orientation.md](features/codex/codex-orientation.md); durable behavior comes from Codex's global and project `AGENTS.md` files
@@ -164,6 +167,8 @@ When `meowsky ./` runs in any folder, it opens a fullscreen Windows Terminal lay
 | `meowsky <directory>` | Change to a directory, checking the current location and then the work root. |
 | `meowsky .` or `meowsky ./` | Open the fullscreen Windows Terminal layout in the current directory. |
 | `meowsky codex [directory]` | Start Codex with the Meowsky orientation prompt; defaults to the current directory. |
+| `:CBuild` / `meowsky :CBuild` | Build `main.c` or the specified C sources with GCC. |
+| `:CRun` / `meowsky :CRun` | Build, then run the resulting executable on success. |
 | `meowsky audit [directory]` | Run filesystem discovery and static checks, then write `.meowsky/MAP.md`, `AUDIT.md`, and `state.json`; no Codex invocation. |
 | `meowsky audit [directory] --quick` | Compatibility option for the same local audit. |
 | `meowsky audit [directory] --refresh` | Compatibility option; every audit now regenerates the artifacts. |
