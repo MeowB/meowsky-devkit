@@ -45,7 +45,7 @@ COMMANDS
     meowsky <directory>     Change to a directory, checking the current location
                             first and then the work root.
     meowsky . or ./         Open a fullscreen Windows Terminal layout in the
-                            current directory with Codex, tree, and status panes.
+                            current directory with Codex, Matrix, and status panes.
     meowsky codex [path]    Start Codex with the Meowsky orientation prompt in
                             the given directory; default is the current one.
     meowsky color           Explain retired project color overrides.

@@ -1,6 +1,7 @@
 meowsky .
 meowsky ./
 Open the fullscreen Windows Terminal layout in the current directory.
-Requires Codex, tree and matrix features. Linux uses the existing tmux layout.
+Opens Codex (40%) beside Matrix and status (60%). Requires Codex and matrix features.
+Linux uses the existing tmux layout.
 
 Use -h or -Help after the command to show this help (PowerShell).

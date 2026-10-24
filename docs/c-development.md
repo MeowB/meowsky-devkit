@@ -28,7 +28,7 @@ Set-Location C:\path\to\your-c-project
 meowsky ./
 ```
 
-The Codex pane starts in that project and can read this guide through the absolute path in its launch context, even when the project is outside the devkit checkout. The four-pane layout contains Codex, Matrix, status, and tree panes; use the original PowerShell terminal or another terminal for interactive editing and builds. Open a source file from the project directory with `nvim .\main.c`. In Neovim, `:w` saves, `:q` exits, and `:wq` saves and exits. There are no custom C key mappings; use the commands below.
+The Codex pane starts in that project and can read this guide through the absolute path in its launch context, even when the project is outside the devkit checkout. The three-pane layout contains Codex, Matrix, and status panes; use the original PowerShell terminal or another terminal for interactive editing and builds. Open a source file from the project directory with `nvim .\main.c`. In Neovim, `:w` saves, `:q` exits, and `:wq` saves and exits. There are no custom C key mappings; use the commands below.
 
 | Task | PowerShell | From a C buffer in Neovim |
 | --- | --- | --- |

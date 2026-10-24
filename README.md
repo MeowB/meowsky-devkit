@@ -151,11 +151,10 @@ meowsky ptree 5
 
 For C programs in the current directory, run `:CBuild` or `:CRun` in PowerShell. `meowsky :CBuild` and `meowsky :CRun` are equivalent; pass a `.c` filename when the entry file is not `main.c`. See [docs/c-development.md](docs/c-development.md).
 
-When `meowsky ./` runs in any folder, it opens a fullscreen Windows Terminal layout with:
+When `meowsky ./` runs in any folder, it opens a fullscreen Windows Terminal layout with Codex on the left (40%) and Matrix and status on the right (60%):
 
 - a Codex session given the dynamic context from [features/codex/codex-orientation.md](features/codex/codex-orientation.md); durable behavior comes from Codex's global and project `AGENTS.md` files
-- a shell at the project root
-- a tree view pane
+- a Matrix animation pane that can become a shell at the project root with `Ctrl+C`
 - a compact status pane
 
 ## PowerShell Command Reference

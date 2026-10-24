@@ -187,7 +187,7 @@ try {
   $oldHelp = $baselineAst.Find({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Show-MeowskyHelp' }, $true).Extent.Text
   $legacyHelp = ($globalHelp -split "`r?`n" | Where-Object { $_ -notmatch '^\s+meowsky (identity|audit|review|refactor)' }) -join "`n"
   $expectedLegacyHelp = ((& { . ([scriptblock]::Create($oldHelp)); Show-MeowskyHelp }).TrimEnd()) -replace "`r`n", "`n"
-  $filter = { $_ -notmatch '^\s+meowsky color|^\s+meowsky (dev|bach|launchpad)|^\s+meowsky\s+(Change to the work root|Ensure the workspace)|^\s+The work root is|^\s+otherwise \$HOME\\work|^\s+then under the work root|^\s+WORK_HOME must|^\s+Bare meowsky|^\s+dev/, bach/, and launchpad/|^\s+File and Codex paths|^\s+meowsky \. and ./ use|^\s+active identity theme|^\s+dev\s+Compatibility alias|AUDIT.md, and state.json|^\s+(?:meowsky )?:C(Build|Run)\b|^\s+(Build main\.c|Build, then run|Same terminal (build|run))' }
+  $filter = { $_ -notmatch '^\s+meowsky color|^\s+meowsky (dev|bach|launchpad)|^\s+meowsky\s+(Change to the work root|Ensure the workspace)|^\s+The work root is|^\s+otherwise \$HOME\\work|^\s+then under the work root|^\s+WORK_HOME must|^\s+Bare meowsky|^\s+dev/, bach/, and launchpad/|^\s+File and Codex paths|^\s+meowsky \. and ./ use|^\s+current directory with Codex,|^\s+active identity theme|^\s+dev\s+Compatibility alias|AUDIT.md, and state.json|^\s+(?:meowsky )?:C(Build|Run)\b|^\s+(Build main\.c|Build, then run|Same terminal (build|run))' }
   Assert-Equal (($legacyHelp -split "`n" | Where-Object $filter) -join "`n") (($expectedLegacyHelp -split "`n" | Where-Object $filter) -join "`n") 'Global help preserved except retired colors, Identity, and Audit'
   Assert-Equal ($globalHelp -match '(?m)^\s+dev\s+Compatibility alias') $false 'Removed standalone dev alias absent from help'
   $oldTree = $baselineAst.Find({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'ptree' }, $true).Extent.Text
@@ -304,14 +304,14 @@ try {
       Assert-Equal $errors.Count 0 'Generated pane script syntax'
     }
   }
-  Assert-Equal $encoded.Count 4 'Four panes'
+  Assert-Equal $encoded.Count 3 'Three development panes'
   foreach ($pane in $encoded) {
     Assert-Equal ($pane -match 'Reset-MeowskyTerminalColors') $true 'Every pane restores terminal theme defaults'
     Assert-Equal ($pane -match 'Apply-MeowskyConsoleColor|Apply-MeowskyProjectColor') $false 'No generated pane color override'
   }
   Assert-Equal ($encoded[1] -match 'meowsky matrix') $true 'Matrix pane preserved'
   Assert-Equal ($encoded[2] -match 'Start-MeowskyStatusPanel') $true 'Status pane preserved'
-  Assert-Equal ($encoded[3] -match 'Start-MeowskyTreePanel') $true 'Tree pane preserved'
+  Assert-Equal (($encoded -join "`n") -match 'Start-MeowskyTreePanel') $false 'No tree pane in development layout'
   $developmentPanes = $encoded
   $developmentArgs = @($script:terminalArgs)
   for ($i = 0; $i -lt $developmentArgs.Count; $i++) {
@@ -319,7 +319,10 @@ try {
     if ($developmentArgs[$i] -eq '-EncodedCommand') { $developmentArgs[$i + 1] = '<script>' }
   }
   Assert-Equal (@($script:terminalArgs | Where-Object { $_ -eq 'new-tab' }).Count) 1 'Development single tab'
-  Assert-Equal (@($script:terminalArgs | Where-Object { $_ -eq 'split-pane' }).Count) 3 'Development three splits'
+  Assert-Equal (@($script:terminalArgs | Where-Object { $_ -eq 'split-pane' }).Count) 2 'Development two splits'
+  Assert-Equal (($developmentArgs -join ',') -match 'split-pane,-V,--size,0\.60') $true 'Development Codex occupies 40 percent'
+  Assert-Equal (($developmentArgs -join ',') -match 'split-pane,-H,--size,0\.22') $true 'Development status split preserved'
+  Assert-Equal (($developmentArgs -join ',') -match 'move-focus,up,;,move-focus,left$') $true 'Development initial focus returns to Codex'
   for ($i = 0; $i -lt $script:terminalArgs.Count; $i++) {
     if ($script:terminalArgs[$i] -eq '-d') {
       Assert-Equal $script:terminalArgs[$i + 1] $project 'Development pane directory'

@@ -80,7 +80,7 @@ On Windows, the workspace defaults to `C:\meowsky`; an optional `WORK_HOME` over
 
 When you want written continuity across sessions, use the optional [district continuity convention](district-continuity.md). You decide when records are created or updated and write capsules yourself; the installer and launcher do not create records.
 
-The development (`meowsky .` / `./`) fullscreen layout retains four panes: Codex, matrix animation, status, and tree. Stop the animation with `Ctrl+C` to use its shell. Status shows the project path and startup Git summary. The active Terminal palette supplies green Matrix glyphs and status header, blue folders, a cyan project path, and green/yellow clean/dirty working-tree status. Other text uses the default foreground; no project or Codex color override is applied. Tree ignores dependency/build directories and limits each directory to 50 displayed entries.
+The development (`meowsky .` / `./`) fullscreen layout has three panes: Codex on the left (40%), and matrix animation above status on the right (60%). Stop the animation with `Ctrl+C` to use its shell. Status shows the project path and startup Git summary. The active Terminal palette supplies green Matrix glyphs and status header, a cyan project path, and green/yellow clean/dirty working-tree status. Other text uses the default foreground; no project or Codex color override is applied.
 
 `ptree [level]` remains available independently. Feature help lives at `features/<name>/help.txt`: PowerShell supports `meowsky <command> -h` and `-Help`. Bare `meowsky -h`, `help`, and `--help` display global help.
 
