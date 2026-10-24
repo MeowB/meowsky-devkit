@@ -122,14 +122,14 @@ meowsky my-app
 meowsky ./
 ```
 
-Open the bachelor or income exploration environment in its own district:
+Open the bachelor or software opportunity environment in its own district:
 
 ```powershell
 meowsky bach
 meowsky launchpad
 ```
 
-These commands read district-specific startup guidance. They ask the agent to read `current.md` if present; they do not create personal records. PDFs and Word documents in a district's `references/` are original sources, not working files. See [district continuity](docs/district-continuity.md) for the optional state, session, and manual capsule convention.
+These commands read district-specific startup guidance. Bachelor asks the agent to read `current.md` if present. Launchpad asks Codex to read its repository instructions and run `node dist/cli.js briefing`; its right pane can run `node dist/cli.js start` when wanted. Neither command creates personal records. See [district continuity](docs/district-continuity.md) for the optional state, session, and manual capsule convention used by Bachelor.
 
 Start Codex directly with the project session context and native `AGENTS.md` instructions:
 
@@ -163,7 +163,7 @@ When `meowsky ./` runs in any folder, it opens a fullscreen Windows Terminal lay
 | `meowsky` | Ensure the workspace directories exist, then enter `WORK_HOME`. |
 | `meowsky dev` | Ensure the workspace directories exist, then enter `dev/`. |
 | `meowsky bach` | Open one Windows Terminal tab in `WORK_HOME\bach` with Codex left (70%), interactive PowerShell right (30%), and bachelor context instructing Codex to read `current.md` first if present. |
-| `meowsky launchpad` | Open one Windows Terminal tab in `WORK_HOME\launchpad` with Codex left (70%), interactive PowerShell right (30%), and income context instructing Codex to read `current.md` first if present. |
+| `meowsky launchpad` | Open one Windows Terminal tab in `WORK_HOME\launchpad` with Codex left (70%) and interactive PowerShell right (30%). Codex reads Launchpad instructions and runs its saved-state briefing; the right pane is available for the optional panel. |
 | `meowsky <directory>` | Change to a directory, checking the current location and then the work root. |
 | `meowsky .` or `meowsky ./` | Open the fullscreen Windows Terminal layout in the current directory. |
 | `meowsky codex [directory]` | Start Codex with the Meowsky orientation prompt; defaults to the current directory. |

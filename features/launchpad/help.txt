@@ -1,5 +1,5 @@
 NAME
-    meowsky launchpad - open the income exploration workspace
+    meowsky launchpad - open the software opportunity workspace
 
 SYNOPSIS
     meowsky launchpad
@@ -8,7 +8,7 @@ DESCRIPTION
     Ensure the Meowsky workspace directories exist, then open the Windows
     Terminal tab in WORK_HOME\launchpad with Codex on the left (70%) and an
     interactive PowerShell on the right (30%). Both panes start in launchpad/.
-    Codex receives income-specific startup context and reads current.md first
-    if it exists; no state is created. The shell is available for ordinary
-    commands and file access.
-    See docs/district-continuity.md for optional user-maintained records.
+    Codex receives software opportunity startup context, reads Launchpad's
+    AGENTS.md, and runs node dist/cli.js briefing. The shell is available for
+    node dist/cli.js start as an optional companion panel; it does not start
+    automatically. No implementation Goal starts automatically.

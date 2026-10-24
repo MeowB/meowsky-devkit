@@ -343,16 +343,24 @@ try {
     Assert-Equal $districtPrompt $expectedPrompt "$district complete startup context preserved"
     if ($district -eq 'launchpad') {
       Assert-Equal ($districtPrompt -match '^# Launchpad workspace') $true 'Launchpad context selected'
-      Assert-Equal ($districtPrompt -match 'This district explores and tests sustainable ways to earn a living') $true 'Launchpad income context selected'
+      Assert-Equal ($districtPrompt -match 'software product opportunities and decisions before development') $true 'Launchpad software opportunity context selected'
+      Assert-Equal ($districtPrompt -match "Read the repository's AGENTS.md") $true 'Launchpad repository instructions requested'
+      Assert-Equal ($districtPrompt -match 'node dist/cli.js briefing') $true 'Launchpad saved briefing requested'
+      Assert-Equal ($districtPrompt -match 'If it is empty, say so') $true 'Launchpad empty briefing handling'
+      Assert-Equal ($districtPrompt -match 'node dist/cli.js start') $true 'Launchpad optional companion panel documented'
+      Assert-Equal ($districtPrompt -match 'Do not start or resume an implementation Goal') $true 'Launchpad Goal remains user initiated'
+      Assert-Equal ($districtPrompt -match 'current.md|income routes|earn a living') $false 'Launchpad excludes old district context'
       Assert-Equal ($districtPrompt -match '^# Bachelor workspace|Inspect `README.md` first') $false 'Launchpad excludes bachelor and development context'
     }
     Assert-Equal ($decoded -match 'Invoke-MeowskyCodex -Root \. -PromptPath \$promptPath') $true "$district passes prompt file to Codex"
-    Assert-Equal ($districtPrompt -match [regex]::Escape("$districtRoot\current.md")) $true "$district current state path"
-    Assert-Equal ($districtPrompt -match 'read it first') $true "$district current state precedence"
-    Assert-Equal ($districtPrompt -match 'If it is missing, say that no current state has been written') $true "$district missing state handling"
-    Assert-Equal ($districtPrompt -match 'references/') $true "$district original references rule"
-    Assert-Equal ($districtPrompt -match 'Approval of a draft does not authorize sending it') $true "$district human communication rule"
-    Assert-Equal ($districtPrompt -match 'Do not create a capsule') $true "$district manual capsules rule"
+    if ($district -eq 'bach') {
+      Assert-Equal ($districtPrompt -match [regex]::Escape("$districtRoot\current.md")) $true 'Bachelor current state path'
+      Assert-Equal ($districtPrompt -match 'read it first') $true 'Bachelor current state precedence'
+      Assert-Equal ($districtPrompt -match 'If it is missing, say that no current state has been written') $true 'Bachelor missing state handling'
+      Assert-Equal ($districtPrompt -match 'references/') $true 'Bachelor original references rule'
+      Assert-Equal ($districtPrompt -match 'Approval of a draft does not authorize sending it') $true 'Bachelor human communication rule'
+      Assert-Equal ($districtPrompt -match 'Do not create a capsule') $true 'Bachelor manual capsules rule'
+    }
     Assert-Equal (Test-Path -LiteralPath (Join-Path $districtRoot 'current.md')) $false "$district state remains absent"
     Assert-Equal (Test-Path -LiteralPath (Join-Path $districtRoot '.git')) $false "$district launch does not initialize Git"
     Remove-Item -LiteralPath $promptPath

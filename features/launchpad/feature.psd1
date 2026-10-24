@@ -5,6 +5,6 @@
     EntryPoint = 'launchpad.ps1'
     Handler = 'Invoke-MeowskyLaunchpadFeature'
     Help = 'help.txt'
-    Description = 'Open the income exploration workspace'
+    Description = 'Open the software opportunity workspace'
     SkipWorkRoot = $true
 }

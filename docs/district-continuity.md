@@ -39,4 +39,4 @@ PDFs and Word documents in `references/` are original context sources. Agents ma
 
 Only you communicate with people. An agent may research, prepare, draft, and document; it must never send messages, submit applications, publish posts, contact people, book meetings, or make commitments on your behalf. Approval of a draft does not authorize sending it.
 
-The `bach` and `launchpad` launch prompts explicitly direct the agent to read the district's `current.md` first, if present, then retrieve relevant older records. They do not rely on a parent instruction file. Applicable instructions in an independent district or project repository still apply.
+The `bach` launch prompt explicitly directs the agent to read the district's `current.md` first, if present, then retrieve relevant older records. The `launchpad` prompt uses its repository instructions and saved CLI briefing instead; this optional file convention is not its startup state. Neither command relies on a parent instruction file. Applicable instructions in an independent district or project repository still apply.

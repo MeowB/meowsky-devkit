@@ -24,7 +24,7 @@ Folder names do not create commands: tree remains `ptree`, workspace remains `.`
 | pdf | Viewer launch | paths |
 | codex | Launchers, global instruction source, and primary/fallback session-context prompts | paths, git, directory-tree, terminal |
 | bach | Bachelor district command, help, and startup context | workspace, paths |
-| launchpad | Income exploration district command, help, and startup context | workspace, paths |
+| launchpad | Software opportunity district command, help, and startup context | workspace, paths |
 | color | Explain retirement of project color overrides | none |
 | identity | Semantic theme loading, validation, planning, Windows/Terminal/VS Code UI/syntax adapters, and help | feature-loader (help resource) |
 | audit | Filesystem discovery, static checks, report/map rendering, input fingerprints, and saved stage state | feature-loader (help resource) |
@@ -41,7 +41,7 @@ Audit's `audit.ps1` handles CLI options and dispatch. `discovery.ps1` inventorie
 
 Workspace is the composition exception: it uses Codex context/launch functions, the tree panel and matrix dispatch. It checks those features before opening a window. All workspace panes restore terminal defaults on startup. Tree and Matrix no longer poll project-color files. Files, tree connectors, and ordinary Git metadata retain the default foreground.
 
-On Windows, `bach` and `launchpad` are registered features that select their own district under `WORK_HOME` and reuse the workspace's Terminal launcher. Both select the two-pane layout: one tab with Codex on the left (70%) and interactive PowerShell on the right (30%), both starting in their respective district, with initial focus on Codex. They share prompt-file creation and Codex/profile startup with the development layout, but require only the Codex feature and start no Matrix, status, tree, editor, or server commands. Their separate startup templates explicitly direct Codex to read `current.md` when present, retrieve older records only as needed, protect originals in `references/`, and leave all human communication to the user. The development `.` / `./` command retains its four-pane layout, orientation prompt, and current-directory behavior. Linux has no district launch commands in this stage.
+On Windows, `bach` and `launchpad` are registered features that select their own district under `WORK_HOME` and reuse the workspace's Terminal launcher. Both select the two-pane layout: one tab with Codex on the left (70%) and interactive PowerShell on the right (30%), both starting in their respective district, with initial focus on Codex. They share prompt-file creation and Codex/profile startup with the development layout, but require only the Codex feature and start no Matrix, status, tree, editor, or server commands. Bachelor's startup template directs Codex to read `current.md` when present and use relevant records while protecting original references and leaving human communication to the user. Launchpad's template directs Codex to read its repository instructions and run `node dist/cli.js briefing`; the right pane remains available for an optional `node dist/cli.js start` panel. The development `.` / `./` command retains its four-pane layout, orientation prompt, and current-directory behavior. Linux has no district launch commands in this stage.
 
 The optional state, dated-session, and manual-capsule file convention is documented in [district-continuity.md](district-continuity.md). It is user-maintained data, not devkit persistence code.
 
