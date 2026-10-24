@@ -8,31 +8,31 @@ These instructions apply when working in this repository. Keep session context s
 - Help the user understand and own the codebase. Prefer working software and clear explanations over process for its own sake.
 - State which folders and files the current task concerns.
 - If a proposed fix lacks a clear hypothesis, investigate the behavior before making speculative changes.
+- Keep this repository as the default boundary. A mention of another repository does not authorize exploring it. If another repository is needed, first state why and what you will read there. Treat that access as read-only until a separate edit batch is approved for that repository.
 
 ## Manual-first development
 
 The user implements by default. Prefer exact guidance for a change involving one or two files, a small UI or copy change, a useful learning exercise, or work likely to take the user less than 20 minutes. Give the file and line, the relevant function or section, the change to make, a snippet when useful, and what to test.
 
-Codex implementation has a stronger multiplier for work spanning three or more files, unclear behavior, routing or shared state, repetitive edits, meaningful refactoring, or test and type fixes across files. An explicit request to implement or edit files also qualifies, subject to the edit gate below.
+Codex implementation is useful for work spanning three or more files, unclear behavior, routing or shared state, repetitive edits, meaningful refactoring, or test and type fixes across files. An explicit request to implement or edit files also qualifies, subject to the edit gate below.
 
-Classify proposed work as follows:
+In a review, recommend the next concrete action, its evidence, and how to verify it. Do not make the choice of who writes the code the main recommendation unless the user asks. When model choice would materially affect speed or quality, suggest a model and reasoning effort with a brief reason; otherwise keep the current setting. A model suggestion does not change settings or authorize edits.
 
-- **LOW:** Guide the user; do not edit.
-- **MEDIUM:** Guide first. Edit only if the user explicitly chooses Codex implementation.
-- **HIGH:** Recommend Codex implementation when it has a strong engineering multiplier, then obtain explicit approval before editing.
+## Questions and decisions
+
+Ask only for information that could change the work. Ask early, group related questions, and keep each question short. Continue useful read-only work while an answer is pending. Give the user a reasonable opportunity to reply before using a stated assumption for an optional question. Silence, a queued question, or a Goal continuation never counts as approval.
 
 ## Edit gate
 
-Before modifying any files, present and wait for explicit confirmation of this batch:
+Before modifying any files, present a readable proposal in a normal message:
 
-- **Token value:** HIGH, MEDIUM, or LOW.
-- **Multiplier:** Why Codex is or is not better than manual work.
-- **Recommendation:** Codex implements or user implements manually.
-- **Files:** Exact files in the batch.
-- **Intended edit:** What will change in those files.
-- **Manual path:** How the user could make the change.
+- **Scope:** Active repository and any separate repository involved.
+- **Files:** Exact files in the edit batch.
+- **Intended edit:** What will change in those files and why.
+- **Verification:** How the result will be checked.
+- **Manual path:** How the user could make a small change, when useful.
 
-Approval covers only the described edit batch. If the files, scope, or intent changes, present a new gate and wait again. Do not treat approval for one batch as approval for a later batch.
+After the proposal, ask a short confirmation question that refers to it, such as "Approve the edit batch above?" Do not squeeze the proposal into a question title or its options. Wait for explicit confirmation before editing, including during a Goal. Approval covers only the described edit batch. If the files, scope, or intent changes, present a revised proposal and wait again. Do not treat approval for one batch as approval for a later batch.
 
 ## Changes and architecture
 
