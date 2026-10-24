@@ -6,7 +6,7 @@
 
 Each PowerShell feature owns implementation, `help.txt` and `feature.psd1`. Manifest fields are `Name`, `Command`, `Aliases`, `EntryPoint`, `Handler`, `Help`, and `Description`. `Handler` names a function accepting `Target` and `WorkRoot`. Color is an explanatory compatibility command; project color overrides are retired.
 
-Identity and Audit use two optional manifest flags: `SkipWorkRoot` bypasses work-root creation and passes no work root; `AcceptsArguments` forwards trailing CLI tokens in the handler's `Arguments` array. Features without those flags retain their existing dispatch behavior. `SkipWorkRoot` describes dispatch only; Identity may install a theme when explicitly requested without `--dry-run`.
+Identity, Audit, and Animate use two optional manifest flags: `SkipWorkRoot` bypasses work-root creation and passes no work root; `AcceptsArguments` forwards trailing CLI tokens in the handler's `Arguments` array. Features without those flags retain their existing dispatch behavior. `SkipWorkRoot` describes dispatch only; Identity may install a theme when explicitly requested without `--dry-run`.
 
 The C feature uses `AcceptsAction` to receive the original command spelling, `CaseSensitive` to reject differently capitalized CLI actions, and `SkipWorkRoot` because builds act in the current directory. Its direct PowerShell functions check their own invocation spelling.
 
@@ -30,7 +30,7 @@ Folder names do not create commands: tree remains `ptree`, workspace remains `.`
 | audit | Filesystem discovery, static checks, report/map rendering, input fingerprints, and saved stage state | feature-loader (help resource) |
 | review | Current-audit gate, interactive read-only Codex launch, explicit validated JSON handoff, report/map/plan enrichment | audit discovery, reporting and state; codex launcher |
 | refactor | Binds human approval to full-review findings, runs read-only planning before an approved write session, and validates completion against changed-file scope | audit state and plan; review handoff; codex launcher |
-| matrix | Animation | terminal |
+| animate | Matrix and cat animations, frame art, and rendering | terminal |
 | workspace | Layout and status banner | feature-loader, terminal, git |
 
 For a feature change, read that directory and the listed core files. Tree and Codex share enumeration but retain separate rendering. Terminal core only restores terminal-default foreground/background with ANSI SGR 39/49. Theme definitions own colors. Runtime panels use standard ANSI roles from the active palette: green Matrix glyphs/header, blue folders, cyan project path, and green/yellow clean/dirty working-tree status. Each colored segment restores the default foreground; panels do not load project colors. No generic configuration or event framework is introduced.
@@ -39,7 +39,7 @@ Audit's `audit.ps1` handles CLI options and dispatch. `discovery.ps1` inventorie
 
 `.meowsky/state.json` version 1 stores the resolved target, audit status, completion time, SHA-256 fingerprint, coverage label, output hashes, review status, and an active review session ID/mode when launched. Completed full review records its PLAN.md hash. Refactor state adds selected approved findings, exact permitted files, approved concrete plan, execution session, approved-file baselines, and a fingerprint of discovered content outside the permitted scope. A write session may mark audit status stale; completion never silently reruns audit. The fingerprint covers inventoried file contents and paths, directory paths, recorded skips, warnings, and exclusion rules through `.meowskyignore`. Review recomputes it without Git. Excluded directory contents are outside this fingerprint and remain a stated coverage limit. Refactor scope checks detect unexpected discovered-file changes after execution; they cannot enforce edits within a permitted file or verify the truth of model-reported test results.
 
-Workspace is the composition exception: its Windows development layout uses Codex context/launch functions and matrix dispatch, and checks those features before opening a window. The tree panel remains a standalone feature. All workspace panes restore terminal defaults on startup. Tree and Matrix no longer poll project-color files. Files, tree connectors, and ordinary Git metadata retain the default foreground.
+Workspace is the composition exception: its Windows development layout uses Codex context/launch functions and `animate matrix` dispatch, and checks those features before opening a window. The tree panel remains a standalone feature. All workspace panes restore terminal defaults on startup. Tree and Matrix no longer poll project-color files. Files, tree connectors, and ordinary Git metadata retain the default foreground. `animate cat` runs in the current pane and owns its Unicode frame art, varied gestures, resize handling, and terminal cleanup under `features/animate/`.
 
 `core/paths.ps1` and `core/paths.sh` also prepare the disposable project workspace. Project navigation and Codex/workspace launches create `.meowsky/` at the Git root when available, or at the opened directory otherwise, and ensure the root `.gitignore` has an equivalent of `/.meowsky/` without replacing existing rules. Audit also prepares a Git repository root before writing its generated reports; for other targets it retains its existing ignore behavior. This folder is excluded from audit discovery and is not a source of maintained application behavior. Removing it discards audit/review/refactor state; rerun `meowsky audit` before using those workflows again.
 
@@ -84,7 +84,7 @@ bash tests/verify-linux.sh
 
 Suites compare retained behavior with the original monoliths at the recorded pre-refactor Git revision, with explicit assertions for the intentional retirement of color overrides. Override that baseline through PowerShell's `BaselineRevision` parameter or shell's `MEOWSKY_BASELINE_REVISION` variable if needed. Process boundaries are mocked: no GUI, installer, Codex session or live animation is started.
 
-Manually verify Windows Terminal geometry, matrix resize/Ctrl+C, theme colors and foreground restoration across all panes, actual Markdown/PDF previews and real Codex startup. apt, tmux and xdg-open integration requires Linux. Automated checks cover dispatch, output, persistence and launch scripts.
+Manually verify Windows Terminal geometry, Matrix and cat resize/Ctrl+C, cat proportions and gestures, theme colors and foreground restoration across all panes, actual Markdown/PDF previews and real Codex startup. apt, tmux and xdg-open integration requires Linux. Automated checks cover dispatch, output, persistence and launch scripts.
 
 Theme discovery supports flat `themes/<id>.json` and folder `themes/<id>/<id>.json` definitions, rejecting duplicate IDs across the two layouts. Wallpapers and icons beside a definition are visual references only; the runtime reads JSON alone.
 

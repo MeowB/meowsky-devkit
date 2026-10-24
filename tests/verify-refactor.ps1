@@ -69,9 +69,9 @@ try {
   Assert-Equal ($script:MeowskyCommands['identity'].SkipWorkRoot) $true 'Identity skips work-root dispatch'
   Assert-Equal ($script:MeowskyCommands['audit'].SkipWorkRoot) $true 'Audit skips work-root dispatch'
   Assert-Equal ($script:MeowskyCommands['.'].SkipWorkRoot) $true 'Current-directory workspace skips work-root dispatch'
-  Assert-Equal (@($script:MeowskyCommands.Values | Where-Object { $_.SkipWorkRoot }).Count) 10 'Identity, Audit workflow, workspace, and districts skip work-root dispatch'
-  Assert-Equal (@($script:MeowskyCommands.Values | Where-Object { $_.AcceptsArguments }).Count) 4 'Identity and Audit workflow accept extra arguments'
-  foreach ($command in @('codex', 'color', 'identity', 'audit', 'review', 'refactor', 'matrix', 'ptree', 'md', 'markdown', 'pdf', '.', './', 'bach', 'launchpad')) {
+  Assert-Equal (@($script:MeowskyCommands.Values | Where-Object { $_.SkipWorkRoot }).Count) 11 'Identity, Audit workflow, Animate, workspace, and districts skip work-root dispatch'
+  Assert-Equal (@($script:MeowskyCommands.Values | Where-Object { $_.AcceptsArguments }).Count) 5 'Identity, Audit workflow, and Animate accept extra arguments'
+  foreach ($command in @('codex', 'color', 'identity', 'audit', 'review', 'refactor', 'animate', 'ptree', 'md', 'markdown', 'pdf', '.', './', 'bach', 'launchpad')) {
     $manifest = $script:MeowskyCommands[$command]
     $expectedHelp = (Get-Content -Raw (Join-Path $manifest.Directory $manifest.Help)).TrimEnd()
     Assert-Equal ((meowsky $command -h).TrimEnd()) $expectedHelp "$command -h"
@@ -187,7 +187,7 @@ try {
   $oldHelp = $baselineAst.Find({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Show-MeowskyHelp' }, $true).Extent.Text
   $legacyHelp = ($globalHelp -split "`r?`n" | Where-Object { $_ -notmatch '^\s+meowsky (identity|audit|review|refactor)' }) -join "`n"
   $expectedLegacyHelp = ((& { . ([scriptblock]::Create($oldHelp)); Show-MeowskyHelp }).TrimEnd()) -replace "`r`n", "`n"
-  $filter = { $_ -notmatch '^\s+meowsky color|^\s+meowsky (dev|bach|launchpad)|^\s+meowsky\s+(Change to the work root|Ensure the workspace)|^\s+The work root is|^\s+otherwise \$HOME\\work|^\s+then under the work root|^\s+WORK_HOME must|^\s+Bare meowsky|^\s+dev/, bach/, and launchpad/|^\s+File and Codex paths|^\s+meowsky \. and ./ use|^\s+current directory with Codex,|^\s+active identity theme|^\s+dev\s+Compatibility alias|AUDIT.md, and state.json|^\s+(?:meowsky )?:C(Build|Run)\b|^\s+(Build main\.c|Build, then run|Same terminal (build|run))' }
+  $filter = { $_ -notmatch '^\s+meowsky color|^\s+meowsky (dev|bach|launchpad|matrix|animate)|^\s+meowsky\s+(Change to the work root|Ensure the workspace)|^\s+The work root is|^\s+otherwise \$HOME\\work|^\s+then under the work root|^\s+WORK_HOME must|^\s+Bare meowsky|^\s+dev/, bach/, and launchpad/|^\s+File and Codex paths|^\s+meowsky \. and ./ use|^\s+current directory with Codex,|^\s+active identity theme|^\s+dev\s+Compatibility alias|AUDIT.md, and state.json|^\s+(?:meowsky )?:C(Build|Run)\b|^\s+(Build main\.c|Build, then run|Same terminal (build|run))' }
   Assert-Equal (($legacyHelp -split "`n" | Where-Object $filter) -join "`n") (($expectedLegacyHelp -split "`n" | Where-Object $filter) -join "`n") 'Global help preserved except retired colors, Identity, and Audit'
   Assert-Equal ($globalHelp -match '(?m)^\s+dev\s+Compatibility alias') $false 'Removed standalone dev alias absent from help'
   $oldTree = $baselineAst.Find({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'ptree' }, $true).Extent.Text
@@ -245,7 +245,7 @@ try {
   }
   Assert-Equal $script:themeResets 0 'Color compatibility command changes no console colors'
   Assert-Equal ([Convert]::ToBase64String([IO.File]::ReadAllBytes($legacyPath))) $legacyBytes 'Legacy colors remain untouched'
-  foreach ($file in @('features/codex/codex.ps1', 'features/workspace/workspace.ps1', 'features/tree/tree.ps1', 'features/matrix/matrix.ps1')) {
+  foreach ($file in @('features/codex/codex.ps1', 'features/workspace/workspace.ps1', 'features/tree/tree.ps1', 'features/animate/matrix.ps1', 'features/animate/cat.ps1')) {
     Assert-Equal ((Get-Content -Raw (Join-Path $repo $file)) -match 'ForegroundColor|Apply-MeowskyConsoleColor|Get-MeowskyProjectConsoleColor|Apply-MeowskyProjectColor') $false "No palette override in $file"
   }
 
@@ -262,6 +262,7 @@ try {
   function Clear-Host {}
   function Start-Sleep { param($Milliseconds) }
   function Start-MeowskyMatrix { $script:matrixStarted = $true }
+  function Start-MeowskyCat { $script:catStarted = $true }
   Assert-Throws { meowsky md } 'Usage: meowsky md <file.md>'
   Assert-Throws { meowsky pdf } 'Usage: meowsky pdf <file.pdf>'
   meowsky md a.md
@@ -271,8 +272,13 @@ try {
   meowsky markdown a.md
   meowsky pdf sample.pdf
   Assert-Equal $script:opened (Join-Path $project 'sample.pdf') 'PDF viewer'
-  meowsky matrix
+  meowsky animate matrix
   Assert-Equal $script:matrixStarted $true 'Matrix dispatch'
+  meowsky animate cat
+  Assert-Equal $script:catStarted $true 'Cat dispatch'
+  Assert-Throws { meowsky animate } 'Usage: meowsky animate matrix|cat'
+  Assert-Throws { meowsky animate dog } 'Usage: meowsky animate matrix|cat'
+  Assert-Throws { meowsky animate cat extra } 'Usage: meowsky animate matrix|cat'
   function Resolve-MeowskyCodexCommand { return $null }
   Assert-Throws { meowsky codex } 'codex was not found. Install the Codex CLI before using meowsky codex.'
   function Resolve-MeowskyCodexCommand { 'Invoke-TestCodex' }
@@ -309,7 +315,7 @@ try {
     Assert-Equal ($pane -match 'Reset-MeowskyTerminalColors') $true 'Every pane restores terminal theme defaults'
     Assert-Equal ($pane -match 'Apply-MeowskyConsoleColor|Apply-MeowskyProjectColor') $false 'No generated pane color override'
   }
-  Assert-Equal ($encoded[1] -match 'meowsky matrix') $true 'Matrix pane preserved'
+  Assert-Equal ($encoded[1] -match 'meowsky animate matrix') $true 'Matrix pane preserved'
   Assert-Equal ($encoded[2] -match 'Start-MeowskyStatusPanel') $true 'Status pane preserved'
   Assert-Equal (($encoded -join "`n") -match 'Start-MeowskyTreePanel') $false 'No tree pane in development layout'
   $developmentPanes = $encoded
@@ -438,8 +444,8 @@ try {
   $promptPath = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String($promptPathEncoded))
   Remove-Item -LiteralPath $promptPath
   # Removing a composed feature blocks workspace, not ordinary commands.
-  $script:MeowskyFeatures.Remove('matrix')
-  Assert-Throws { meowsky ./ } "Workspace requires the 'matrix' feature."
+  $script:MeowskyFeatures.Remove('animate')
+  Assert-Throws { meowsky ./ } "Workspace requires the 'animate' feature."
   $null = Capture { meowsky ptree 1 }
   $isolatedRuntime = Join-Path $fixture 'isolated'
   New-Item -ItemType Directory -Path (Join-Path $isolatedRuntime 'features') -Force | Out-Null

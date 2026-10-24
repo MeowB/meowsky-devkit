@@ -92,8 +92,3 @@ function Start-MeowskyMatrix {
       }
     }
   }
-
-function Invoke-MeowskyMatrixFeature {
-  param([string]$Target, [string]$WorkRoot)
-  Start-MeowskyMatrix
-}

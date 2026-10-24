@@ -27,7 +27,8 @@ SYNOPSIS
     meowsky refactor [<directory>] --plan-complete <plan.json>
     meowsky refactor [<directory>] --execute
     meowsky refactor [<directory>] --complete <completion.json>
-    meowsky matrix
+    meowsky animate matrix
+    meowsky animate cat
     meowsky ptree [<level>]
     meowsky md <file.md>
     meowsky markdown <file.md>
@@ -76,7 +77,8 @@ COMMANDS
     meowsky refactor --plan-complete  Confirm a validated concrete plan.
     meowsky refactor --execute Launch approved interactive Codex write session.
     meowsky refactor --complete Validate changes and verification handoff.
-    meowsky matrix          Run the animated matrix display; press Ctrl+C to stop.
+    meowsky animate matrix  Run the Matrix animation; press Ctrl+C to stop.
+    meowsky animate cat     Run the animated terminal cat; press Ctrl+C to stop.
     meowsky ptree [level]   Print the current directory tree to the given depth;
                             default is 3 levels. Level must be a positive integer.
     meowsky md <file>       Render Markdown to temporary HTML with Pandoc and

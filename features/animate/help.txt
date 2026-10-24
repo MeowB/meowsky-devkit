@@ -1,0 +1,9 @@
+meowsky animate matrix
+meowsky animate cat [standing|seated]
+
+Matrix runs as before; stop it with Ctrl+C.
+Cat currently shows a still shape preview. Seated is the default pose.
+The cat uses Unicode blocks in the terminal's default foreground color.
+Press any key to close the preview. A pane smaller than the art shows its required size.
+
+Use -h or -Help after animate to show this help (PowerShell).

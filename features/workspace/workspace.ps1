@@ -39,7 +39,7 @@ function Start-MeowskyWorkspaceLayout {
   if ($Layout -eq 'TwoPane') {
     Assert-MeowskyFeatures -Names @('codex')
   } else {
-    Assert-MeowskyFeatures -Names @('codex', 'matrix')
+    Assert-MeowskyFeatures -Names @('codex', 'animate')
   }
     $root = $Root
 
@@ -80,7 +80,7 @@ if (Resolve-MeowskyCodexCommand) {
       )
     } else {
       $gitStatusEncoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($gitStatus))
-      $idleScript = "$profilePrelude`r`nmeowsky matrix`r`n"
+      $idleScript = "$profilePrelude`r`nmeowsky animate matrix`r`n"
       $meowskyScript = @(
         $profilePrelude,
         "`$gitStatus = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('$gitStatusEncoded'))",

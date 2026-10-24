@@ -45,7 +45,7 @@ This setup is meant to feel like:
 |   |-- color/
 |   |-- identity/
 |   |-- launchpad/
-|   |-- matrix/
+|   |-- animate/
 |   |-- md/
 |   |-- pdf/
 |   |-- tree/
@@ -154,7 +154,7 @@ For C programs in the current directory, run `:CBuild` or `:CRun` in PowerShell.
 When `meowsky ./` runs in any folder, it opens a fullscreen Windows Terminal layout with Codex on the left (40%) and Matrix and status on the right (60%):
 
 - a Codex session given the dynamic context from [features/codex/codex-orientation.md](features/codex/codex-orientation.md); durable behavior comes from Codex's global and project `AGENTS.md` files
-- a Matrix animation pane that can become a shell at the project root with `Ctrl+C`
+- a Matrix animation pane (`meowsky animate matrix`) that can become a shell at the project root with `Ctrl+C`
 - a compact status pane
 
 ## PowerShell Command Reference
@@ -195,7 +195,8 @@ When `meowsky ./` runs in any folder, it opens a fullscreen Windows Terminal lay
 | `meowsky identity apply <id> --target vscode` | Back up VS Code settings, merge UI/syntax colors, and set visual preferences. |
 | `meowsky color <color>` | Compatibility command; changes no colors or settings. |
 | `meowsky color reset` or `meowsky color default` | Compatibility command; saved project colors are ignored. |
-| `meowsky matrix` | Run the animated matrix display; stop it with `Ctrl+C`. |
+| `meowsky animate matrix` | Run the Matrix animation; stop it with `Ctrl+C`. |
+| `meowsky animate cat` | Run the animated terminal cat; stop it with `Ctrl+C`. |
 | `meowsky ptree [level]` | Print the current directory tree; defaults to 3 levels and accepts a positive integer such as `15`. |
 | `meowsky md <file.md>` or `meowsky markdown <file.md>` | Render Markdown with Pandoc and open the HTML preview. |
 | `meowsky pdf <file.pdf>` | Open a PDF in the default viewer. |
