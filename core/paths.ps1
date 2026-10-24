@@ -57,3 +57,61 @@ function Resolve-MeowskyPath {
 
     throw "Path was not found: $Target"
   }
+
+function Get-MeowskyProjectRoot {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    $directory = (Resolve-Path -LiteralPath $Path -ErrorAction Stop).Path
+    if (-not (Test-Path -LiteralPath $directory -PathType Container)) {
+      throw "Project path is not a directory: $directory"
+    }
+    if (Get-Command git -ErrorAction SilentlyContinue) {
+      $gitRoot = $null
+      try { $gitRoot = (& git -C $directory rev-parse --show-toplevel 2>$null) } catch { }
+      if ($LASTEXITCODE -eq 0 -and $gitRoot) {
+        return (Resolve-Path -LiteralPath ($gitRoot | Select-Object -First 1)).Path
+      }
+    }
+    return $directory
+  }
+
+function Ensure-MeowskyProjectWorkspace {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    $projectRoot = Get-MeowskyProjectRoot -Path $Path
+    $workspacePath = Join-Path $projectRoot '.meowsky'
+    $ignorePath = Join-Path $projectRoot '.gitignore'
+
+    if (Test-Path -LiteralPath $workspacePath) {
+      $workspaceItem = Get-Item -LiteralPath $workspacePath -Force -ErrorAction Stop
+      if (-not $workspaceItem.PSIsContainer -or ($workspaceItem.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+        throw "Project workspace must be a regular directory: $workspacePath"
+      }
+    }
+    if (Test-Path -LiteralPath $ignorePath) {
+      $ignoreItem = Get-Item -LiteralPath $ignorePath -Force -ErrorAction Stop
+      if ($ignoreItem.PSIsContainer -or ($ignoreItem.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+        throw "Project .gitignore must be a regular file: $ignorePath"
+      }
+    }
+
+    if (-not (Test-Path -LiteralPath $workspacePath)) {
+      $null = New-Item -ItemType Directory -Path $workspacePath -ErrorAction Stop
+    }
+    if (-not (Test-Path -LiteralPath $ignorePath)) {
+      [IO.File]::WriteAllText($ignorePath, "/.meowsky/`n", [Text.UTF8Encoding]::new($false))
+      return $projectRoot
+    }
+
+    $reader = New-Object IO.StreamReader($ignorePath, $true)
+    try {
+      $content = $reader.ReadToEnd()
+      $encoding = $reader.CurrentEncoding
+    } finally { $reader.Dispose() }
+    if ($content -notmatch '(?m)^[ \t]*/?\.meowsky/?[ \t]*\r?$') {
+      $newline = if ($content.Contains("`r`n")) { "`r`n" } elseif ($content.Contains("`n")) { "`n" } else { [Environment]::NewLine }
+      $prefix = if ($content -and -not $content.EndsWith("`n")) { $newline } else { '' }
+      [IO.File]::AppendAllText($ignorePath, $prefix + '/.meowsky/' + $newline, $encoding)
+    }
+    return $projectRoot
+  }

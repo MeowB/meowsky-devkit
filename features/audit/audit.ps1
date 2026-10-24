@@ -77,7 +77,11 @@ function Invoke-MeowskyAuditFeature {
 
   if ($promptRequested) { return (Get-MeowskyAuditRefactorPrompt -Root $root -Ids $promptIds) }
 
-  Add-MeowskyAuditGitignoreEntry -Root $root
+  if (Test-Path -LiteralPath (Join-Path $root '.git')) {
+    $null = Ensure-MeowskyProjectWorkspace -Path $root
+  } else {
+    Add-MeowskyAuditGitignoreEntry -Root $root
+  }
   $history = @()
   try {
     $previous = Read-MeowskyAuditState -Root $root

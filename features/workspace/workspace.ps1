@@ -1,6 +1,7 @@
 function Invoke-MeowskyWorkspaceFeature {
   param([string]$Target, [string]$WorkRoot)
   $root = (Get-Location).Path
+  $null = Ensure-MeowskyProjectWorkspace -Path $root
   $today = Get-Date -Format 'yyyy-MM-dd'
   $promptTree = Get-MeowskyPromptTree -Root $root
   $gitStatus = Get-MeowskyGitSummary -Root $root
@@ -16,6 +17,7 @@ function Invoke-MeowskyDistrictWorkspace {
   )
   $workRoot = Ensure-MeowskyWorkspace
   $root = Join-Path $workRoot $District
+  $null = Ensure-MeowskyProjectWorkspace -Path $root
   $today = Get-Date -Format 'yyyy-MM-dd'
   $promptTree = Get-MeowskyPromptTree -Root $root
   $gitStatus = Get-MeowskyGitSummary -Root $root

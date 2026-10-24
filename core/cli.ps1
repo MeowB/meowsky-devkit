@@ -40,11 +40,13 @@ function meowsky {
   }
   if ($Action) {
     if (Test-Path -LiteralPath $Action) {
+      $null = Ensure-MeowskyProjectWorkspace -Path $Action
       Set-Location $Action
       return
     }
     $workPath = Join-Path $workRoot $Action
     if (Test-Path -LiteralPath $workPath) {
+      $null = Ensure-MeowskyProjectWorkspace -Path $workPath
       Set-Location $workPath
       return
     }

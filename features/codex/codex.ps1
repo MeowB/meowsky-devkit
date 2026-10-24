@@ -192,6 +192,7 @@ function Invoke-MeowskyCodexFeature {
       }
       $codexTarget = if ($Target) { $Target } else { '.' }
       $root = Resolve-MeowskyPath -Target $codexTarget -Root $workRoot
+      $null = Ensure-MeowskyProjectWorkspace -Path $root
       $today = Get-Date -Format 'yyyy-MM-dd'
       $promptTree = Get-MeowskyPromptTree -Root $root
       $gitStatus = Get-MeowskyGitSummary -Root $root

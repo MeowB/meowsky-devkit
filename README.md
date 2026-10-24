@@ -84,6 +84,8 @@ Run it from the checkout you want to keep. It installs or verifies the core tool
 
 On Windows, the workspace defaults to `C:\meowsky`. To use another workspace, set the user-level `WORK_HOME` to an absolute path and open a new terminal.
 
+When you enter a project with `meowsky <directory>` or open it with `meowsky codex` or `meowsky .` / `./`, Meowsky prepares a root `.meowsky/` folder for temporary development inputs and outputs and adds `/.meowsky/` to the project's `.gitignore` when needed. It uses the Git root when present; otherwise it uses the opened directory. Put screenshots, logs, scratch scripts, plans, and handoffs there. Keep maintained source, tests, documentation, configuration, and required assets in their normal locations. You can delete `.meowsky/` without affecting the maintained project; audit/review/refactor state inside it must then be regenerated with `meowsky audit`. Existing projects receive the folder and ignore rule the next time they are opened through Meowsky. Existing tracked `.meowsky/` files remain tracked until you remove them from Git's index yourself.
+
 Rerunning the installer from the same or a relocated checkout repairs its managed PATH and profile entries without duplicating them. It preserves unrelated profile content and backs up an existing profile before changing it. It updates only known Meowsky-managed Neovim files; an unrelated or manually changed editor config and an unmarked Meowsky-style profile import require review rather than automatic replacement. To explicitly check package upgrades too, run:
 
 ```powershell

@@ -65,11 +65,11 @@ try {
       Assert-Equal $inputColors.$name ([string][char]27 + '[' + $expectedInputColors[$name] + 'm') "PowerShell input $name follows ANSI palette"
     }
   }
-  Assert-Equal $script:MeowskyCommands.Count 15 'Registered commands and aliases'
+  Assert-Equal $script:MeowskyCommands.Count 17 'Registered commands and aliases'
   Assert-Equal ($script:MeowskyCommands['identity'].SkipWorkRoot) $true 'Identity skips work-root dispatch'
   Assert-Equal ($script:MeowskyCommands['audit'].SkipWorkRoot) $true 'Audit skips work-root dispatch'
   Assert-Equal ($script:MeowskyCommands['.'].SkipWorkRoot) $true 'Current-directory workspace skips work-root dispatch'
-  Assert-Equal (@($script:MeowskyCommands.Values | Where-Object { $_.SkipWorkRoot }).Count) 8 'Identity, Audit workflow, workspace, and districts skip work-root dispatch'
+  Assert-Equal (@($script:MeowskyCommands.Values | Where-Object { $_.SkipWorkRoot }).Count) 10 'Identity, Audit workflow, workspace, and districts skip work-root dispatch'
   Assert-Equal (@($script:MeowskyCommands.Values | Where-Object { $_.AcceptsArguments }).Count) 4 'Identity and Audit workflow accept extra arguments'
   foreach ($command in @('codex', 'color', 'identity', 'audit', 'review', 'refactor', 'matrix', 'ptree', 'md', 'markdown', 'pdf', '.', './', 'bach', 'launchpad')) {
     $manifest = $script:MeowskyCommands[$command]
@@ -123,6 +123,59 @@ try {
   meowsky project
   $project = (Get-Location).Path
   Assert-Equal $project (Join-Path $env:WORK_HOME 'project') 'Project navigation'
+  $projectWorkspace = Join-Path $project '.meowsky'
+  $projectIgnore = Join-Path $project '.gitignore'
+  Assert-Equal (Test-Path -LiteralPath $projectWorkspace -PathType Container) $true 'Project navigation creates disposable workspace'
+  Assert-Equal ((Get-Content -Raw -LiteralPath $projectIgnore).Trim()) '/.meowsky/' 'Project navigation creates root ignore rule'
+  Set-Content -LiteralPath (Join-Path $projectWorkspace 'user-input.txt') -Value 'preserve this input'
+  $ignoreHash = (Get-FileHash -LiteralPath $projectIgnore -Algorithm SHA256).Hash
+  $null = Ensure-MeowskyProjectWorkspace -Path $project
+  Assert-Equal (Get-FileHash -LiteralPath $projectIgnore -Algorithm SHA256).Hash $ignoreHash 'Repeated project open does not duplicate ignore rule'
+  Assert-Equal (Get-Content -Raw -LiteralPath (Join-Path $projectWorkspace 'user-input.txt')) "preserve this input`r`n" 'Repeated project open preserves user input'
+
+  $gitProject = Join-Path $fixture 'tracked project'
+  New-Item -ItemType Directory -Path (Join-Path $gitProject 'src') -Force | Out-Null
+  & git -C $gitProject init --quiet
+  Assert-Equal $LASTEXITCODE 0 'Git fixture initializes'
+  Set-Content -LiteralPath (Join-Path $gitProject 'README.md') -Value '# Maintained project'
+  Set-Content -LiteralPath (Join-Path $gitProject 'src/main.ps1') -Value 'Write-Output ready'
+  $readmeHash = (Get-FileHash -LiteralPath (Join-Path $gitProject 'README.md') -Algorithm SHA256).Hash
+  $runBeforeDeletion = (& (Join-Path $gitProject 'src/main.ps1')) -join "`n"
+  $null = Ensure-MeowskyProjectWorkspace -Path (Join-Path $gitProject 'src')
+  Assert-Equal (Test-Path -LiteralPath (Join-Path $gitProject '.meowsky') -PathType Container) $true 'Nested open uses Git root'
+  Assert-Equal (Test-Path -LiteralPath (Join-Path $gitProject 'src/.meowsky')) $false 'Nested open creates no nested workspace'
+  Set-Content -LiteralPath (Join-Path $gitProject '.meowsky/reference.txt') -Value 'referenced input'
+  & git -C $gitProject check-ignore --quiet .meowsky/reference.txt
+  Assert-Equal $LASTEXITCODE 0 'Git ignores project workspace contents'
+  Assert-Equal (Get-Content -Raw -LiteralPath (Join-Path $gitProject '.meowsky/reference.txt')) "referenced input`r`n" 'Explicitly referenced ignored file remains readable'
+  Remove-Item -LiteralPath (Join-Path $gitProject '.meowsky') -Recurse
+  Assert-Equal (Get-FileHash -LiteralPath (Join-Path $gitProject 'README.md') -Algorithm SHA256).Hash $readmeHash 'Deleting workspace preserves maintained project'
+  Assert-Equal ((& (Join-Path $gitProject 'src/main.ps1')) -join "`n") $runBeforeDeletion 'Maintained project still runs after workspace deletion'
+  $null = Ensure-MeowskyProjectWorkspace -Path $gitProject
+  Assert-Equal (Test-Path -LiteralPath (Join-Path $gitProject '.meowsky') -PathType Container) $true 'Next open recreates deleted workspace'
+  Assert-Equal ((Get-Content -Raw -LiteralPath (Join-Path $gitProject '.gitignore') | Select-String -Pattern '/.meowsky/' -AllMatches).Matches.Count) 1 'Reopen does not duplicate Git ignore rule'
+
+  $existingRuleProject = Join-Path $fixture 'existing ignore rule'
+  New-Item -ItemType Directory -Path $existingRuleProject | Out-Null
+  $existingRulePath = Join-Path $existingRuleProject '.gitignore'
+  [IO.File]::WriteAllText($existingRulePath, "node_modules/`n.meowsky/`n", [Text.UTF8Encoding]::new($false))
+  $existingRuleHash = (Get-FileHash -LiteralPath $existingRulePath -Algorithm SHA256).Hash
+  $null = Ensure-MeowskyProjectWorkspace -Path $existingRuleProject
+  Assert-Equal (Get-FileHash -LiteralPath $existingRulePath -Algorithm SHA256).Hash $existingRuleHash 'Equivalent existing ignore rule is preserved'
+
+  $appendRuleProject = Join-Path $fixture 'append ignore rule'
+  New-Item -ItemType Directory -Path $appendRuleProject | Out-Null
+  [IO.File]::WriteAllText((Join-Path $appendRuleProject '.gitignore'), 'node_modules/', [Text.UTF8Encoding]::new($false))
+  $null = Ensure-MeowskyProjectWorkspace -Path $appendRuleProject
+  Assert-Equal ((Get-Content -Raw -LiteralPath (Join-Path $appendRuleProject '.gitignore')).Replace("`r`n", "`n")) "node_modules/`n/.meowsky/`n" 'New ignore rule preserves existing rule without final newline'
+
+  $blockedProject = Join-Path $fixture 'blocked workspace'
+  New-Item -ItemType Directory -Path $blockedProject | Out-Null
+  Set-Content -LiteralPath (Join-Path $blockedProject '.meowsky') -Value 'user file'
+  Assert-Throws { $null = Ensure-MeowskyProjectWorkspace -Path $blockedProject } "Project workspace must be a regular directory: $blockedProject\.meowsky"
+  Assert-Equal (Get-Content -Raw -LiteralPath (Join-Path $blockedProject '.meowsky')) "user file`r`n" 'Conflicting user file remains intact'
+  Assert-Equal (Test-Path -LiteralPath (Join-Path $blockedProject '.gitignore')) $false 'Conflict creates no ignore file'
+
   Assert-Equal (Resolve-MeowskyPath 'project/a.md' $env:WORK_HOME) (Join-Path $project 'a.md') 'Work-root path fallback'
   Assert-Throws { meowsky missing-project } 'Path was not found: missing-project'
   foreach ($level in @('0', '-1', 'abc')) {
@@ -134,7 +187,7 @@ try {
   $oldHelp = $baselineAst.Find({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Show-MeowskyHelp' }, $true).Extent.Text
   $legacyHelp = ($globalHelp -split "`r?`n" | Where-Object { $_ -notmatch '^\s+meowsky (identity|audit|review|refactor)' }) -join "`n"
   $expectedLegacyHelp = ((& { . ([scriptblock]::Create($oldHelp)); Show-MeowskyHelp }).TrimEnd()) -replace "`r`n", "`n"
-  $filter = { $_ -notmatch '^\s+meowsky color|^\s+meowsky (dev|bach|launchpad)|^\s+meowsky\s+(Change to the work root|Ensure the workspace)|^\s+The work root is|^\s+otherwise \$HOME\\work|^\s+then under the work root|^\s+WORK_HOME must|^\s+Bare meowsky|^\s+dev/, bach/, and launchpad/|^\s+File and Codex paths|^\s+meowsky \. and ./ use|^\s+active identity theme|^\s+dev\s+Compatibility alias|AUDIT.md, and state.json' }
+  $filter = { $_ -notmatch '^\s+meowsky color|^\s+meowsky (dev|bach|launchpad)|^\s+meowsky\s+(Change to the work root|Ensure the workspace)|^\s+The work root is|^\s+otherwise \$HOME\\work|^\s+then under the work root|^\s+WORK_HOME must|^\s+Bare meowsky|^\s+dev/, bach/, and launchpad/|^\s+File and Codex paths|^\s+meowsky \. and ./ use|^\s+active identity theme|^\s+dev\s+Compatibility alias|AUDIT.md, and state.json|^\s+(?:meowsky )?:C(Build|Run)\b|^\s+(Build main\.c|Build, then run|Same terminal (build|run))' }
   Assert-Equal (($legacyHelp -split "`n" | Where-Object $filter) -join "`n") (($expectedLegacyHelp -split "`n" | Where-Object $filter) -join "`n") 'Global help preserved except retired colors, Identity, and Audit'
   Assert-Equal ($globalHelp -match '(?m)^\s+dev\s+Compatibility alias') $false 'Removed standalone dev alias absent from help'
   $oldTree = $baselineAst.Find({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'ptree' }, $true).Extent.Text
@@ -406,7 +459,7 @@ meowsky dev
 if ((Get-Location).Path -ne (Join-Path $env:WORK_HOME 'dev')) { throw 'meowsky dev did not enter dev/.' }
 if ($script:MeowskyCommands.ContainsKey('md') -or $script:MeowskyCommands.ContainsKey('markdown')) { throw 'Removed feature still registered.' }
 if (-not (meowsky pdf -h).Contains('meowsky pdf')) { throw 'Unrelated feature failed.' }
-if ($script:MeowskyCommands.Count -ne 13) { throw 'Unexpected command count after feature removal.' }
+if ($script:MeowskyCommands.Count -ne 15) { throw 'Unexpected command count after feature removal.' }
 '@ | Set-Content -LiteralPath (Join-Path $isolatedRuntime 'verify.ps1') -Encoding UTF8
   & powershell.exe -NoProfile -File (Join-Path $isolatedRuntime 'verify.ps1')
   Assert-Equal $LASTEXITCODE 0 'Fresh-profile feature removal without standalone dev alias'

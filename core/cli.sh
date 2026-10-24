@@ -31,11 +31,13 @@ meowsky() {
 
   if [ -n "$action" ]; then
     if [ -d "$action" ]; then
+      meowsky_ensure_project_workspace "$action" || return
       cd "$action" || return
       return
     fi
 
     if [ -d "$work_root/$action" ]; then
+      meowsky_ensure_project_workspace "$work_root/$action" || return
       cd "$work_root/$action" || return
       return
     fi

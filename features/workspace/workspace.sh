@@ -13,6 +13,7 @@ meowsky_workspace() {
       return 1
     fi
 
+    meowsky_ensure_project_workspace "$root" || return
     cd "$root" || return
 
     name="$(basename "$root" | tr -cd '[:alnum:]_-')"

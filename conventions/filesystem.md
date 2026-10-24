@@ -2,6 +2,10 @@
 
 Use these conventions when adding or changing project files. They guide decisions; the examples below are illustrative patterns, not mandatory templates. Preserve a repository's established layout and naming unless a separate migration is explicitly approved. For Meowsky DevKit's current module ownership, see [the feature architecture](../docs/architecture.md).
 
+## Disposable development workspace
+
+Projects opened through Meowsky use a root `.meowsky/` directory for user-supplied task inputs and temporary Codex artifacts. Meowsky creates it on project open and adds `/.meowsky/` to the root `.gitignore` when no equivalent rule exists. Keep maintained source, tests, configuration, documentation, and required assets outside it. Move any lasting result to its maintained location. The directory can be deleted without changing project functionality, although deleting generated audit and review files resets those workflows until audit runs again. Preserve existing inputs and artifacts unless the user asks to remove them.
+
 ## Organize by responsibility
 
 1. Give each file and folder a clear responsibility. Its contents should fit the purpose implied by its name.

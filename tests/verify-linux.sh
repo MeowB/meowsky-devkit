@@ -50,6 +50,13 @@ if meowsky missing; then exit 1; fi
 EOF
 "$BASH" "$fixture/exercise.sh" "$fixture/baseline.sh" "$fixture" > "$fixture/baseline.out" 2>&1
 "$BASH" "$fixture/exercise.sh" "$repo/shell/meowsky.sh" "$fixture" > "$fixture/current.out" 2>&1
+test -d "$fixture/work/project/.meowsky"
+test "$(grep -Fxc '/.meowsky/' "$fixture/work/project/.gitignore")" -eq 1
+printf 'user reference\n' > "$fixture/work/project/.meowsky/reference.txt"
+test "$(cat "$fixture/work/project/.meowsky/reference.txt")" = 'user reference'
+readme_hash="$(sha256sum "$fixture/work/project/readme.md")"
+rm -rf -- "$fixture/work/project/.meowsky"
+test "$(sha256sum "$fixture/work/project/readme.md")" = "$readme_hash"
 normalize_prompt() {
   awk '
     /^tmux <new-session>/ {
@@ -83,4 +90,15 @@ for runtime_file in core/paths.sh core/git.sh core/cli.sh \
 done
 "$BASH" "$fixture/exercise.sh" "$fixture/installed/meowsky.sh" "$fixture" > "$fixture/installed.out" 2>&1
 diff -u "$fixture/current.out" "$fixture/installed.out"
+test -d "$fixture/work/project/.meowsky"
+test "$(grep -Fxc '/.meowsky/' "$fixture/work/project/.gitignore")" -eq 1
+printf 'user reference\n' > "$fixture/work/project/.meowsky/reference.txt"
+git -C "$fixture/work/project" init --quiet
+git -C "$fixture/work/project" check-ignore --quiet .meowsky/reference.txt
+test "$(cat "$fixture/work/project/.meowsky/reference.txt")" = 'user reference'
+mkdir -p "$fixture/existing-rule-project"
+printf 'node_modules/\n.meowsky/\n' > "$fixture/existing-rule-project/.gitignore"
+existing_rule_hash="$(sha256sum "$fixture/existing-rule-project/.gitignore")"
+"$BASH" -c '. "$1"; meowsky_ensure_project_workspace "$2"' -- "$repo/shell/meowsky.sh" "$fixture/existing-rule-project"
+test "$(sha256sum "$fixture/existing-rule-project/.gitignore")" = "$existing_rule_hash"
 printf 'PASS: shell syntax, original Linux behavior, copied installation layout.\n'

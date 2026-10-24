@@ -691,6 +691,16 @@ try {
   $invalidRule = Get-MeowskyAuditInventory -Root $plain
   Assert-Equal $invalidRule.Incomplete $true 'Invalid exclusion rule marks coverage incomplete'
   Assert-Equal (@($invalidRule.Warnings | Where-Object { $_ -like 'Invalid .meowskyignore rule at line 4*' }).Count) 1 'Invalid exclusion rule names its line'
+  $gitAuditRoot = Join-Path $fixture 'git audit project'
+  New-Item -ItemType Directory -Path $gitAuditRoot | Out-Null
+  & git -C $gitAuditRoot init --quiet
+  Assert-Equal $LASTEXITCODE 0 'Git audit fixture initializes'
+  Set-Content -LiteralPath (Join-Path $gitAuditRoot 'README.md') -Value '# Audit fixture'
+  $null = meowsky audit $gitAuditRoot
+  Assert-Equal (Test-Path -LiteralPath (Join-Path $gitAuditRoot '.meowsky/state.json')) $true 'Audit at Git root writes disposable state'
+  Assert-Equal ((Get-Content -Raw -LiteralPath (Join-Path $gitAuditRoot '.gitignore')).Trim()) '/.meowsky/' 'Audit at Git root creates ignore rule'
+  & git -C $gitAuditRoot check-ignore --quiet .meowsky/state.json
+  Assert-Equal $LASTEXITCODE 0 'Audit state is ignored by Git'
   Write-Host "PASS: $checks Audit integration checks."
 } finally {
   Set-Location $originalLocation
