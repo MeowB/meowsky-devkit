@@ -35,8 +35,11 @@ try {
   $projectIndex = $prompt.IndexOf('PROJECT_RULE_4821', [StringComparison]::Ordinal)
   Assert-True ($globalIndex -ge 0) 'Global instructions discovered outside DevKit'
   Assert-True ($projectIndex -gt $globalIndex) 'Project instructions follow global instructions'
-  Assert-True ($prompt.Contains('Approval covers only the described edit batch')) 'Edit gate discovered'
-  Assert-True ($prompt.Contains('present a readable proposal in a normal message')) 'Readable proposal rule discovered'
+  Assert-True ($prompt.Contains('Approval covers only the prepared file list')) 'Edit gate discovered'
+  Assert-True ($prompt.Contains('present a concise proposal in a normal message')) 'Readable proposal rule discovered'
+  Assert-True ($prompt.Contains('Offer to expand it as')) 'File plan expansion discovered'
+  Assert-True ($prompt.Contains('Suggest a model and reasoning effort with a brief task-specific reason')) 'Model reasoning proposal discovered'
+  Assert-True ($prompt.Contains('Do not add Token value, implementer Recommendation, or Manual path fields')) 'Unwanted gate fields excluded'
   Assert-True ($prompt.Contains('Do not squeeze the proposal into a question title')) 'Short confirmation question rule discovered'
   Assert-True ($prompt.Contains('a Goal continuation never counts as approval')) 'Goal approval boundary discovered'
   Assert-True ($prompt.Contains('A mention of another repository does not authorize exploring it')) 'Repository boundary discovered'

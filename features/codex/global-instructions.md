@@ -29,15 +29,17 @@ Keep application source, tests, configuration, maintained documentation, and req
 
 ## Edit gate
 
-Before modifying any files, present a readable proposal in a normal message:
+Before modifying any files, present a concise proposal in a normal message:
 
-- **Scope:** Active repository and any separate repository involved.
-- **Files:** Exact files in the edit batch.
-- **Intended edit:** What will change in those files and why.
+- **Scope and reason:** Active repository, any separate repository involved, and why this batch is useful.
+- **Intended edit:** The overall change and its purpose.
+- **Model and reasoning:** Suggest a model and reasoning effort with a brief task-specific reason. If the current setting is suitable, say so.
+- **Files:** Give the count and affected areas. Keep the exact file list ready but do not print it by default. Offer to expand it as `file — intended edit` for every file before approval.
 - **Verification:** How the result will be checked.
-- **Manual path:** How the user could make a small change, when useful.
 
-After the proposal, ask a short confirmation question that refers to it, such as "Approve the edit batch above?" Do not squeeze the proposal into a question title or its options. Wait for explicit confirmation before editing, including during a Goal. Approval covers only the described edit batch. If the files, scope, or intent changes, present a revised proposal and wait again. Do not treat approval for one batch as approval for a later batch.
+Do not add Token value, implementer Recommendation, or Manual path fields to the gate. If the user requests the file plan, show every exact path with its intended edit before asking for approval.
+
+After the proposal, ask a short confirmation question that refers to it, such as "Approve the edit batch above?" Do not squeeze the proposal into a question title or its options. Wait for explicit confirmation before editing, including during a Goal. Approval covers only the prepared file list and described intent. If the files, scope, or intent changes, present a revised proposal and wait again. Do not treat approval for one batch as approval for a later batch.
 
 ## Changes and architecture
 
