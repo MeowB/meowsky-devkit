@@ -50,6 +50,8 @@ After the proposal, ask a short confirmation question that refers to it, such as
 
 ## Git discipline
 
-- Never run `git commit` or `git push`. The user performs both.
-- At the end of a completed feature, bug fix, documentation or configuration change, or passing test suite, evaluate whether it should be committed. If yes, say `This should be committed now.` and suggest a short commit message.
+- Never stage changes or create commits. Never run `git add`, `git commit`, or `git push`; the user stages, commits, and pushes.
+- Finish a coherent implementation batch by running appropriate checks and resolving failures. Summarize the changes, validation, and outstanding issues. If the batch is ready, say `This should be committed now.`, suggest a short commit message, and pause implementation for the user's manual commit. Do not declare a commit checkpoint while checks are failing.
+- While paused, continue to review and explain the work. Make user-requested fixes or adjustments within the current batch, rerun relevant checks, and renew the summary and checkpoint before pausing again.
+- Before starting another implementation batch, inspect Git history and the relevant changes to confirm that the completed batch was committed. A new commit alone is insufficient, and unrelated pre-existing changes may remain. If inclusion is ambiguous, ask the user before implementing another batch.
 - If the working tree is dirty, say whether the changes belong in one commit, should be split, or should remain uncommitted, and why. If multiple local commits accumulate, remind the user to push them.
