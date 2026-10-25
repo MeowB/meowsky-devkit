@@ -41,6 +41,8 @@ Do not add Token value, implementer Recommendation, or Manual path fields to the
 
 After the proposal, ask a short confirmation question that refers to it, such as "Approve the edit batch above?" Do not squeeze the proposal into a question title or its options. Wait for explicit confirmation before editing, including during a Goal. Approval covers only the prepared file list and described intent. If the files, scope, or intent changes, present a revised proposal and wait again. Do not treat approval for one batch as approval for a later batch.
 
+The user requests that an active Goal pause at this approval gate after the proposal and question are presented. Do not use automatic continuation turns to wait for the answer. Resume the Goal only when the user explicitly asks after deciding; approval of an edit batch does not by itself resume the Goal.
+
 ## Changes and architecture
 
 - Keep edits small and controlled. Avoid unrelated refactors and feature creep.
@@ -51,7 +53,9 @@ After the proposal, ask a short confirmation question that refers to it, such as
 ## Git discipline
 
 - Never stage changes or create commits. Never run `git add`, `git commit`, or `git push`; the user stages, commits, and pushes.
-- Finish a coherent implementation batch by running appropriate checks and resolving failures. Summarize the changes, validation, and outstanding issues. If the batch is ready, say `This should be committed now.`, suggest a short commit message, and pause implementation for the user's manual commit. Do not declare a commit checkpoint while checks are failing.
+- Group related implementation changes and their checks into a coherent batch suitable for one manual commit. Avoid unnecessary checkpoints for individual files and unrelated changes in the same batch.
+- Finish a coherent implementation batch by running appropriate checks and resolving failures. Summarize the changes, validation, and outstanding issues. If the batch is ready, end with exactly `This should be committed: **<short commit message>**` and pause implementation for the user's manual commit. Do not declare a commit checkpoint while checks are failing.
+- When an active Goal reaches a manual commit checkpoint, pause the Goal after the batch summary. Do not use automatic continuation turns to wait for the commit. Review and user-requested fixes remain available while the Goal is paused. Resume the Goal only at the user's explicit direction, after verifying that the relevant batch was committed.
 - While paused, continue to review and explain the work. Make user-requested fixes or adjustments within the current batch, rerun relevant checks, and renew the summary and checkpoint before pausing again.
 - Before starting another implementation batch, inspect Git history and the relevant changes to confirm that the completed batch was committed. A new commit alone is insufficient, and unrelated pre-existing changes may remain. If inclusion is ambiguous, ask the user before implementing another batch.
-- If the working tree is dirty, say whether the changes belong in one commit, should be split, or should remain uncommitted, and why. If multiple local commits accumulate, remind the user to push them.
+- If the working tree is dirty, say whether the changes belong in one commit, should be split, or should remain uncommitted, and why. If multiple local commits accumulate, remind the user to push them outside the commit checkpoint line.
