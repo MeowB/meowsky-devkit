@@ -5,10 +5,12 @@ SYNOPSIS
     meowsky launchpad
 
 DESCRIPTION
-    Ensure the Meowsky workspace directories exist, then open the Windows
+    Check the Launchpad repository in WORK_HOME\launchpad, then open the Windows
     Terminal tab in WORK_HOME\launchpad with Codex on the left (70%) and an
     interactive PowerShell on the right (30%). Both panes start in launchpad/.
     Codex receives software opportunity startup context, reads Launchpad's
     AGENTS.md, and runs node dist/cli.js briefing. The shell is available for
     node dist/cli.js start as an optional companion panel; it does not start
-    automatically. No implementation Goal starts automatically.
+    automatically. No implementation Goal starts automatically. If missing,
+    show its clone command. Fetch origin and advise a pull when the current
+    branch is behind; no clone or pull runs automatically.

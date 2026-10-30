@@ -1,6 +1,6 @@
 # District continuity
 
-This is a file convention for the workspace (`C:\meowsky` by default on Windows, optionally overridden by `WORK_HOME`), not a state service. The devkit and workspace root remain separate: the devkit is its own Git repository, and the workspace root has no Git repository or parent `AGENTS.md`. Projects under `dev/` keep independent repositories; `bach/` and `launchpad/` may each become private repositories. Meowsky creates the three district directories but does not create records, initialize repositories, or configure remotes.
+This is a file convention for the workspace (`C:\meowsky` by default on Windows, optionally overridden by `WORK_HOME`), not a state service. The devkit and workspace root remain separate: the devkit is its own Git repository, and the workspace root has no Git repository or parent `AGENTS.md`. Projects under `dev/` keep independent repositories; `bach/` and `launchpad/` are separate repositories. Bare `meowsky` creates the workspace root and `dev/` if missing. The named commands check their own repositories and show clone or pull guidance; they do not create the repositories or personal records.
 
 ## Files you maintain
 
@@ -10,12 +10,11 @@ Each district may use this small structure:
 district/
   current.md
   sessions/YYYY-MM-DD-topic.md
-  capsules/topic-YYYY-MM-DD.md
   references/                  # original PDFs and Word documents
   notes/                       # generated working notes, if useful
 ```
 
-These files and subdirectories are optional; the launcher does not create them. You decide when current state and session records are created or updated. An agent may document them at your direction, while capsules are written by you. Keep personal records in their district, and use links to refer to work in another district or an independent project repository. Keep evidence at its source instead of copying it into every summary.
+These files and subdirectories are optional; the launcher does not create them. You decide when current state and session records are created or updated. An agent may document them at your direction. Keep personal records in their district, and use links to refer to work in another district or an independent project repository. Keep evidence at its source instead of copying it into every summary.
 
 ### Current state
 
@@ -26,12 +25,6 @@ If a session ends unexpectedly, the next session reads `current.md` first, then 
 ### Dated sessions
 
 A session record says what actually happened: actions taken, observations, decisions made by you, unresolved questions, and links to evidence. Date the filename and use a short topic so older records can be found when relevant. Do not load all session records at startup. `current.md` points to the few that matter now.
-
-### Manual capsules
-
-You create capsules yourself from accumulated records. A capsule preserves durable decisions, findings, and source links for a topic or completed phase; it does not replace the originals or become another live task list. The agent must not automatically create a capsule or merge, rewrite, or delete history.
-
-The agent may suggest consolidation when retrieval has become cumbersome: several records repeat or supersede the same facts, a phase's decisions are scattered, or understanding the present requires reading substantial old material. The suggestion should briefly name the actual friction, the records involved, and what knowledge is worth preserving. File count alone is not a reason.
 
 ## Original references and communication
 

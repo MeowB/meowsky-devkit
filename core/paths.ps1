@@ -22,7 +22,7 @@ function Get-WorkRoot {
 
 function Ensure-MeowskyWorkspace {
     $root = Get-MeowskyWorkHomePath
-    $directories = @($root) + @('dev', 'bach', 'launchpad' | ForEach-Object { Join-Path $root $_ })
+    $directories = @($root, (Join-Path $root 'dev'))
     foreach ($directory in $directories) {
       if ((Test-Path -LiteralPath $directory) -and
           -not (Test-Path -LiteralPath $directory -PathType Container)) {

@@ -96,8 +96,9 @@ OPTIONS
 
 PATHS AND COLORS
     WORK_HOME must be an absolute path; when unset, Windows uses C:\meowsky.
-    Bare meowsky and meowsky dev create only missing workspace,
-    dev/, bach/, and launchpad/ directories; files at those paths cause an error.
+    Bare meowsky and meowsky dev create only missing WORK_HOME and dev/
+    directories; files at those paths cause an error. The bach and launchpad
+    commands check their own repositories and show clone or pull instructions.
     File and Codex paths are checked as typed first, then under WORK_HOME.
     meowsky . and ./ use the current directory. Terminal colors come from the
     active identity theme.

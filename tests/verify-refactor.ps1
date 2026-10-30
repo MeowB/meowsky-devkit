@@ -85,10 +85,13 @@ try {
   Set-Content -LiteralPath (Join-Path $env:WORK_HOME 'dev/keep.txt') -Value 'existing'
   meowsky
   Assert-Equal (Get-Location).Path $env:WORK_HOME 'Workspace navigation'
-  foreach ($district in @('dev', 'bach', 'launchpad')) {
+  foreach ($district in @('dev')) {
     Assert-Equal (Test-Path -LiteralPath (Join-Path $env:WORK_HOME $district) -PathType Container) $true "$district directory exists"
     Assert-Equal (Test-Path -LiteralPath (Join-Path $env:WORK_HOME "$district/.git")) $false "$district Git repository not initialized"
     Assert-Equal (Test-Path -LiteralPath (Join-Path $env:WORK_HOME "$district/current.md")) $false "$district personal state not created"
+  }
+  foreach ($projectName in @('bach', 'launchpad')) {
+    Assert-Equal (Test-Path -LiteralPath (Join-Path $env:WORK_HOME $projectName)) $false "$projectName repository is not created by workspace navigation"
   }
   Assert-Equal (Test-Path -LiteralPath (Join-Path $env:WORK_HOME '.git')) $false 'Workspace Git repository not initialized'
   Assert-Equal (Test-Path -LiteralPath (Join-Path $env:WORK_HOME 'AGENTS.md')) $false 'Workspace instructions not invented'
@@ -100,10 +103,11 @@ try {
   New-Item -ItemType Directory -Path $conflictRoot | Out-Null
   Set-Content -LiteralPath (Join-Path $conflictRoot 'bach') -Value 'original'
   $env:WORK_HOME = $conflictRoot
-  Assert-Throws { meowsky } "Expected a directory but found a file: $conflictRoot\bach"
+  meowsky
+  Assert-Equal (Get-Location).Path $conflictRoot 'Workspace navigation ignores unrelated project conflict'
   Assert-Equal (Get-Content -Raw -LiteralPath (Join-Path $conflictRoot 'bach')) "original`r`n" 'Conflicting file preserved'
-  Assert-Equal (Test-Path -LiteralPath (Join-Path $conflictRoot 'dev')) $false 'Conflict checked before creating directories'
-  Assert-Equal (Test-Path -LiteralPath (Join-Path $conflictRoot 'launchpad')) $false 'No partial district setup on conflict'
+  Assert-Equal (Test-Path -LiteralPath (Join-Path $conflictRoot 'dev')) $true 'Workspace creates dev despite unrelated project conflict'
+  Assert-Equal (Test-Path -LiteralPath (Join-Path $conflictRoot 'launchpad')) $false 'No unrelated project setup on conflict'
   $fileRoot = Join-Path $fixture 'file-work'
   Set-Content -LiteralPath $fileRoot -Value 'original'
   $env:WORK_HOME = $fileRoot
@@ -187,7 +191,7 @@ try {
   $oldHelp = $baselineAst.Find({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Show-MeowskyHelp' }, $true).Extent.Text
   $legacyHelp = ($globalHelp -split "`r?`n" | Where-Object { $_ -notmatch '^\s+meowsky (identity|audit|review|refactor)' }) -join "`n"
   $expectedLegacyHelp = ((& { . ([scriptblock]::Create($oldHelp)); Show-MeowskyHelp }).TrimEnd()) -replace "`r`n", "`n"
-  $filter = { $_ -notmatch '^\s+meowsky color|^\s+meowsky (dev|bach|launchpad|matrix|animate)|^\s+meowsky\s+(Change to the work root|Ensure the workspace)|^\s+The work root is|^\s+otherwise \$HOME\\work|^\s+then under the work root|^\s+WORK_HOME must|^\s+Bare meowsky|^\s+dev/, bach/, and launchpad/|^\s+File and Codex paths|^\s+meowsky \. and ./ use|^\s+current directory with Codex,|^\s+active identity theme|^\s+dev\s+Compatibility alias|AUDIT.md, and state.json|^\s+(?:meowsky )?:C(Build|Run)\b|^\s+(Build main\.c|Build, then run|Same terminal (build|run))' }
+  $filter = { $_ -notmatch '^\s+meowsky color|^\s+meowsky (dev|bach|launchpad|matrix|animate)|^\s+meowsky\s+(Change to the work root|Ensure the workspace)|^\s+The work root is|^\s+otherwise \$HOME\\work|^\s+then under the work root|^\s+WORK_HOME must|^\s+Bare meowsky|^\s+dev/, bach/, and launchpad/|^\s+directories; files at those paths|^\s+commands check their own repositories|^\s+File and Codex paths|^\s+meowsky \. and ./ use|^\s+current directory with Codex,|^\s+active identity theme|^\s+dev\s+Compatibility alias|AUDIT.md, and state.json|^\s+(?:meowsky )?:C(Build|Run)\b|^\s+(Build main\.c|Build, then run|Same terminal (build|run))' }
   Assert-Equal (($legacyHelp -split "`n" | Where-Object $filter) -join "`n") (($expectedLegacyHelp -split "`n" | Where-Object $filter) -join "`n") 'Global help preserved except retired colors, Identity, and Audit'
   Assert-Equal ($globalHelp -match '(?m)^\s+dev\s+Compatibility alias') $false 'Removed standalone dev alias absent from help'
   $oldTree = $baselineAst.Find({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'ptree' }, $true).Extent.Text
@@ -346,7 +350,7 @@ try {
   $env:WORK_HOME = $conflictRoot
   Assert-Throws { meowsky bach } "Expected a directory but found a file: $conflictRoot\bach"
   Assert-Equal (Get-Content -Raw -LiteralPath (Join-Path $conflictRoot 'bach')) "original`r`n" 'Bachelor conflicting file preserved'
-  Assert-Equal (Test-Path -LiteralPath (Join-Path $conflictRoot 'dev')) $false 'Bachelor conflict creates no directories'
+  Assert-Equal (Test-Path -LiteralPath (Join-Path $conflictRoot 'dev')) $true 'Bachelor conflict leaves the existing dev directory alone'
   $launchpadConflictRoot = Join-Path $fixture 'launchpad-conflict-work'
   New-Item -ItemType Directory -Path $launchpadConflictRoot | Out-Null
   Set-Content -LiteralPath (Join-Path $launchpadConflictRoot 'launchpad') -Value 'original'
@@ -355,6 +359,67 @@ try {
   Assert-Equal (Get-Content -Raw -LiteralPath (Join-Path $launchpadConflictRoot 'launchpad')) "original`r`n" 'Launchpad conflicting file preserved'
   Assert-Equal (Test-Path -LiteralPath (Join-Path $launchpadConflictRoot 'dev')) $false 'Launchpad conflict creates no directories'
   $env:WORK_HOME = Join-Path $fixture 'work'
+  $bachRoot = Join-Path $env:WORK_HOME 'bach'
+  $launchpadRoot = Join-Path $env:WORK_HOME 'launchpad'
+  $missingBach = Capture { meowsky bach }
+  Assert-Equal ($missingBach -match 'git clone https://github.com/MeowB/bach\.git') $true 'Missing Bachelor shows its clone command'
+  Assert-Equal (Test-Path -LiteralPath $bachRoot) $false 'Missing Bachelor is not replaced with an empty folder'
+  Assert-Equal (Test-Path -LiteralPath $launchpadRoot) $false 'Bachelor does not create Launchpad'
+  $missingLaunchpad = Capture { meowsky launchpad }
+  Assert-Equal ($missingLaunchpad -match 'git clone https://github.com/MeowB/launchpad\.git') $true 'Missing Launchpad shows its clone command'
+  Assert-Equal (Test-Path -LiteralPath $launchpadRoot) $false 'Missing Launchpad is not replaced with an empty folder'
+  New-Item -ItemType Directory -Path $bachRoot, $launchpadRoot | Out-Null
+  $script:gitScenario = 'current'
+  $script:gitCalls = @()
+  function git {
+    $commandLine = $args -join ' '
+    $script:gitCalls += $commandLine
+    $global:LASTEXITCODE = 0
+    if ($commandLine -match 'rev-parse --show-toplevel$') {
+      if ($script:gitScenario -eq 'nonrepo') { $global:LASTEXITCODE = 1; return }
+      return $args[1]
+    }
+    if ($commandLine -match 'remote get-url origin$') {
+      if ($script:gitScenario -eq 'wrong-origin') { return 'https://github.com/MeowB/launchpad.git' }
+      return 'git@github.com:MeowB/bach.git'
+    }
+    if ($commandLine -match 'fetch --quiet origin$') {
+      if ($script:gitScenario -eq 'offline') { $global:LASTEXITCODE = 1 }
+      return
+    }
+    if ($commandLine -match 'rev-parse --abbrev-ref --symbolic-full-name') { return 'origin/main' }
+    if ($commandLine -match 'rev-list --left-right --count') {
+      if ($script:gitScenario -eq 'behind') { return '0 2' }
+      if ($script:gitScenario -eq 'diverged') { return '1 2' }
+      return '0 0'
+    }
+    throw "Unexpected Git command: $commandLine"
+  }
+  $expectedBachUrl = 'https://github.com/MeowB/bach.git'
+  $script:gitScenario = 'nonrepo'
+  $nonrepoMessage = (Test-MeowskyDistrictRepository -Root $bachRoot -RepositoryUrl $expectedBachUrl 6>&1 | Out-String)
+  Assert-Equal ($nonrepoMessage -match 'not its own Git checkout') $true 'Existing nonrepository is rejected'
+  Assert-Equal ($nonrepoMessage -match 'git clone https://github.com/MeowB/bach\.git') $true 'Empty nonrepository receives clone command'
+  Assert-Equal (@($script:gitCalls | Where-Object { $_ -match 'fetch' }).Count) 0 'Nonrepository does not fetch'
+  $script:gitScenario = 'wrong-origin'
+  $wrongOriginMessage = (Test-MeowskyDistrictRepository -Root $bachRoot -RepositoryUrl $expectedBachUrl 6>&1 | Out-String)
+  Assert-Equal ($wrongOriginMessage -match 'Wrong origin') $true 'Wrong repository origin is rejected'
+  Assert-Equal (@($script:gitCalls | Where-Object { $_ -match 'fetch' }).Count) 0 'Wrong origin does not fetch'
+  $script:gitScenario = 'current'
+  Assert-Equal (Test-MeowskyDistrictRepository -Root $bachRoot -RepositoryUrl $expectedBachUrl) $true 'Current checkout opens'
+  $script:gitScenario = 'behind'
+  $behindMessage = (Test-MeowskyDistrictRepository -Root $bachRoot -RepositoryUrl $expectedBachUrl 6>&1 | Out-String)
+  Assert-Equal ($behindMessage -match 'pull --ff-only') $true 'Behind checkout receives pull command'
+  $script:gitScenario = 'diverged'
+  $divergedMessage = (Test-MeowskyDistrictRepository -Root $bachRoot -RepositoryUrl $expectedBachUrl 3>&1 6>&1 | Out-String)
+  Assert-Equal ($divergedMessage -match 'diverged') $true 'Diverged checkout is reported'
+  Assert-Equal ($divergedMessage -match 'pull --ff-only') $false 'Diverged checkout is not advised to pull'
+  $script:gitScenario = 'offline'
+  $offlineMessage = (Test-MeowskyDistrictRepository -Root $bachRoot -RepositoryUrl $expectedBachUrl 3>&1 6>&1 | Out-String)
+  Assert-Equal ($offlineMessage -match 'Could not check remote updates') $true 'Offline checkout reports unknown update status'
+  Assert-Equal ($offlineMessage -match 'True') $true 'Offline checkout can still open'
+  Remove-Item Function:git
+  Set-Item Function:Test-MeowskyDistrictRepository { param($Root, $RepositoryUrl) return $true }
   foreach ($district in @('bach', 'launchpad')) {
     Set-Location $project
     meowsky $district
@@ -421,8 +486,8 @@ try {
       Assert-Equal ($districtPrompt -match 'If it is missing, say that no current state has been written') $true 'Bachelor missing state handling'
       Assert-Equal ($districtPrompt -match 'references/') $true 'Bachelor original references rule'
       Assert-Equal ($districtPrompt -match 'Approval of a draft does not authorize sending it') $true 'Bachelor human communication rule'
-      Assert-Equal ($districtPrompt -match 'Do not create a capsule') $true 'Bachelor manual capsules rule'
     }
+    Assert-Equal ($districtPrompt -match '(?i)district|capsule') $false "$district startup uses project-specific wording"
     Assert-Equal (Test-Path -LiteralPath (Join-Path $districtRoot 'current.md')) $false "$district state remains absent"
     Assert-Equal (Test-Path -LiteralPath (Join-Path $districtRoot '.git')) $false "$district launch does not initialize Git"
     Remove-Item -LiteralPath $promptPath

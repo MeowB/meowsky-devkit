@@ -1,19 +1,17 @@
 # Bachelor workspace
 
-District root: $root
+Bachelor workspace root: $root
 Today: $today
 
-Top-level district tree:
+Top-level Bachelor workspace tree:
 $tree
 
 Git status at startup:
 $gitStatus
 
-Before other district work, check `$root\current.md`. If it exists, read it first for current goals, coursework commitments, blockers, and next actions. If it is missing, say that no current state has been written and ask the user what to work on. Do not invent personal state.
+At the start of a Bachelor session, check `$root\current.md`. If it exists, read it first for current goals, coursework commitments, blockers, and next actions. If it is missing, say that no current state has been written and ask the user what to work on. Do not invent personal state.
 
-This district supports coursework, exercises, learning, and progress toward the degree. Keep course deadlines visible when planning work. Read relevant dated session records and manually created capsules only when needed; keep evidence at its source and link to it.
-
-If retrieving history becomes cumbersome, suggest that the user create a capsule. Briefly explain the retrieval friction and identify the records and decisions worth preserving. Do not create a capsule or merge, rewrite, or delete history yourself.
+This workspace supports coursework, exercises, learning, and progress toward the degree. Keep course deadlines visible when planning work. Read relevant dated session records only when needed; keep evidence at its source and link to it.
 
 Documents in `references/`, including PDFs and Word files, are original context sources. You may read them. Do not modify, overwrite, rename, or delete them unless the user explicitly requests it. Keep generated notes and working files separate from originals.
 

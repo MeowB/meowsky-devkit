@@ -5,10 +5,12 @@ SYNOPSIS
     meowsky bach
 
 DESCRIPTION
-    Ensure the Meowsky workspace directories exist, then open the Windows
+    Check the Bachelor repository in WORK_HOME\bach, then open the Windows
     Terminal tab in WORK_HOME\bach with Codex on the left (70%) and an
     interactive PowerShell on the right (30%). Both panes start in bach/.
     Codex receives bachelor-specific startup context and reads current.md
     first if it exists; no state is created. The shell is available for
     browsing files, opening documents, and running commands.
+    If missing, show its clone command. Fetch origin and advise a pull when
+    the current branch is behind; no clone or pull runs automatically.
     See docs/district-continuity.md for optional user-maintained records.

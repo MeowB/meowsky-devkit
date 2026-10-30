@@ -131,7 +131,7 @@ meowsky bach
 meowsky launchpad
 ```
 
-These commands read district-specific startup guidance. Bachelor asks the agent to read `current.md` if present. Launchpad asks Codex to read its repository instructions and run `node dist/cli.js briefing`; its right pane can run `node dist/cli.js start` when wanted. Neither command creates personal records. See [district continuity](docs/district-continuity.md) for the optional state, session, and manual capsule convention used by Bachelor.
+These commands check their own repositories and show a clone command if one is missing. They fetch origin and suggest a pull when the current branch is behind, but do not clone or pull automatically. Bachelor asks the agent to read `current.md` if present. Launchpad asks Codex to read its repository instructions and run `node dist/cli.js briefing`; its right pane can run `node dist/cli.js start` when wanted. Neither command creates personal records. See [district continuity](docs/district-continuity.md) for optional Bachelor state and session records.
 
 Start Codex directly with the project session context and native `AGENTS.md` instructions:
 
@@ -202,7 +202,7 @@ When `meowsky ./` runs in any folder, it opens a fullscreen Windows Terminal lay
 | `meowsky pdf <file.pdf>` | Open a PDF in the default viewer. |
 | `meowsky -h`, `meowsky -Help`, `meowsky help`, or `meowsky --help` | Print the built-in command manual. |
 
-`ptree [level]` also works as a standalone command. On Windows, the workspace defaults to `C:\meowsky`; an optional `WORK_HOME` override must be an absolute path. Bare `meowsky` and `meowsky dev` create only missing `dev/`, `bach/`, and `launchpad/` directories under it; they do not create repositories or records. Linux retains its existing work-root behavior. Run `meowsky -h` for the terminal manual.
+`ptree [level]` also works as a standalone command. On Windows, the workspace defaults to `C:\meowsky`; an optional `WORK_HOME` override must be an absolute path. Bare `meowsky` and `meowsky dev` create only the workspace root and `dev/` when missing; they do not create Bachelor or Launchpad directories, repositories, or records. Linux retains its existing work-root behavior. Run `meowsky -h` for the terminal manual.
 
 ## Workspace Audit
 
