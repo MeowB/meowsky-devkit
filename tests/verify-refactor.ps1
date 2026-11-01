@@ -419,6 +419,21 @@ try {
   Assert-Equal ($offlineMessage -match 'Could not check remote updates') $true 'Offline checkout reports unknown update status'
   Assert-Equal ($offlineMessage -match 'True') $true 'Offline checkout can still open'
   Remove-Item Function:git
+  $nativeGitRoot = Join-Path $fixture 'native-district'
+  New-Item -ItemType Directory -Path $nativeGitRoot | Out-Null
+  & git -C $nativeGitRoot init --quiet | Out-Null
+  Assert-Equal $LASTEXITCODE 0 'District Git fixture initializes'
+  & git -C $nativeGitRoot -c user.name=MeowskyTest -c user.email=meowsky@example.invalid commit --quiet --allow-empty -m 'Fixture'
+  Assert-Equal $LASTEXITCODE 0 'District Git fixture has a commit'
+  & git -C $nativeGitRoot branch -M main
+  Assert-Equal $LASTEXITCODE 0 'District Git fixture has a main branch'
+  & git -C $nativeGitRoot remote add origin $nativeGitRoot
+  Assert-Equal $LASTEXITCODE 0 'District Git fixture has an origin'
+  & git -C $nativeGitRoot fetch --quiet origin main
+  Assert-Equal $LASTEXITCODE 0 'District Git fixture fetches origin'
+  & git -C $nativeGitRoot branch --set-upstream-to=origin/main main | Out-Null
+  Assert-Equal $LASTEXITCODE 0 'District Git fixture tracks origin'
+  Assert-Equal (Test-MeowskyDistrictRepository -Root $nativeGitRoot -RepositoryUrl $nativeGitRoot) $true 'Native Git origin is accepted'
   Set-Item Function:Test-MeowskyDistrictRepository { param($Root, $RepositoryUrl) return $true }
   foreach ($district in @('bach', 'launchpad')) {
     Set-Location $project

@@ -39,7 +39,7 @@ function Test-MeowskyDistrictRepository {
     }
     return $false
   }
-  $origin = (& git -C $Root remote get-url origin 2>$null | Select-Object -First 1)
+  $origin = & git -C $Root remote get-url origin 2>$null
   if ($LASTEXITCODE -ne 0 -or -not $origin) {
     Write-Host "This checkout has no origin remote. Expected: $RepositoryUrl"
     return $false
@@ -56,12 +56,12 @@ function Test-MeowskyDistrictRepository {
     Write-Warning "Could not check remote updates for $Root. Opened with local checkout state."
     return $true
   }
-  $upstream = (& git -C $Root rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>$null | Select-Object -First 1)
+  $upstream = & git -C $Root rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>$null
   if ($LASTEXITCODE -ne 0 -or -not $upstream -or -not $upstream.StartsWith('origin/')) {
     Write-Warning "The current branch in $Root does not track origin; update status is unknown."
     return $true
   }
-  $counts = (& git -C $Root rev-list --left-right --count 'HEAD...@{u}' 2>$null | Select-Object -First 1)
+  $counts = & git -C $Root rev-list --left-right --count 'HEAD...@{u}' 2>$null
   if ($LASTEXITCODE -ne 0 -or -not $counts -or $counts.Trim() -notmatch '^(\d+)\s+(\d+)$') {
     Write-Warning "Could not compare the current branch with $upstream in $Root."
     return $true
