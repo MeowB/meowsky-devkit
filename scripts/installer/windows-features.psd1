@@ -4,7 +4,7 @@
   Order = @(
     'checkout', 'packages', 'compiler', 'nvim-runtime', 'zig',
     'codex-cli', 'codex-instructions', 'zig-wrappers', 'nvim-config',
-    'profile-import', 'nvim-plugins', 'nvim-mason', 'nvim-parsers'
+    'profile-import', 'terminal-directory', 'nvim-plugins', 'nvim-mason', 'nvim-parsers'
   )
   Steps = @{
     checkout = @{ Label = 'Set DevKit checkout location'; Script = 'profile.ps1'; Handler = 'Install-MeowskyCheckoutLocation'; Requires = @() }
@@ -17,6 +17,7 @@
     'zig-wrappers' = @{ Label = 'Create Zig compiler wrappers'; Script = 'zig.ps1'; Handler = 'Install-MeowskyZigWrappers'; Requires = @('zig') }
     'nvim-config' = @{ Label = 'Install Neovim config'; Script = 'nvim.ps1'; Handler = 'Install-MeowskyNvimConfig'; Requires = @() }
     'profile-import' = @{ Label = 'Update PowerShell profile'; Script = 'profile.ps1'; Handler = 'Install-MeowskyProfile'; Requires = @('checkout') }
+    'terminal-directory' = @{ Label = 'Configure Terminal splits to inherit the current directory'; Script = 'terminal.ps1'; Handler = 'Install-MeowskyTerminalDirectory'; Requires = @('profile-import') }
     'nvim-plugins' = @{ Label = 'Sync Neovim plugins with lazy.nvim'; Script = 'nvim.ps1'; Handler = 'Install-MeowskyNvimPlugins'; Requires = @('nvim-config', 'zig-wrappers', 'packages') }
     'nvim-mason' = @{ Label = 'Install Mason language servers'; Script = 'nvim.ps1'; Handler = 'Install-MeowskyMason'; Requires = @('nvim-plugins') }
     'nvim-parsers' = @{ Label = 'Install Treesitter parsers'; Script = 'nvim.ps1'; Handler = 'Install-MeowskyTreesitter'; Requires = @('nvim-plugins') }

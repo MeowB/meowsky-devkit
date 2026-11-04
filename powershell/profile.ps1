@@ -18,6 +18,7 @@ if ($meowskyCompilerBin -and [IO.Path]::IsPathRooted($meowskyCompilerBin) -and
 foreach ($coreFile in @('paths', 'terminal', 'git', 'directory-tree', 'feature-loader', 'cli', 'completion')) {
   . (Join-Path $script:MeowskyRoot "core/$coreFile.ps1")
 }
+Enable-MeowskyTerminalDirectoryReporting
 if (Get-Module -ListAvailable -Name PSReadLine) {
   Set-PSReadLineKeyHandler -Key Tab -Function MenuComplete
   # Use bright ANSI slots so input highlighting follows the active Terminal palette.

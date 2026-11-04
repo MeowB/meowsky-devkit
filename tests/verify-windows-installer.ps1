@@ -188,7 +188,10 @@ try {
 
   $installerRoot = Join-Path $repo 'scripts/installer'
   $manifest = Import-PowerShellDataFile (Join-Path $installerRoot 'windows-features.psd1')
-  Assert-True ($manifest.Version -eq 1 -and $manifest.Order.Count -eq 13) 'Windows installation manifest version and steps'
+  Assert-True ($manifest.Version -eq 1 -and $manifest.Order.Count -eq 14) 'Windows installation manifest version and steps'
+  $terminalStep = $manifest.Steps['terminal-directory']
+  Assert-True ($terminalStep.Script -eq 'terminal.ps1' -and $terminalStep.Handler -eq 'Install-MeowskyTerminalDirectory') 'Terminal directory step uses its installer module and handler'
+  Assert-True (@($terminalStep.Requires).Count -eq 1 -and $terminalStep.Requires[0] -eq 'profile-import') 'Terminal directory step requires the PowerShell profile'
   $seenSteps = @{}
   $loadedModules = @{}
   foreach ($name in $manifest.Order) {

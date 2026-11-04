@@ -3,3 +3,22 @@
 function Reset-MeowskyTerminalColors {
   [Console]::Write(([char]27).ToString() + '[39;49m')
 }
+
+function Enable-MeowskyTerminalDirectoryReporting {
+  # Wrap once, preserving the prompt that was installed before Meowsky loaded.
+  if (-not $env:WT_SESSION -or $global:MeowskyTerminalPromptInstalled) { return }
+  $global:MeowskyTerminalOriginalPrompt = $function:prompt
+  function global:prompt {
+    # Invoke first so the original prompt sees the previous command's status.
+    $meowskyPromptText = & $global:MeowskyTerminalOriginalPrompt
+    $meowskyLocation = $executionContext.SessionState.Path.CurrentLocation
+    if ($env:WT_SESSION -and $meowskyLocation.Provider.Name -eq 'FileSystem') {
+      $meowskyPath = $meowskyLocation.ProviderPath
+      if ($meowskyPath -notmatch '[\x00-\x1f\x7f]') {
+        $Host.UI.Write("$([char]27)]9;9;`"$meowskyPath`"$([char]27)\")
+      }
+    }
+    $meowskyPromptText
+  }
+  $global:MeowskyTerminalPromptInstalled = $true
+}

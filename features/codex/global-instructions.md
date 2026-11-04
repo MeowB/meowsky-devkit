@@ -29,6 +29,8 @@ Keep application source, tests, configuration, maintained documentation, and req
 
 ## Edit gate
 
+When investigation supports a concrete implementation batch, prepare and present this gate proactively in the same turn. Do not stop at offering to prepare a gate or wait for the user to request one. Presenting the gate is not authorization to edit.
+
 Before modifying any files, present a concise proposal in a normal message:
 
 - **Scope and reason:** Active repository, any separate repository involved, and why this batch is useful.
