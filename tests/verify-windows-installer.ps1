@@ -18,6 +18,42 @@ function Assert-Throws([scriptblock]$Action, [string]$Label) {
 }
 
 try {
+  # Mock policy cmdlets so no test changes the user's actual execution policy.
+  . (Join-Path $repo 'scripts/installer/features/profile.ps1')
+  function Get-ExecutionPolicy {
+    param([string]$Scope)
+    $script:policyState[$Scope]
+  }
+  function Set-ExecutionPolicy {
+    param([string]$Scope, [string]$ExecutionPolicy, [switch]$Force, [string]$ErrorAction)
+    $script:policyWrites++
+    if (-not $script:policyWriteFails) { $script:policyState[$Scope] = $ExecutionPolicy }
+  }
+  $script:policyState = @{ MachinePolicy = 'Undefined'; UserPolicy = 'Undefined'; CurrentUser = 'Undefined'; LocalMachine = 'Undefined'; Process = 'Bypass' }
+  $script:policyWrites = 0
+  $script:policyWriteFails = $false
+  Initialize-MeowskyProfileExecutionPolicy
+  Assert-True ($script:policyState.CurrentUser -eq 'RemoteSigned' -and $script:policyWrites -eq 1) 'Default restrictive policy repaired despite bootstrap Bypass'
+  Initialize-MeowskyProfileExecutionPolicy
+  Assert-True ($script:policyWrites -eq 1) 'Policy setup is idempotent'
+  foreach ($policy in @('RemoteSigned', 'Unrestricted', 'Bypass')) {
+    $script:policyState.CurrentUser = $policy
+    Initialize-MeowskyProfileExecutionPolicy
+    Assert-True ($script:policyState.CurrentUser -eq $policy -and $script:policyWrites -eq 1) "Explicit $policy preserved"
+  }
+  foreach ($scope in @('MachinePolicy', 'UserPolicy', 'CurrentUser', 'LocalMachine')) {
+    foreach ($policy in @('Restricted', 'AllSigned')) {
+      foreach ($key in @($script:policyState.Keys)) { $script:policyState[$key] = 'Undefined' }
+      $script:policyState[$scope] = $policy
+      Assert-Throws { Initialize-MeowskyProfileExecutionPolicy } "Explicit $scope $policy reported"
+      Assert-True ($script:policyWrites -eq 1 -and $script:policyState[$scope] -eq $policy) 'Restrictive policy not overwritten'
+    }
+  }
+  foreach ($key in @($script:policyState.Keys)) { $script:policyState[$key] = 'Undefined' }
+  $script:policyWriteFails = $true
+  Assert-Throws { Initialize-MeowskyProfileExecutionPolicy } 'Failed policy persistence detected'
+  Remove-Item Function:Get-ExecutionPolicy, Function:Set-ExecutionPolicy
+
   $checkoutA = Join-Path $fixture 'checkout-a'
   $checkoutB = Join-Path $fixture 'checkout-b'
   foreach ($root in @($checkoutA, $checkoutB)) {

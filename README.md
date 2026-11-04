@@ -80,6 +80,10 @@ Run the one-command bootstrap:
 .\scripts\install-windows.ps1
 ```
 
+If a new Windows machine blocks this script because script execution is disabled, bootstrap with `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-windows.ps1`. This bypass applies only to that installer process. The installer configures `CurrentUser RemoteSigned` in each installed PowerShell edition when no persistent policy is configured, allowing the Meowsky profile to load in future sessions. Explicit policies are preserved; incompatible policies stop profile setup with guidance.
+
+The installer also configures `Alt+Shift+-` and `Alt+Shift++` to duplicate the focused pane in its current directory. Open Windows Terminal with `wt` from Win+R, change directory, and test both shortcuts. See [Windows Terminal setup and troubleshooting](docs/new-pc-dev-setup.md#daily-windows-workflow) for details.
+
 Run it from the checkout you want to keep. It installs or verifies the core tools and Codex CLI, copies the Neovim config, manages one Meowsky import in each installed PowerShell edition's user profile, installs global Codex instructions when no global `AGENTS.md` exists, and sets `MEOWSKY_DEVKIT_HOME` for the session-context template. Existing user instructions are preserved and reported. The installer verifies command discovery, a temporary C build, and headless C/TypeScript editor support before reporting success. Open a new terminal afterwards so it inherits the persistent PATH and profile changes.
 
 On Windows, the workspace defaults to `C:\meowsky`. To use another workspace, set the user-level `WORK_HOME` to an absolute path and open a new terminal.

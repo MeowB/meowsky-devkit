@@ -55,6 +55,18 @@ meowsky -h
 
 `gcc` and `gdb` should resolve to the same toolchain directory. For isolated checks of profile reconciliation, PATH logic, and installation module wiring without changing user configuration, run `powershell -NoProfile -File tests/verify-windows-installer.ps1` from this checkout. Rerun `scripts/install-windows.ps1` to repair or verify an existing installation; use `-Upgrade` only when you also want package upgrade checks.
 
+### PowerShell profile execution policy
+
+On a fresh machine, if Windows blocks the installer because scripts are disabled, run:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-windows.ps1
+```
+
+The process-only bypass lets setup run; it does not enable profiles in future terminals. During profile setup, the installer checks persistent policies separately in Windows PowerShell 5.1 and PowerShell 7 when installed. If all persistent scopes are undefined, it configures and verifies `CurrentUser RemoteSigned`, which allows local profile scripts without administrator permission. Reruns preserve that setting. Existing explicit policies are preserved. A restrictive or signed-script-only policy stops setup with guidance; organization policies require administrator review.
+
+For an existing installation whose profile fails to load, inspect `Get-ExecutionPolicy -List`. If permitted, run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` in the affected PowerShell edition, then `. $PROFILE`, or open a fresh pane. This matches the [PowerShell execution-policy documentation](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_execution_policies).
+
 ## Daily Windows workflow
 
 ```powershell
@@ -92,6 +104,10 @@ Meowsky's PowerShell profile reports the filesystem directory to Windows Termina
 `ptree [level]` remains available independently. Feature help lives at `features/<name>/help.txt`: PowerShell supports `meowsky <command> -h` and `-Help`. Bare `meowsky -h`, `help`, and `--help` display global help.
 
 Legacy `project-colors.json` files are ignored and left untouched. `meowsky color` remains an explanatory compatibility command. Apply terminal colors through `meowsky identity apply <id> --target terminal`. Markdown previews use the system temporary directory under `meowsky-preview`. Windows Codex uses [its session-context resource](../features/codex/codex-orientation.md), retaining a context-only fallback when the primary template cannot be found. The prompt contains a startup date, root, top-level tree, Git summary, and brief project orientation; durable rules come from native `AGENTS.md` discovery. Detailed conventions are read only when relevant.
+
+If splits open in the wrong directory, check `$global:MeowskyTerminalPromptInstalled` and `$env:WT_SESSION` in the original pane. A missing prompt wrapper can indicate a blocked profile (see execution policy above). Launching `powershell` directly through Win+R can also leave `WT_SESSION` unset when Windows hands the process to Terminal; use `wt` through Win+R to start a Terminal-managed shell. See [Microsoft's default-terminal environment issue](https://github.com/microsoft/terminal/issues/13006).
+
+If a split unexpectedly requests administrator permission, open Terminal Settings and turn off **Run this profile as Administrator** for the affected profile, including any inherited profile default. Duplicate mode reuses that profile. The installer preserves personal profile elevation preferences; setting up directory inheritance does not disable them.
 
 ## Linux / Ubuntu
 
