@@ -33,9 +33,9 @@ Before modifying any files, present a concise proposal in a normal message:
 
 - **Scope and reason:** Active repository, any separate repository involved, and why this batch is useful.
 - **Intended edit:** The overall change and its purpose.
-- **Model and reasoning:** Suggest a model and reasoning effort with a brief task-specific reason. If the current setting is suitable, say so.
 - **Files:** Give the count and affected areas. Keep the exact file list ready but do not print it by default. Offer to expand it as `file — intended edit` for every file before approval.
 - **Verification:** How the result will be checked.
+- **Model and reasoning:** Suggest a model and reasoning effort with a brief task-specific reason. If the current setting is suitable, say so. Make this the proposal's final line, immediately before the separate approval question. Start with one bold choice containing the decision and model name (for example, `**Keep GPT-6**` or `**Switch to GPT-6.1**`), then state the reasoning effort and reason.
 
 Do not add Token value, implementer Recommendation, or Manual path fields to the gate. If the user requests the file plan, show every exact path with its intended edit before asking for approval.
 
