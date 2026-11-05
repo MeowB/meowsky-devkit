@@ -81,12 +81,13 @@ $ErrorActionPreference = 'Stop'
 $env:WT_SESSION = ''
 . $TerminalPath
 function global:prompt { "ORIGINAL:$?:$global:LASTEXITCODE" }
-$before = $function:prompt
 Enable-MeowskyTerminalDirectoryReporting
-if ($function:prompt -ne $before) { throw 'Changed prompt outside Terminal' }
+if (-not $global:MeowskyTerminalPromptInstalled -or $function:prompt.ToString() -notmatch '9;9') {
+  throw 'Missing directory reporting when WT_SESSION is absent'
+}
+$wrapper = $function:prompt
 $env:WT_SESSION = 'fixture'
 Enable-MeowskyTerminalDirectoryReporting
-$wrapper = $function:prompt
 . $TerminalPath
 Enable-MeowskyTerminalDirectoryReporting
 if ($function:prompt -ne $wrapper) { throw 'Reload wrapped prompt twice' }
