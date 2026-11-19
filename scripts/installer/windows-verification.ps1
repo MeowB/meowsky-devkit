@@ -38,7 +38,7 @@ function Test-MeowskyWindowsInstallation {
   }
   if ((Get-FileHash -LiteralPath $globalInstructions).Hash -ne
       (Get-FileHash -LiteralPath (Join-Path $repoRoot 'features\codex\global-instructions.md')).Hash) {
-    Write-Warning "Existing custom Codex instructions were preserved at $globalInstructions; compare them with the Meowsky source."
+    Write-Warning "Codex instructions differ from the Meowsky source at $globalInstructions. Existing instructions were preserved; rerun features/codex/install-instructions.ps1 interactively to back up and replace them. Verification will continue."
   }
   foreach ($relative in @('init.lua', 'lua\meowsky\c.lua')) {
     $source = Join-Path $repoRoot "nvim\$relative"
