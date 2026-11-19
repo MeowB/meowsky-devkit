@@ -18,7 +18,8 @@ try {
   [IO.File]::WriteAllText((Join-Path $project 'AGENTS.md'), "Project-specific instruction marker: PROJECT_RULE_4821`n")
 
   $env:CODEX_HOME = $codexHome
-  & (Join-Path $repo 'features/codex/install-instructions.ps1') | Out-Null
+  $installer = Join-Path $repo 'features/codex/install-instructions.ps1'
+  & $installer | Out-Null
   $globalPath = Join-Path $codexHome 'AGENTS.md'
   Assert-True (Test-Path -LiteralPath $globalPath -PathType Leaf) 'Global installation'
   $sourcePath = Join-Path $repo 'features/codex/global-instructions.md'
@@ -54,10 +55,30 @@ try {
   Assert-True (-not $prompt.Contains('Git status at startup:')) 'Git snapshot is not in global instructions'
 
   $custom = "Existing user instructions: DO_NOT_OVERWRITE_4821`n"
+  $matchingOutput = & $installer 6>&1 | Out-String
+  Assert-True ($matchingOutput.Contains('are already current')) 'Matching install reports current instructions'
+  Assert-True (@(Get-ChildItem -LiteralPath $codexHome -Filter 'AGENTS.md.meowsky-backup-*').Count -eq 0) 'Matching install creates no backup'
+
   [IO.File]::WriteAllText($globalPath, $custom)
-  & (Join-Path $repo 'features/codex/install-instructions.ps1') 3>$null | Out-Null
-  Assert-True (([IO.File]::ReadAllText($globalPath)) -eq $custom) 'Existing user AGENTS.md remains untouched'
-  Write-Host 'PASS: global and project instruction discovery, edit gate, context separation, and non-overwrite behavior.'
+  $customHash = (Get-FileHash -LiteralPath $globalPath).Hash
+  $shell = (Get-Process -Id $PID).Path
+  '' | & $shell -NoProfile -ExecutionPolicy Bypass -File $installer | Out-Null
+  Assert-True ($LASTEXITCODE -eq 0) 'Default choice completes successfully'
+  Assert-True ((Get-FileHash -LiteralPath $globalPath).Hash -eq $customHash) 'Default choice keeps existing instructions'
+
+  & $shell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $installer | Out-Null
+  Assert-True ($LASTEXITCODE -eq 0) 'Unavailable input completes successfully'
+  Assert-True ((Get-FileHash -LiteralPath $globalPath).Hash -eq $customHash) 'Unavailable input keeps existing instructions'
+  Assert-True (@(Get-ChildItem -LiteralPath $codexHome -Filter 'AGENTS.md.meowsky-backup-*').Count -eq 0) 'Keeping an existing file creates no backup'
+
+  $replacementOutput = 'replace' | & $shell -NoProfile -ExecutionPolicy Bypass -File $installer | Out-String
+  Assert-True ($LASTEXITCODE -eq 0) 'Approved replacement completes successfully'
+  $backups = @(Get-ChildItem -LiteralPath $codexHome -Filter 'AGENTS.md.meowsky-backup-*')
+  Assert-True ($backups.Count -eq 1) 'Approved replacement creates one backup'
+  Assert-True ($replacementOutput.Contains($backups[0].FullName)) 'Approved replacement reports the backup path'
+  Assert-True ((Get-FileHash -LiteralPath $backups[0].FullName).Hash -eq $customHash) 'Backup bytes match the original'
+  Assert-True ((Get-FileHash -LiteralPath $globalPath).Hash -eq (Get-FileHash -LiteralPath $sourcePath).Hash) 'Replacement bytes match the template'
+  Write-Host 'PASS: global and project instruction discovery, edit gate, context separation, and confirmed replacement with backup.'
 } finally {
   $env:CODEX_HOME = $oldCodexHome
   Set-Location $oldLocation

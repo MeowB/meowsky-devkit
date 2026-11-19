@@ -11,20 +11,62 @@ export MEOWSKY_DEVKIT_HOME="$repo_root"
 
 codex_home="${CODEX_HOME:-$HOME/.codex}"
 codex_instructions="$repo_root/features/codex/global-instructions.md"
-if [ -e "$codex_home/AGENTS.md" ] || [ -L "$codex_home/AGENTS.md" ]; then
-  if cmp -s "$codex_instructions" "$codex_home/AGENTS.md"; then
-    echo "Codex global instructions are already current: $codex_home/AGENTS.md"
-  else
-    echo "Existing Codex AGENTS.md was left unchanged: $codex_home/AGENTS.md" >&2
-    echo "Compare it with $codex_instructions and merge any desired Meowsky rules manually." >&2
+codex_target="$codex_home/AGENTS.md"
+
+replace_codex_instructions() (
+  staged=$(mktemp "$codex_home/.meowsky-agents.XXXXXXXX")
+  backup=
+  backup_ready=false
+  trap 'rm -f -- "$staged"; if ! $backup_ready && [ -n "$backup" ]; then rm -f -- "$backup"; fi' EXIT
+
+  cp -- "$codex_instructions" "$staged"
+  if [ -L "$codex_target" ] || [ ! -f "$codex_target" ] ||
+    [ "$(sha256sum < "$codex_target")" != "$1" ]; then
+    echo "Codex instructions changed while awaiting confirmation. Review $codex_target and rerun setup." >&2
+    exit 1
   fi
+  backup=$(mktemp "$codex_target.meowsky-backup-XXXXXXXX")
+  cp -p -- "$codex_target" "$backup"
+  if [ "$(sha256sum < "$backup")" != "$1" ] || [ -L "$codex_target" ] ||
+    ! cmp -s "$backup" "$codex_target"; then
+    echo "Codex instructions changed during backup. Review $codex_target and rerun setup." >&2
+    exit 1
+  fi
+  backup_ready=true
+  echo "Backed up previous Codex instructions: $backup"
+  chmod --reference="$backup" "$staged"
+  mv -T -- "$staged" "$codex_target"
+  echo "Installed Codex global instructions: $codex_target"
+)
+
+if [ -L "$codex_target" ]; then
+  echo "Global Codex instructions are a link and were preserved: $codex_target" >&2
+elif [ -f "$codex_target" ]; then
+  if cmp -s "$codex_instructions" "$codex_target"; then
+    echo "Codex global instructions are already current: $codex_target"
+  else
+    original_hash=$(sha256sum < "$codex_target")
+    printf 'Current Codex instructions: %s\nMeowsky template: %s\n' "$codex_target" "$codex_instructions"
+    printf 'Type replace to back up and replace the existing file, or press Enter to keep it: ' >&2
+    if read -r choice && [ "$choice" = replace ]; then
+      replace_codex_instructions "$original_hash"
+    else
+      echo "Existing Codex AGENTS.md was kept: $codex_target" >&2
+    fi
+  fi
+elif [ -e "$codex_target" ]; then
+  echo "Expected a file but found another path at $codex_target" >&2
+  exit 1
 else
   mkdir -p "$codex_home"
-  cp -n "$codex_instructions" "$codex_home/AGENTS.md"
-  if cmp -s "$codex_instructions" "$codex_home/AGENTS.md"; then
-    echo "Installed Codex global instructions: $codex_home/AGENTS.md"
+  if cp -nT -- "$codex_instructions" "$codex_target" && cmp -s "$codex_instructions" "$codex_target"; then
+    echo "Installed Codex global instructions: $codex_target"
+  elif [ -e "$codex_target" ] || [ -L "$codex_target" ]; then
+    echo "Review $codex_target before rerunning setup. The initial copy could not be verified." >&2
+    exit 1
   else
-    echo "Codex AGENTS.md appeared during installation and was left unchanged: $codex_home/AGENTS.md" >&2
+    echo "Could not install Codex global instructions: $codex_target" >&2
+    exit 1
   fi
 fi
 

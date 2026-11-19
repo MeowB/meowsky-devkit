@@ -16,7 +16,7 @@ It is a small repo, but it does three concrete things:
 | GitHub CLI | Optional, only if you want terminal-first GitHub repo workflows |
 | Editor setup | Loads a personal Neovim config with web and C language support, LSPs, Treesitter, and completion |
 | Workspace flow | Adds `meowsky` to PowerShell so you can enter the workspace or dev district, open the fullscreen project layout, or start Codex directly |
-| Codex instructions | Installs durable behavioral rules once in Codex's global `AGENTS.md`; project `AGENTS.md` files add local guidance, while the launch prompt supplies session context |
+| Codex instructions | Installs the global `AGENTS.md` template and offers to replace a differing copy during setup. Project `AGENTS.md` files add local guidance, and the launch prompt supplies session context. |
 | Preview helpers | Uses Pandoc to preview Markdown and the default PDF viewer for PDFs |
 | Linux support | Includes a lighter Ubuntu version using `tmux` |
 
@@ -84,7 +84,7 @@ If a new Windows machine blocks this script because script execution is disabled
 
 The installer also configures `Alt+Shift+-` and `Alt+Shift++` to duplicate the focused pane in its current directory. Open Windows Terminal with `wt` from Win+R, change directory, and test both shortcuts. See [Windows Terminal setup and troubleshooting](docs/new-pc-dev-setup.md#daily-windows-workflow) for details.
 
-Run it from the checkout you want to keep. It installs or verifies the core tools and Codex CLI, copies the Neovim config, manages one Meowsky import in each installed PowerShell edition's user profile, installs global Codex instructions when no global `AGENTS.md` exists, and sets `MEOWSKY_DEVKIT_HOME` for the session-context template. Existing user instructions are preserved and reported. The installer verifies command discovery, a temporary C build, and headless C/TypeScript editor support before reporting success. Open a new terminal afterwards so it inherits the persistent PATH and profile changes.
+Run it from the checkout you want to keep. It installs or verifies the core tools and Codex CLI, copies the Neovim config, manages one Meowsky import in each installed PowerShell edition's user profile, installs global Codex instructions, and sets `MEOWSKY_DEVKIT_HOME` for the session-context template. If an existing global `AGENTS.md` differs, type `replace` when prompted to install the full template and save a backup next to the original. Press Enter to keep your copy. The installer verifies command discovery, a temporary C build, and headless C/TypeScript editor support before reporting success. Open a new terminal afterwards so it inherits the persistent PATH and profile changes.
 
 On Windows, the workspace defaults to `C:\meowsky`. To use another workspace, set the user-level `WORK_HOME` to an absolute path and open a new terminal.
 
