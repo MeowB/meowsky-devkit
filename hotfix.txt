@@ -1,0 +1,5 @@
+﻿Edit gate model recommendation hotfix
+
+Problem: An edit gate claimed that the current model setting was suitable without verifying the selected model and did not give a concrete task-based recommendation.
+
+For each edit gate, assess the actual task and recommend a specific model and reasoning effort with a brief task-specific reason. Do not infer or claim the current model unless it has been verified. Put the Model and reasoning line last in the proposal, immediately before the separate approval question. Bold the recommended model name and explain why it fits the task.
