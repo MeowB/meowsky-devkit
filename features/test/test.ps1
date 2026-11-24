@@ -46,14 +46,18 @@ function Invoke-MeowskyTestFeature {
 
   $color = if ($status -eq 0) { 'Green' } else { 'Red' }
   Write-Host $message -ForegroundColor $color
-  if ($result -and $status -ne 0) {
+  if ($result -and $status -ne 0 -and ($result.stdout -or $result.stderr)) {
     foreach ($stream in @('stdout', 'stderr')) {
       $output = $result.$stream
       if ($output) {
         Write-Host
-        Write-Host "Program $stream"
-        Write-Host $output -NoNewline:($output.EndsWith("`n"))
+        Write-Host "Program $stream" -ForegroundColor White
+        Write-Host $output -ForegroundColor White -NoNewline:($output.EndsWith("`n"))
       }
+    }
+    $width = $Host.UI.RawUI.WindowSize.Width
+    if ($width -gt 0) {
+      Write-Host ('-' * $width) -ForegroundColor White
     }
   }
   $global:LASTEXITCODE = $status
