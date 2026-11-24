@@ -5,12 +5,15 @@ SYNTAX
     meowsky test <program.exe> --input "<text>" --expected "<text>"
     meowsky test --help
 
-EXAMPLE
+EXAMPLES
     meowsky test .\main.exe --input "2 3" --expected "5"
+    meowsky test .\main.exe --input "999`n1000" --expected "result: 1000"
 
     Build first with :CBuild or GCC. Python 3.7 or later must be on PATH.
-    The runner sends UTF-8 input followed by a newline. Use PowerShell
-    newline escapes to put multiple values on separate input lines.
+    To send multiple input lines, use double quotes around the input and
+    separate values with `n (a backtick followed by n). The second example
+    sends 999 and 1000 on separate lines. Numeric scanf conversions read
+    them as numbers. The runner adds a newline after the final value.
     Put the result on its own stdout line. The runner compares that final
     line exactly, preserving spaces and case. Use --expected "" to require
     completely empty stdout.
