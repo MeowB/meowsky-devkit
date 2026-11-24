@@ -9,10 +9,13 @@ EXAMPLE
     meowsky test .\main.exe --input "2 3" --expected "5"
 
     Build first with :CBuild or GCC. Python 3.7 or later must be on PATH.
-    The runner sends the literal input as UTF-8 followed by a newline.
-    It compares UTF-8 stdout case-sensitively after normalizing CRLF and
-    removing one final newline. Use --expected "" for empty output.
+    The runner sends UTF-8 input followed by a newline. Use PowerShell
+    newline escapes to put multiple values on separate input lines.
+    Put the result on its own stdout line. The runner compares that final
+    line exactly, preserving spaces and case. Use --expected "" to require
+    completely empty stdout.
 
-    The program has five seconds to finish. The runner reports stderr when
-    present. In a PowerShell script, check $LASTEXITCODE after each call.
+    The program has five seconds to finish. A pass shows input and result.
+    A failure shows the cause, input, expected result, stdout, and stderr.
+    In a PowerShell script, check $LASTEXITCODE after each call.
     0 = pass, 1 = output mismatch, 2 = execution or usage error.

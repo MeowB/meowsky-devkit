@@ -17,6 +17,9 @@ function Invoke-MeowskyTestFeature {
       $Arguments[0] = [string]$Arguments[1]
       $Arguments[2] = [string]$Arguments[3]
     }
+    if ($options['--expected'] -match '[\r\n]') {
+      throw '--expected accepts a single line. Put the expected result on its own line in the program output.'
+    }
     $program = Get-Item -LiteralPath $Target -ErrorAction SilentlyContinue
     if ($program -isnot [IO.FileInfo] -or $program.Extension -ne '.exe') {
       throw "Executable not found: $Target. Build it with :CBuild or GCC first."

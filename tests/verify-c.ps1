@@ -46,11 +46,22 @@ try {
 int main(void) {
     int a, b;
     if (scanf("%d %d", &a, &b) != 2) {
+        fputs("Enter two numbers: ", stdout);
         fputs("expected two integers\n", stderr);
         return 7;
     }
     if (a == 99) {
+        fputs("waiting for a result", stdout);
+        fflush(stdout);
         for (;;) {}
+    }
+    if (a == 42) {
+        printf("First number: Second number: \nresult: %d\n", b);
+        return 0;
+    }
+    if (a == 41) {
+        printf("Enter a number: result: %d\n", b);
+        return 0;
     }
     if (a != 0) {
         printf("%d\n", a + b);
@@ -62,15 +73,23 @@ int main(void) {
     $null = :CBuild 'test program.c'
 
     $pass = meowsky test './test program.exe' --input '-2 3' --expected '1' 6>&1
-    Assert-C ($LASTEXITCODE -eq 0 -and "$pass" -like 'PASS*1*') "Numeric test with a spaced path: $pass"
+    Assert-C ($LASTEXITCODE -eq 0 -and "$pass" -ceq 'PASS input="-2 3" output="1"') "Numeric test with a spaced path: $pass"
     $mismatch = meowsky test './test program.exe' --input '10 -4' --expected '7' 6>&1
-    Assert-C ($LASTEXITCODE -eq 1 -and "$mismatch" -match '(?s)FAIL.*Expected: "7".*Actual:\s+"6"') "Mismatch details: $mismatch"
+    Assert-C ($LASTEXITCODE -eq 1 -and "$mismatch" -match '(?s)FAIL.*Expected: "7".*Stdout:\s+"6') "Mismatch details: $mismatch"
+    $prompted = meowsky test './test program.exe' --input "42`n10" --expected 'result: 10' 6>&1
+    Assert-C ($LASTEXITCODE -eq 0 -and "$prompted" -ceq 'PASS input="42\n10" output="result: 10"') "Quiet pass with multiple inputs: $prompted"
+    $joined = meowsky test './test program.exe' --input '41 10' --expected 'result: 10' 6>&1
+    Assert-C ($LASTEXITCODE -eq 1 -and "$joined" -match '(?s)own line.*Stdout:.*Enter a number: result: 10') "Missing result line break: $joined"
+    $similar = meowsky test './test program.exe' --input '100 10' --expected '10' 6>&1
+    Assert-C ($LASTEXITCODE -eq 1 -and "$similar" -like 'FAIL Final output line mismatch.*') "Reject 110 when the expected result is 10: $similar"
     $empty = meowsky test './test program.exe' --expected '' --input '0 4' 6>&1
     Assert-C ($LASTEXITCODE -eq 0 -and "$empty" -like 'PASS*') "Pass resets status and accepts empty expected output: $empty"
+    $missing = meowsky test './test program.exe' --input '0 4' --expected '4' 6>&1
+    Assert-C ($LASTEXITCODE -eq 1 -and "$missing" -like 'FAIL Program exited successfully without printing any stdout.*') "Missing output: $missing"
     $programError = meowsky test './test program.exe' --input 'no' --expected '' 6>&1
-    Assert-C ($LASTEXITCODE -eq 2 -and "$programError" -match '(?s)ERROR.*code 7.*expected two integers') "Program error details: $programError"
+    Assert-C ($LASTEXITCODE -eq 2 -and "$programError" -match '(?s)ERROR.*code 7.*Enter two numbers:.*expected two integers') "Program error details: $programError"
     $timeout = meowsky test './test program.exe' --input '99 1' --expected '' 6>&1
-    Assert-C ($LASTEXITCODE -eq 2 -and "$timeout" -like 'ERROR Timed out after 5 seconds*') "Timeout: $timeout"
+    Assert-C ($LASTEXITCODE -eq 2 -and "$timeout" -match '(?s)ERROR Program did not exit within 5 seconds.*waiting for a result') "Timeout with partial stdout: $timeout"
     $usage = meowsky test './test program.exe' --input '2 3' --input '5' 6>&1
     Assert-C ($LASTEXITCODE -eq 2 -and "$usage" -like 'ERROR Usage*') "Duplicate option usage error: $usage"
     Assert-C ((meowsky test --help | Out-String).Contains('--expected')) 'Meowsky test help'
@@ -80,13 +99,18 @@ int main(void) {
 meowsky test './test program.exe' --input -2 --expected ''
 if ($LASTEXITCODE -ne 2) { exit 1 }
 meowsky test './test program.exe' --input '-2 3' --expected '1'
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+meowsky test './test program.exe' --input '100 10' --expected '10'
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+Write-Host 'UNREACHABLE TEST'
 exit $LASTEXITCODE
 '@)
     $profilePath = (Join-Path $repo 'powershell/profile.ps1').Replace("'", "''")
     $scriptPath = $standalonePath.Replace("'", "''")
     $shell = (Get-Process -Id $PID).Path
     $standalone = & $shell -NoProfile -Command ". '$profilePath'; & '$scriptPath'" | Out-String
-    Assert-C ($LASTEXITCODE -eq 0 -and $standalone.Contains('PASS Output: "1"')) "Standalone PS1 dispatch: $standalone"
+    Assert-C ($LASTEXITCODE -eq 1 -and $standalone.Contains('PASS input="-2 3" output="1"') -and
+      $standalone.Contains('FAIL Final output line mismatch.') -and -not $standalone.Contains('UNREACHABLE TEST')) "Standalone PS1 stops on the first mismatch: $standalone"
 
     $luaPath = Join-Path $fixture 'verify-quickfix.lua'
     $lua = @'

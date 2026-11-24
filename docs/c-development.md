@@ -59,9 +59,9 @@ meowsky test .\main.exe --input "10 -4" --expected "6"
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 ~~~
 
-Each call starts a fresh process, sends the input as UTF-8 with a newline, and waits up to five seconds. The comparison is case-sensitive and preserves spaces. It normalizes Windows line endings and removes one final newline from stdout, so a program that prints `5` followed by a newline matches `--expected "5"`. Use `--expected ""` for empty stdout.
+Each call starts a fresh process, sends UTF-8 input followed by a newline, and waits up to five seconds. To send values on separate lines, use a PowerShell newline escape, as in ``--input "42`n10"``. Put the result on its own stdout line. The runner compares the complete final line, preserving spaces and case, and accepts either Windows or Unix line endings. The result line can end with a newline. Use `--expected ""` to require completely empty stdout.
 
-A green `PASS` shows the actual output and sets `$LASTEXITCODE` to `0`. A red `FAIL` shows expected and actual output and sets it to `1`. A red `ERROR` sets it to `2` for a timeout, nonzero program exit, or usage or launch error. The runner includes the program's stderr when available. Run `meowsky test --help` for the command reference.
+A green `PASS` shows the input and result and sets `$LASTEXITCODE` to `0`. A red `FAIL` sets it to `1` for a missing or mismatched result. If a prompt and result appear on the same line, the runner can suggest a line break. A red `ERROR` sets it to `2` for a timeout, nonzero program exit, or usage or launch error. Program failures show captured stdout and stderr, including partial output captured before a timeout. The exit checks in the script above stop at the first failure. Run `meowsky test --help` for the command reference.
 
 ## Your first exercise
 

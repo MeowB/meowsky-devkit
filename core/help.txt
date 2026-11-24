@@ -90,7 +90,7 @@ COMMANDS
     :CRun [file.c ...]      Build, then run only if compilation succeeds.
     meowsky :CBuild        Same terminal build command; spelling is exact.
     meowsky :CRun          Same terminal run command; spelling is exact.
-    meowsky test           Test a compiled program's stdout with a five-second timeout.
+    meowsky test           Check the final stdout line with a five-second timeout.
 
 OPTIONS
     -h, -Help               Show this help page and exit.
