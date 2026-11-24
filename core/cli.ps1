@@ -8,7 +8,8 @@ function meowsky {
     [string]$Target,
     [Alias('h', 'help')][switch]$ShowHelp
   )
-  $feature = if ($Action) { $script:MeowskyCommands[$Action.ToLowerInvariant()] }
+  # The caller may be a script whose script scope differs from the loaded profile.
+  $feature = if ($Action) { $MeowskyCommands[$Action.ToLowerInvariant()] }
   if ($feature -and $feature.CaseSensitive -and
       (@($feature.Command) + @($feature.Aliases)) -cnotcontains $Action) {
     throw "Use the exact command name: $($feature.Command) or $($feature.Aliases -join ', ')"

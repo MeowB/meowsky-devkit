@@ -75,6 +75,19 @@ int main(void) {
     Assert-C ($LASTEXITCODE -eq 2 -and "$usage" -like 'ERROR Usage*') "Duplicate option usage error: $usage"
     Assert-C ((meowsky test --help | Out-String).Contains('--expected')) 'Meowsky test help'
 
+    $standalonePath = Join-Path $fixture 'standalone-test.ps1'
+    [IO.File]::WriteAllText($standalonePath, @'
+meowsky test './test program.exe' --input -2 --expected ''
+if ($LASTEXITCODE -ne 2) { exit 1 }
+meowsky test './test program.exe' --input '-2 3' --expected '1'
+exit $LASTEXITCODE
+'@)
+    $profilePath = (Join-Path $repo 'powershell/profile.ps1').Replace("'", "''")
+    $scriptPath = $standalonePath.Replace("'", "''")
+    $shell = (Get-Process -Id $PID).Path
+    $standalone = & $shell -NoProfile -Command ". '$profilePath'; & '$scriptPath'" | Out-String
+    Assert-C ($LASTEXITCODE -eq 0 -and $standalone.Contains('PASS Output: "1"')) "Standalone PS1 dispatch: $standalone"
+
     $luaPath = Join-Path $fixture 'verify-quickfix.lua'
     $lua = @'
 local ok, err = pcall(function()
