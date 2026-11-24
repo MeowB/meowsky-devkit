@@ -20,5 +20,21 @@ EXAMPLES
 
     The program has five seconds to finish. A pass shows input and result.
     A failure shows the cause, input, expected result, stdout, and stderr.
-    In a PowerShell script, check $LASTEXITCODE after each call.
     0 = pass, 1 = output mismatch, 2 = execution or usage error.
+
+SCRIPT EXAMPLE
+    Save this in test.ps1 and run .\test.ps1 from PowerShell after building.
+    Set the executable in the function, then put one case on each line.
+    The exit check stops the script at the first failed case.
+
+    function Test-Case {
+        param([string]$InputText, [string]$Expected)
+
+        meowsky test .\main.exe --input $InputText --expected $Expected
+        if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+        }
+    }
+
+    Test-Case '10' 'result: 10'
+    Test-Case "999`n1000" 'result: 1000'
