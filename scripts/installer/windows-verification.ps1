@@ -171,6 +171,35 @@ assert(vim.wait(15000, function()
   end
   return false
 end, 200), 'TypeScript LSP did not attach')
+vim.cmd('edit ' .. vim.fn.fnameescape(vim.fn.fnamemodify(vim.g.meowsky_ts_path, ':h') .. '/verify-powershell.ps1'))
+local psbuf = vim.api.nvim_get_current_buf()
+assert(vim.bo.filetype == 'ps1', 'PowerShell filetype missing')
+assert(vim.treesitter.highlighter.active[psbuf], 'PowerShell highlighting is inactive')
+assert(vim.bo.indentexpr:find('nvim-treesitter', 1, true), 'PowerShell Tree-sitter indentation is inactive')
+vim.api.nvim_buf_set_lines(psbuf, 0, -1, false, {
+  'function Test-Case {',
+  'if ($true) {',
+  'Write-Output "ok"',
+  '}',
+  '}',
+  'Test-Case',
+})
+vim.cmd.normal({ 'gg=G', bang = true })
+assert(vim.deep_equal(vim.api.nvim_buf_get_lines(psbuf, 0, -1, false), {
+  'function Test-Case {',
+  '  if ($true) {',
+  '    Write-Output "ok"',
+  '  }',
+  '}',
+  'Test-Case',
+}), 'PowerShell gg=G did not indent the nested function body')
+local function has_capture(row, column, name)
+  return vim.iter(vim.treesitter.get_captures_at_pos(psbuf, row, column)):any(function(capture)
+    return capture.capture == name
+  end)
+end
+assert(has_capture(0, 9, 'function'), 'PowerShell function declaration highlighting missing')
+assert(has_capture(5, 0, 'function.call'), 'PowerShell function call highlighting missing')
 print('MEOWSKY_EDITOR_VERIFIED')
 vim.cmd('qa!')
 '@
@@ -180,7 +209,7 @@ vim.cmd('qa!')
     $result = Invoke-QuietNativeCommand -Label 'verify-nvim-c-web' -FilePath 'nvim.exe' `
       -Arguments @('--headless', '-i', 'NONE', '-n', $cFile, '-c', "let g:meowsky_ts_path='$tsLiteral'", '-c', "luafile $luaPath")
     if (-not (($result.Output | Out-String).Contains('MEOWSKY_EDITOR_VERIFIED'))) {
-      throw 'Neovim did not confirm C and TypeScript editor support.'
+      throw 'Neovim did not confirm C, TypeScript, and PowerShell editor support.'
     }
   } finally {
     $env:XDG_STATE_HOME = $previousStateHome

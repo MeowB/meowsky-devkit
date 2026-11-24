@@ -67,11 +67,11 @@ require('lazy').setup({
       })
 
       if vim.fn.executable('tree-sitter') == 1 then
-        treesitter.install({ 'c', 'lua', 'vim', 'vimdoc', 'javascript', 'typescript', 'tsx', 'json', 'html', 'css', 'prisma' })
+        treesitter.install({ 'c', 'lua', 'vim', 'vimdoc', 'javascript', 'typescript', 'tsx', 'json', 'html', 'css', 'prisma', 'powershell' })
       end
 
       vim.api.nvim_create_autocmd('FileType', {
-        pattern = { 'c', 'lua', 'vim', 'javascript', 'typescript', 'typescriptreact', 'json', 'html', 'css', 'prisma' },
+        pattern = { 'c', 'lua', 'vim', 'javascript', 'typescript', 'typescriptreact', 'json', 'html', 'css', 'prisma', 'ps1' },
         callback = function()
           pcall(vim.treesitter.start)
           if vim.treesitter.highlighter.active[vim.api.nvim_get_current_buf()] then

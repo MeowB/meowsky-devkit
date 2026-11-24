@@ -63,7 +63,8 @@ $treesitterParsers = @(
   'html',
   'css',
   'markdown',
-  'prisma'
+  'prisma',
+  'powershell'
 )
 
 function Test-MasonPackageInstalled {
