@@ -53,14 +53,15 @@ require('lazy').setup({
     config = function()
       require('tokyonight').setup({
         on_colors = function(colors)
-          colors.bg = '#111421'
-          colors.bg_dark = '#0D101A'
+          colors.bg = '#0D101B'
+          colors.bg_dark = '#0A0D16'
+          colors.bg_dark1 = '#080B13'
           colors.fg = '#DCE5FF'
           colors.comment = '#8995B8'
-          colors.blue = '#55DFFF'
-          colors.magenta = '#D6A0FF'
-          colors.green = '#ACF06A'
-          colors.yellow = '#FFD166'
+          colors.blue = '#00F5FF'
+          colors.magenta = '#DF63FF'
+          colors.green = '#A6FF00'
+          colors.yellow = '#FFD000'
         end,
         on_highlights = function(highlights, colors)
           highlights.Keyword.fg = colors.magenta
