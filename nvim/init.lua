@@ -51,6 +51,22 @@ require('lazy').setup({
     lazy = false,
     priority = 1000,
     config = function()
+      require('tokyonight').setup({
+        on_colors = function(colors)
+          colors.bg = '#111421'
+          colors.bg_dark = '#0D101A'
+          colors.fg = '#DCE5FF'
+          colors.comment = '#8995B8'
+          colors.blue = '#55DFFF'
+          colors.magenta = '#D6A0FF'
+          colors.green = '#ACF06A'
+          colors.yellow = '#FFD166'
+        end,
+        on_highlights = function(highlights, colors)
+          highlights.Keyword.fg = colors.magenta
+          highlights.Number = { fg = colors.yellow }
+        end,
+      })
       vim.cmd.colorscheme('tokyonight-night')
     end,
   },
