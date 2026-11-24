@@ -2,7 +2,7 @@
   Version = 1
   # Execution order is explicit. Requires below records technical prerequisites.
   Order = @(
-    'checkout', 'packages', 'compiler', 'nvim-runtime', 'zig',
+    'checkout', 'packages', 'compiler', 'python', 'nvim-runtime', 'zig',
     'codex-cli', 'codex-instructions', 'zig-wrappers', 'nvim-config',
     'profile-import', 'terminal-directory', 'nvim-plugins', 'nvim-mason', 'nvim-parsers'
   )
@@ -10,6 +10,7 @@
     checkout = @{ Label = 'Set DevKit checkout location'; Script = 'profile.ps1'; Handler = 'Install-MeowskyCheckoutLocation'; Requires = @() }
     packages = @{ Label = 'Install or verify Windows packages'; Script = 'packages.ps1'; Handler = 'Install-MeowskyWindowsPackages'; Requires = @() }
     compiler = @{ Label = 'Install or verify C compiler and debugger'; Script = 'compiler.ps1'; Handler = 'Install-MeowskyCCompiler'; Requires = @('packages') }
+    python = @{ Label = 'Install or verify Python for C tests'; Script = 'python.ps1'; Handler = 'Install-MeowskyPython'; Requires = @('packages', 'compiler') }
     'nvim-runtime' = @{ Label = 'Repair Neovim runtime environment'; Script = 'nvim.ps1'; Handler = 'Install-MeowskyNvimRuntimeRepair'; Requires = @() }
     zig = @{ Label = 'Resolve Zig compiler'; Script = 'zig.ps1'; Handler = 'Install-MeowskyZig'; Requires = @() }
     'codex-cli' = @{ Label = 'Check Codex CLI'; Script = 'codex.ps1'; Handler = 'Install-MeowskyCodexCli'; Requires = @('packages') }

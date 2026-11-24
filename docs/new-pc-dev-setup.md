@@ -55,6 +55,12 @@ meowsky -h
 
 `gcc` and `gdb` should resolve to the same toolchain directory. For isolated checks of profile reconciliation, PATH logic, and installation module wiring without changing user configuration, run `powershell -NoProfile -File tests/verify-windows-installer.ps1` from this checkout. Rerun `scripts/install-windows.ps1` to repair or verify an existing installation; use `-Upgrade` only when you also want package upgrade checks.
 
+### Python for C tests
+
+The Windows installer reuses a working Python 3.7 or later on persistent PATH. If needed, it installs Python 3.13 through WinGet. The final verification compiles a temporary C program and runs `meowsky test` in each installed PowerShell edition.
+
+If setup reports a Python PATH problem, open a fresh PowerShell window and run `where.exe python` and `python --version`. If the Windows Store alias takes precedence over an installed interpreter, disable that alias under **App execution aliases** or move the Python directory ahead of it on PATH, then rerun setup.
+
 ### PowerShell profile execution policy
 
 On a fresh machine, if Windows blocks the installer because scripts are disabled, run:

@@ -1,3 +1,24 @@
+function Test-MeowskyFreshCProgram {
+  param([string]$Shell, [string]$Source, [string]$Program)
+
+  $sourceLiteral = $Source.Replace("'", "''")
+  $programLiteral = $Program.Replace("'", "''")
+  $freshBuild = @"
+`$ErrorActionPreference = 'Stop'
+& gcc.exe -std=c11 -Wall -Wextra -Wpedantic -g '$sourceLiteral' -o '$programLiteral'
+if (`$LASTEXITCODE -ne 0) { throw 'Fresh PowerShell C build failed.' }
+meowsky test '$programLiteral' --input '4' --expected 'result: 5'
+if (`$LASTEXITCODE -ne 0) { throw 'Fresh PowerShell meowsky test failed. See the runner diagnostics above.' }
+'MEOWSKY_FRESH_C_VERIFIED'
+"@
+  $encodedBuild = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($freshBuild))
+  $freshResult = Invoke-MeowskyFreshPowerShellCommand -Label "verify-$Shell-c-test" -FilePath $Shell `
+    -Arguments @('-NoLogo', '-NonInteractive', '-EncodedCommand', $encodedBuild)
+  if (-not (($freshResult.Output | Out-String).Contains('MEOWSKY_FRESH_C_VERIFIED'))) {
+    throw "A fresh $Shell session did not confirm C compilation and meowsky test."
+  }
+}
+
 function Test-MeowskyWindowsInstallation {
   $expectedBin = Get-MeowskyPathKey $script:cCompilerBin
   if ((Get-MeowskyPathKey (Get-MeowskyToolchainDirectory -Scope User)) -ne $expectedBin) {
@@ -85,31 +106,26 @@ function Test-MeowskyWindowsInstallation {
   try {
     $cFile = Join-Path $fixture 'main.c'
     $tsFile = Join-Path $fixture 'app.ts'
-    [IO.File]::WriteAllText($cFile, "#include <stdio.h>`nint main(void) { int value = 5; return value - 5; }`n")
+    [IO.File]::WriteAllText($cFile, @'
+#include <stdio.h>
+int main(void) {
+    int value;
+    if (scanf("%d", &value) != 1) {
+        fputs("expected an integer\n", stderr);
+        return 1;
+    }
+    puts("Enter a number:");
+    printf("result: %d\n", value + 1);
+    return 0;
+}
+'@)
     [IO.File]::WriteAllText($tsFile, "const value: number = 5;`nconsole.log(value);`n")
     $exe = Join-Path $fixture 'main.exe'
     Invoke-QuietNativeCommand -Label 'verify-c-build' -FilePath (Join-Path $script:cCompilerBin 'gcc.exe') `
       -Arguments @('-std=c11', '-Wall', '-Wextra', '-Wpedantic', '-g', $cFile, '-o', $exe) | Out-Null
-    Invoke-QuietNativeCommand -Label 'verify-c-run' -FilePath $exe -Arguments @() | Out-Null
     foreach ($shell in @('powershell.exe', 'pwsh.exe')) {
       if (-not (Get-Command $shell -ErrorAction SilentlyContinue)) { continue }
-      $freshExe = Join-Path $fixture "fresh-$shell"
-      $sourceLiteral = $cFile.Replace("'", "''")
-      $programLiteral = $freshExe.Replace("'", "''")
-      $freshBuild = @"
-`$ErrorActionPreference = 'Stop'
-& gcc.exe -std=c11 -Wall -Wextra -Wpedantic -g '$sourceLiteral' -o '$programLiteral'
-if (`$LASTEXITCODE -ne 0) { throw 'Fresh PowerShell C build failed.' }
-& '$programLiteral'
-if (`$LASTEXITCODE -ne 0) { throw 'Fresh PowerShell C program failed.' }
-'MEOWSKY_FRESH_C_VERIFIED'
-"@
-      $encodedBuild = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($freshBuild))
-      $freshResult = Invoke-MeowskyFreshPowerShellCommand -Label "verify-$shell-c-build" -FilePath $shell `
-        -Arguments @('-NoLogo', '-NonInteractive', '-EncodedCommand', $encodedBuild)
-      if (-not (($freshResult.Output | Out-String).Contains('MEOWSKY_FRESH_C_VERIFIED'))) {
-        throw "A fresh $shell session did not confirm C compilation and execution."
-      }
+      Test-MeowskyFreshCProgram -Shell $shell -Source $cFile -Program (Join-Path $fixture "fresh-$shell")
     }
     $gdbResult = Invoke-QuietNativeCommand -Label 'verify-gdb' -FilePath (Join-Path $script:cCompilerBin 'gdb.exe') `
       -Arguments @('-q', '-batch', '-ex', 'break main', '-ex', 'run', $exe)

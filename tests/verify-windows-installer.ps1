@@ -222,9 +222,40 @@ try {
   Assert-Throws { Initialize-CCompiler } 'Missing compiler and MSYS2 root fails clearly'
   Assert-True ($script:packageInstalls -eq 1) 'Missing toolchain tries package installation once'
 
+  . (Join-Path $repo 'scripts/installer/features/python.ps1')
+  $script:pythonCandidate = Join-Path $bin 'python.exe'
+  $script:pythonHealthy = $true
+  $script:pythonPackageInstalled = $false
+  $script:pythonInstalls = 0
+  $script:pythonPathRefreshes = 0
+  function Get-MeowskyFreshPathCommand { param([string]$Name) return $script:pythonCandidate }
+  function Test-WinGetPackageInstalled { param([string]$Id) return $script:pythonPackageInstalled }
+  function Sync-MeowskyProcessPath { $script:pythonPathRefreshes++ }
+  function Invoke-QuietNativeCommand {
+    param([string]$Label, [string]$FilePath, [string[]]$Arguments)
+    if ($Label -eq 'install-python') {
+      Assert-True ($FilePath -eq 'winget.exe' -and $Arguments -contains 'Python.Python.3.13') 'WinGet receives the Python package ID'
+      $script:pythonInstalls++
+      $script:pythonCandidate = Join-Path $bin 'python.exe'
+      $script:pythonPackageInstalled = $true
+    } elseif (-not $script:pythonHealthy) {
+      throw 'Interpreter probe failed'
+    }
+    return @{ Output = '3.13.1'; ExitCode = 0 }
+  }
+  Install-MeowskyPython
+  Assert-True ($script:pythonInstalls -eq 0) 'Healthy Python is reused'
+  $script:pythonCandidate = $null
+  Install-MeowskyPython
+  Assert-True ($script:pythonInstalls -eq 1 -and $script:pythonPathRefreshes -eq 1) 'Missing Python triggers installation and PATH refresh'
+  $script:pythonCandidate = Join-Path $fixture 'WindowsApps/python.exe'
+  $script:pythonHealthy = $false
+  Assert-Throws { Install-MeowskyPython } 'Unusable Python still fails after the package is installed'
+  Assert-True ($script:pythonInstalls -eq 1) 'Existing Python package is not reinstalled for a PATH conflict'
+
   $installerRoot = Join-Path $repo 'scripts/installer'
   $manifest = Import-PowerShellDataFile (Join-Path $installerRoot 'windows-features.psd1')
-  Assert-True ($manifest.Version -eq 1 -and $manifest.Order.Count -eq 14) 'Windows installation manifest version and steps'
+  Assert-True ($manifest.Version -eq 1 -and $manifest.Order.Count -eq 15) 'Windows installation manifest version and steps'
   $terminalStep = $manifest.Steps['terminal-directory']
   Assert-True ($terminalStep.Script -eq 'terminal.ps1' -and $terminalStep.Handler -eq 'Install-MeowskyTerminalDirectory') 'Terminal directory step uses its installer module and handler'
   Assert-True (@($terminalStep.Requires).Count -eq 1 -and $terminalStep.Requires[0] -eq 'profile-import') 'Terminal directory step requires the PowerShell profile'
