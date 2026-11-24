@@ -7,6 +7,7 @@ function Invoke-MeowskyTestFeature {
   }
 
   $status = 2
+  $result = $null
   try {
     $flags = @('--input', '--expected')
     if (-not $Target -or $Arguments.Count -ne 4 -or
@@ -45,5 +46,15 @@ function Invoke-MeowskyTestFeature {
 
   $color = if ($status -eq 0) { 'Green' } else { 'Red' }
   Write-Host $message -ForegroundColor $color
+  if ($result -and $status -ne 0) {
+    foreach ($stream in @('stdout', 'stderr')) {
+      $output = $result.$stream
+      if ($output) {
+        Write-Host
+        Write-Host "Program $stream"
+        Write-Host $output -NoNewline:($output.EndsWith("`n"))
+      }
+    }
+  }
   $global:LASTEXITCODE = $status
 }

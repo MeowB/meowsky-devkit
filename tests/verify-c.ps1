@@ -75,11 +75,15 @@ int main(void) {
     $pass = meowsky test './test program.exe' --input '-2 3' --expected '1' 6>&1
     Assert-C ($LASTEXITCODE -eq 0 -and "$pass" -ceq 'PASS input="-2 3" output="1"') "Numeric test with a spaced path: $pass"
     $mismatch = meowsky test './test program.exe' --input '10 -4' --expected '7' 6>&1
-    Assert-C ($LASTEXITCODE -eq 1 -and "$mismatch" -match '(?s)FAIL.*Expected: "7".*Stdout:\s+"6') "Mismatch details: $mismatch"
+    Assert-C ($LASTEXITCODE -eq 1 -and "$mismatch" -match '(?s)FAIL.*Expected: "7".*Program stdout 6\r?\n') "Mismatch details: $mismatch"
     $prompted = meowsky test './test program.exe' --input "42`n10" --expected 'result: 10' 6>&1
     Assert-C ($LASTEXITCODE -eq 0 -and "$prompted" -ceq 'PASS input="42\n10" output="result: 10"') "Quiet pass with multiple inputs: $prompted"
+    $transcript = meowsky test './test program.exe' --input "42`n10" --expected '' 6>&1
+    Assert-C ($LASTEXITCODE -eq 1 -and $transcript[0].MessageData.ForegroundColor -eq 'Red' -and
+      $transcript[-1].MessageData.ForegroundColor -ne 'Red' -and
+      "$($transcript[-1])" -cmatch '\AFirst number: Second number: \r?\nresult: 10\r?\n\z') "Multiline program output in the default color: $transcript"
     $joined = meowsky test './test program.exe' --input '41 10' --expected 'result: 10' 6>&1
-    Assert-C ($LASTEXITCODE -eq 1 -and "$joined" -match '(?s)own line.*Stdout:.*Enter a number: result: 10') "Missing result line break: $joined"
+    Assert-C ($LASTEXITCODE -eq 1 -and "$joined" -match '(?s)own line.*Program stdout.*Enter a number: result: 10') "Missing result line break: $joined"
     $similar = meowsky test './test program.exe' --input '100 10' --expected '10' 6>&1
     Assert-C ($LASTEXITCODE -eq 1 -and "$similar" -like 'FAIL Final output line mismatch.*') "Reject 110 when the expected result is 10: $similar"
     $empty = meowsky test './test program.exe' --expected '' --input '0 4' 6>&1
@@ -87,7 +91,7 @@ int main(void) {
     $missing = meowsky test './test program.exe' --input '0 4' --expected '4' 6>&1
     Assert-C ($LASTEXITCODE -eq 1 -and "$missing" -like 'FAIL Program exited successfully without printing any stdout.*') "Missing output: $missing"
     $programError = meowsky test './test program.exe' --input 'no' --expected '' 6>&1
-    Assert-C ($LASTEXITCODE -eq 2 -and "$programError" -match '(?s)ERROR.*code 7.*Enter two numbers:.*expected two integers') "Program error details: $programError"
+    Assert-C ($LASTEXITCODE -eq 2 -and "$programError" -match '(?s)ERROR.*code 7.*Program stdout.*Enter two numbers:.*Program stderr.*expected two integers') "Program error details: $programError"
     $timeout = meowsky test './test program.exe' --input '99 1' --expected '' 6>&1
     Assert-C ($LASTEXITCODE -eq 2 -and "$timeout" -match '(?s)ERROR Program did not exit within 5 seconds.*waiting for a result') "Timeout with partial stdout: $timeout"
     $usage = meowsky test './test program.exe' --input '2 3' --input '5' 6>&1

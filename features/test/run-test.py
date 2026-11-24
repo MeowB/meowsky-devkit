@@ -7,13 +7,17 @@ import sys
 TIMEOUT_SECONDS = 5
 
 
-def failure_details(request, stdout=None, stderr=None):
-    return (
-        f"\n  Input:    {json.dumps(request['input'])}"
-        f"\n  Expected: {json.dumps(request['expected'])}"
-        f"\n  Stdout:   {json.dumps((stdout or b'').decode('utf-8', errors='replace'))}"
-        f"\n  Stderr:   {json.dumps((stderr or b'').decode('utf-8', errors='replace'))}"
-    )
+def failure(request, status, message, stdout=None, stderr=None):
+    return {
+        "status": status,
+        "message": (
+            f"{message}"
+            f"\n  Input:    {json.dumps(request['input'])}"
+            f"\n  Expected: {json.dumps(request['expected'])}"
+        ),
+        "stdout": (stdout or b"").decode("utf-8", errors="replace"),
+        "stderr": (stderr or b"").decode("utf-8", errors="replace"),
+    }
 
 
 def run_test(request):
@@ -25,25 +29,25 @@ def run_test(request):
             timeout=TIMEOUT_SECONDS,
         )
     except subprocess.TimeoutExpired as error:
-        return 2, (
-            f"ERROR Program did not exit within {TIMEOUT_SECONDS} seconds."
-            + failure_details(request, error.stdout, error.stderr)
+        return failure(
+            request, 2, f"ERROR Program did not exit within {TIMEOUT_SECONDS} seconds.",
+            error.stdout, error.stderr,
         )
     except OSError as error:
-        return 2, f"ERROR Could not start program: {error}" + failure_details(request)
+        return failure(request, 2, f"ERROR Could not start program: {error}")
 
     if result.returncode != 0:
-        return 2, (
-            f"ERROR Program exited with code {result.returncode}."
-            + failure_details(request, result.stdout, result.stderr)
+        return failure(
+            request, 2, f"ERROR Program exited with code {result.returncode}.",
+            result.stdout, result.stderr,
         )
 
     try:
         actual = result.stdout.decode("utf-8").replace("\r\n", "\n")
     except UnicodeDecodeError:
-        return 2, (
-            "ERROR Program stdout is not valid UTF-8."
-            + failure_details(request, result.stdout, result.stderr)
+        return failure(
+            request, 2, "ERROR Program stdout is not valid UTF-8.",
+            result.stdout, result.stderr,
         )
 
     if actual.endswith("\n"):
@@ -52,7 +56,10 @@ def run_test(request):
     expected = request["expected"]
     matches = last_line == expected if expected else not result.stdout
     if matches:
-        return 0, f"PASS input={json.dumps(request['input'])} output={json.dumps(last_line)}"
+        return {
+            "status": 0,
+            "message": f"PASS input={json.dumps(request['input'])} output={json.dumps(last_line)}",
+        }
 
     if not result.stdout:
         message = "FAIL Program exited successfully without printing any stdout."
@@ -65,10 +72,9 @@ def run_test(request):
         )
     else:
         message = "FAIL Final output line mismatch."
-    return 1, message + failure_details(request, result.stdout, result.stderr)
+    return failure(request, 1, message, result.stdout, result.stderr)
 
 
 if __name__ == "__main__":
     request = json.loads(base64.b64decode(sys.stdin.buffer.readline()))
-    status, message = run_test(request)
-    print(json.dumps({"status": status, "message": message}))
+    print(json.dumps(run_test(request)))
