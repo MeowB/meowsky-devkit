@@ -1,0 +1,18 @@
+NAME
+    meowsky test - run one test against a compiled program
+
+SYNTAX
+    meowsky test <program.exe> --input "<text>" --expected "<text>"
+    meowsky test --help
+
+EXAMPLE
+    meowsky test .\main.exe --input "2 3" --expected "5"
+
+    Build first with :CBuild or GCC. Python 3.7 or later must be on PATH.
+    The runner sends the literal input as UTF-8 followed by a newline.
+    It compares UTF-8 stdout case-sensitively after normalizing CRLF and
+    removing one final newline. Use --expected "" for empty output.
+
+    The program has five seconds to finish. The runner reports stderr when
+    present. In a PowerShell script, check $LASTEXITCODE after each call.
+    0 = pass, 1 = output mismatch, 2 = execution or usage error.

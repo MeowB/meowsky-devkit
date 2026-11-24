@@ -65,12 +65,12 @@ try {
       Assert-Equal $inputColors.$name ([string][char]27 + '[' + $expectedInputColors[$name] + 'm') "PowerShell input $name follows ANSI palette"
     }
   }
-  Assert-Equal $script:MeowskyCommands.Count 17 'Registered commands and aliases'
+  Assert-Equal $script:MeowskyCommands.Count 18 'Registered commands and aliases'
   Assert-Equal ($script:MeowskyCommands['identity'].SkipWorkRoot) $true 'Identity skips work-root dispatch'
   Assert-Equal ($script:MeowskyCommands['audit'].SkipWorkRoot) $true 'Audit skips work-root dispatch'
   Assert-Equal ($script:MeowskyCommands['.'].SkipWorkRoot) $true 'Current-directory workspace skips work-root dispatch'
-  Assert-Equal (@($script:MeowskyCommands.Values | Where-Object { $_.SkipWorkRoot }).Count) 11 'Identity, Audit workflow, Animate, workspace, and districts skip work-root dispatch'
-  Assert-Equal (@($script:MeowskyCommands.Values | Where-Object { $_.AcceptsArguments }).Count) 5 'Identity, Audit workflow, and Animate accept extra arguments'
+  Assert-Equal (@($script:MeowskyCommands.Values | Where-Object { $_.SkipWorkRoot }).Count) 12 'Commands that skip work-root dispatch'
+  Assert-Equal (@($script:MeowskyCommands.Values | Where-Object { $_.AcceptsArguments }).Count) 6 'Commands that accept extra arguments'
   foreach ($command in @('codex', 'color', 'identity', 'audit', 'review', 'refactor', 'animate', 'ptree', 'md', 'markdown', 'pdf', '.', './', 'bach', 'launchpad')) {
     $manifest = $script:MeowskyCommands[$command]
     $expectedHelp = (Get-Content -Raw (Join-Path $manifest.Directory $manifest.Help)).TrimEnd()
@@ -189,7 +189,7 @@ try {
   $baseline = (& git -C $repo show "${BaselineRevision}:powershell/profile.ps1") -join "`n"
   $baselineAst = [Management.Automation.Language.Parser]::ParseInput($baseline, [ref]$null, [ref]$null)
   $oldHelp = $baselineAst.Find({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Show-MeowskyHelp' }, $true).Extent.Text
-  $legacyHelp = ($globalHelp -split "`r?`n" | Where-Object { $_ -notmatch '^\s+meowsky (identity|audit|review|refactor)' }) -join "`n"
+  $legacyHelp = ($globalHelp -split "`r?`n" | Where-Object { $_ -notmatch '^\s+meowsky (identity|audit|review|refactor|test)\b' }) -join "`n"
   $expectedLegacyHelp = ((& { . ([scriptblock]::Create($oldHelp)); Show-MeowskyHelp }).TrimEnd()) -replace "`r`n", "`n"
   $filter = { $_ -notmatch '^\s+meowsky color|^\s+meowsky (dev|bach|launchpad|matrix|animate)|^\s+meowsky\s+(Change to the work root|Ensure the workspace)|^\s+The work root is|^\s+otherwise \$HOME\\work|^\s+then under the work root|^\s+WORK_HOME must|^\s+Bare meowsky|^\s+dev/, bach/, and launchpad/|^\s+directories; files at those paths|^\s+commands check their own repositories|^\s+File and Codex paths|^\s+meowsky \. and ./ use|^\s+current directory with Codex,|^\s+active identity theme|^\s+dev\s+Compatibility alias|AUDIT.md, and state.json|^\s+(?:meowsky )?:C(Build|Run)\b|^\s+(Build main\.c|Build, then run|Same terminal (build|run))' }
   Assert-Equal (($legacyHelp -split "`n" | Where-Object $filter) -join "`n") (($expectedLegacyHelp -split "`n" | Where-Object $filter) -join "`n") 'Global help preserved except retired colors, Identity, and Audit'
@@ -548,7 +548,7 @@ meowsky dev
 if ((Get-Location).Path -ne (Join-Path $env:WORK_HOME 'dev')) { throw 'meowsky dev did not enter dev/.' }
 if ($script:MeowskyCommands.ContainsKey('md') -or $script:MeowskyCommands.ContainsKey('markdown')) { throw 'Removed feature still registered.' }
 if (-not (meowsky pdf -h).Contains('meowsky pdf')) { throw 'Unrelated feature failed.' }
-if ($script:MeowskyCommands.Count -ne 15) { throw 'Unexpected command count after feature removal.' }
+if ($script:MeowskyCommands.Count -ne 16) { throw 'Unexpected command count after feature removal.' }
 '@ | Set-Content -LiteralPath (Join-Path $isolatedRuntime 'verify.ps1') -Encoding UTF8
   & powershell.exe -NoProfile -File (Join-Path $isolatedRuntime 'verify.ps1')
   Assert-Equal $LASTEXITCODE 0 'Fresh-profile feature removal without standalone dev alias'

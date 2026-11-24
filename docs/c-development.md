@@ -41,6 +41,28 @@ For a program with multiple source files, pass each additional `.c` file to GCC 
 
 From PowerShell, `:CBuild` and `:CRun` (or `meowsky :CBuild` and `meowsky :CRun`) build `main.c` in the current directory by default. Give another entry file when needed, such as `:CRun exercise.c`, followed by any additional `.c` files. The executable takes the first file's name. These terminal commands use the same GCC warning flags as Neovim and print complete compiler messages. `:CRun` runs only after a successful build. Spell the commands exactly as shown, and open a new PowerShell session to load them. Neovim's commands still use the current C buffer.
 
+## Test a compiled program from PowerShell
+
+Save the C buffers in Neovim and keep both tabs open. From the project's PowerShell terminal, run `:CBuild` or GCC, then test the resulting executable. Python 3.7 or later must be on PATH.
+
+~~~powershell
+meowsky test <program.exe> --input "<text>" --expected "<text>"
+~~~
+
+For a program that reads two integers and prints their sum, save these calls in `test.ps1` and run `.\test.ps1` after building `main.exe`.
+
+~~~powershell
+meowsky test .\main.exe --input "2 3" --expected "5"
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+meowsky test .\main.exe --input "10 -4" --expected "6"
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+~~~
+
+Each call starts a fresh process, sends the input as UTF-8 with a newline, and waits up to five seconds. The comparison is case-sensitive and preserves spaces. It normalizes Windows line endings and removes one final newline from stdout, so a program that prints `5` followed by a newline matches `--expected "5"`. Use `--expected ""` for empty stdout.
+
+A green `PASS` shows the actual output and sets `$LASTEXITCODE` to `0`. A red `FAIL` shows expected and actual output and sets it to `1`. A red `ERROR` sets it to `2` for a timeout, nonzero program exit, or usage or launch error. The runner includes the program's stderr when available. Run `meowsky test --help` for the command reference.
+
 ## Your first exercise
 
 Create a folder for the exercise and write `main.c` there. For example, begin with a small `main` function and add your own statements. Open it from the project folder:

@@ -41,6 +41,40 @@ try {
     Assert-CError { :CRun broken.c } 'C build failed*'
     Assert-C (-not (Test-Path -LiteralPath (Join-Path $fixture 'broken.exe'))) 'Failed build did not run'
 
+    $testSource = @'
+#include <stdio.h>
+int main(void) {
+    int a, b;
+    if (scanf("%d %d", &a, &b) != 2) {
+        fputs("expected two integers\n", stderr);
+        return 7;
+    }
+    if (a == 99) {
+        for (;;) {}
+    }
+    if (a != 0) {
+        printf("%d\n", a + b);
+    }
+    return 0;
+}
+'@
+    [IO.File]::WriteAllText((Join-Path $fixture 'test program.c'), $testSource)
+    $null = :CBuild 'test program.c'
+
+    $pass = meowsky test './test program.exe' --input '-2 3' --expected '1' 6>&1
+    Assert-C ($LASTEXITCODE -eq 0 -and "$pass" -like 'PASS*1*') "Numeric test with a spaced path: $pass"
+    $mismatch = meowsky test './test program.exe' --input '10 -4' --expected '7' 6>&1
+    Assert-C ($LASTEXITCODE -eq 1 -and "$mismatch" -match '(?s)FAIL.*Expected: "7".*Actual:\s+"6"') "Mismatch details: $mismatch"
+    $empty = meowsky test './test program.exe' --expected '' --input '0 4' 6>&1
+    Assert-C ($LASTEXITCODE -eq 0 -and "$empty" -like 'PASS*') "Pass resets status and accepts empty expected output: $empty"
+    $programError = meowsky test './test program.exe' --input 'no' --expected '' 6>&1
+    Assert-C ($LASTEXITCODE -eq 2 -and "$programError" -match '(?s)ERROR.*code 7.*expected two integers') "Program error details: $programError"
+    $timeout = meowsky test './test program.exe' --input '99 1' --expected '' 6>&1
+    Assert-C ($LASTEXITCODE -eq 2 -and "$timeout" -like 'ERROR Timed out after 5 seconds*') "Timeout: $timeout"
+    $usage = meowsky test './test program.exe' --input '2 3' --input '5' 6>&1
+    Assert-C ($LASTEXITCODE -eq 2 -and "$usage" -like 'ERROR Usage*') "Duplicate option usage error: $usage"
+    Assert-C ((meowsky test --help | Out-String).Contains('--expected')) 'Meowsky test help'
+
     $luaPath = Join-Path $fixture 'verify-quickfix.lua'
     $lua = @'
 local ok, err = pcall(function()
