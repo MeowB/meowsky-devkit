@@ -81,6 +81,7 @@ int main(void) {
     $transcript = meowsky test './test program.exe' --input "42`n10" --expected '' 6>&1
     $separator = '-' * $Host.UI.RawUI.WindowSize.Width
     Assert-C ($LASTEXITCODE -eq 1 -and $transcript[0].MessageData.ForegroundColor -eq 'Red' -and
+      "$($transcript[0])" -cmatch 'Input sent\r?\n    42\r?\n    10\r?\n  Expected: ""' -and
       $transcript[-3].MessageData.ForegroundColor -eq 'White' -and
       $transcript[-2].MessageData.ForegroundColor -eq 'White' -and
       $transcript[-1].MessageData.ForegroundColor -eq 'White' -and

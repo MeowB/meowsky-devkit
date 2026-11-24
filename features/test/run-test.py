@@ -8,11 +8,17 @@ TIMEOUT_SECONDS = 5
 
 
 def failure(request, status, message, stdout=None, stderr=None):
+    input_text = request["input"].replace("\r\n", "\n")
+    if "\n" in input_text:
+        input_details = "  Input sent\n    " + input_text.replace("\n", "\n    ")
+    else:
+        input_details = f"  Input:    {json.dumps(input_text)}"
+
     return {
         "status": status,
         "message": (
             f"{message}"
-            f"\n  Input:    {json.dumps(request['input'])}"
+            f"\n{input_details}"
             f"\n  Expected: {json.dumps(request['expected'])}"
         ),
         "stdout": (stdout or b"").decode("utf-8", errors="replace"),
