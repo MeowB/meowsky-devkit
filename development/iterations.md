@@ -12,3 +12,9 @@
 - Carried the verified origin upstream and fetch time from the Windows district launcher into the startup summary. The summary labels cached counts and reports unknown when an upstream comparison is unavailable.
 - Ran `powershell -NoProfile -ExecutionPolicy Bypass -File tests/verify-refactor.ps1`. All 365 checks passed. Local Git checks verified a fresh behind comparison, a failed fetch, a summary without fetch, and a missing upstream. They also checked that HEAD, branch, and working tree stayed unchanged.
 - Next, commit this batch and prepare the opt-in Codex launch flag.
+
+## Opt-in workspace instruction skip
+
+- Added Windows workspace flags `-s` and `--skip`. Removed the `-ShowHelp` parameter that captured `-s` and documented `-h` and `--help`. Kept `-Help` for compatibility.
+- All 382 checks in `tests/verify-refactor.ps1` passed. An installed Codex 0.171.0 prompt inspection found both repository instruction fixtures on a default launch and omitted both with the override.
+- A runtime check with a global instruction file remains open. Next, commit the batch, verify that case, and review the Alt+Tab batch.

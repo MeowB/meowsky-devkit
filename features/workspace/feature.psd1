@@ -7,4 +7,5 @@
     Help = 'help.txt'
     Description = 'Open the current project workspace'
     SkipWorkRoot = $true
+    AcceptsArguments = $true
 }

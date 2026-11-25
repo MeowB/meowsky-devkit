@@ -6,7 +6,7 @@ function meowsky {
   param(
     [string]$Action,
     [string]$Target,
-    [Alias('h', 'help')][switch]$ShowHelp
+    [Alias('h')][switch]$Help
   )
   # The caller may be a script whose script scope differs from the loaded profile.
   $feature = if ($Action) { $MeowskyCommands[$Action.ToLowerInvariant()] }
@@ -14,7 +14,7 @@ function meowsky {
       (@($feature.Command) + @($feature.Aliases)) -cnotcontains $Action) {
     throw "Use the exact command name: $($feature.Command) or $($feature.Aliases -join ', ')"
   }
-  if ($ShowHelp -or $Action -in @('help', '--help')) {
+  if ($Help -or $Action -in @('help', '--help') -or ($feature -and $Target -eq '--help')) {
     if ($feature) {
       Get-Content -Raw -LiteralPath (Join-Path $feature.Directory $feature.Help)
     } else {

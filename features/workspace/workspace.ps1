@@ -1,12 +1,13 @@
 function Invoke-MeowskyWorkspaceFeature {
-  param([string]$Target, [string]$WorkRoot)
+  param([string]$Target, [string]$WorkRoot, [string[]]$Arguments)
+  $skipProjectInstructions = ($Target -eq '--skip') -or ($Arguments -contains '-s')
   $root = (Get-Location).Path
   $null = Ensure-MeowskyProjectWorkspace -Path $root
   $today = Get-Date -Format 'yyyy-MM-dd'
   $promptTree = Get-MeowskyPromptTree -Root $root
   $gitStatus = Get-MeowskyGitSummary -Root $root
   $codexPrompt = Get-MeowskyCodexPrompt -Today $today -Root $root -Tree $promptTree -GitStatus $gitStatus
-  Start-MeowskyWorkspaceLayout -Root $root -Prompt $codexPrompt -GitStatus $gitStatus
+  Start-MeowskyWorkspaceLayout -Root $root -Prompt $codexPrompt -GitStatus $gitStatus -SkipProjectInstructions:$skipProjectInstructions
 }
 
 function Test-MeowskyDistrictRepository {
@@ -125,7 +126,8 @@ function Start-MeowskyWorkspaceLayout {
     [Parameter(Mandatory = $true)][string]$Root,
     [Parameter(Mandatory = $true)][string]$Prompt,
     [Parameter(Mandatory = $true)][string]$GitStatus,
-    [ValidateSet('Development', 'TwoPane')][string]$Layout = 'Development'
+    [ValidateSet('Development', 'TwoPane')][string]$Layout = 'Development',
+    [switch]$SkipProjectInstructions
   )
   if ($Layout -eq 'TwoPane') {
     Assert-MeowskyFeatures -Names @('codex')
@@ -145,13 +147,14 @@ function Start-MeowskyWorkspaceLayout {
 
     $promptPathEncoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($promptPath))
     $profilePrelude = "`$WarningPreference = 'SilentlyContinue'`r`n. `$PROFILE`r`nReset-MeowskyTerminalColors`r`n`$WarningPreference = 'Continue'"
+    $codexOptions = if ($SkipProjectInstructions) { " -Arguments @('-c', 'project_doc_max_bytes=0')" }
 $codexScript = @"
 $profilePrelude
 Clear-Host
 Start-Sleep -Milliseconds 250
 `$promptPath = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('$promptPathEncoded'))
 if (Resolve-MeowskyCodexCommand) {
-  Invoke-MeowskyCodex -Root . -PromptPath `$promptPath
+  Invoke-MeowskyCodex -Root . -PromptPath `$promptPath$codexOptions
 } else {
   Write-Host ''
 }

@@ -70,15 +70,16 @@ try {
   Assert-Equal ($script:MeowskyCommands['audit'].SkipWorkRoot) $true 'Audit skips work-root dispatch'
   Assert-Equal ($script:MeowskyCommands['.'].SkipWorkRoot) $true 'Current-directory workspace skips work-root dispatch'
   Assert-Equal (@($script:MeowskyCommands.Values | Where-Object { $_.SkipWorkRoot }).Count) 12 'Commands that skip work-root dispatch'
-  Assert-Equal (@($script:MeowskyCommands.Values | Where-Object { $_.AcceptsArguments }).Count) 6 'Commands that accept extra arguments'
+  Assert-Equal (@($script:MeowskyCommands.Values | Where-Object { $_.AcceptsArguments }).Count) 8 'Commands that accept extra arguments'
   foreach ($command in @('codex', 'color', 'identity', 'audit', 'review', 'refactor', 'animate', 'ptree', 'md', 'markdown', 'pdf', '.', './', 'bach', 'launchpad')) {
     $manifest = $script:MeowskyCommands[$command]
     $expectedHelp = (Get-Content -Raw (Join-Path $manifest.Directory $manifest.Help)).TrimEnd()
     Assert-Equal ((meowsky $command -h).TrimEnd()) $expectedHelp "$command -h"
     Assert-Equal ((meowsky $command -Help).TrimEnd()) $expectedHelp "$command -Help"
+    Assert-Equal ((meowsky $command --help).TrimEnd()) $expectedHelp "$command --help"
   }
   $globalHelp = (Get-Content -Raw (Join-Path $repo 'core/help.txt')).TrimEnd()
-  foreach ($flag in @('-h', '-Help', '-ShowHelp', '-help', 'help', '--help')) {
+  foreach ($flag in @('-h', '-Help', '-help', 'help', '--help')) {
     Assert-Equal ((Invoke-Expression "meowsky $flag").TrimEnd()) $globalHelp "Global $flag"
   }
   New-Item -ItemType Directory -Path (Join-Path $env:WORK_HOME 'dev') | Out-Null
@@ -315,6 +316,7 @@ try {
     }
   }
   Assert-Equal $encoded.Count 3 'Three development panes'
+  Assert-Equal ($encoded[0] -match 'project_doc_max_bytes') $false 'Default workspace retains project instructions'
   foreach ($pane in $encoded) {
     Assert-Equal ($pane -match 'Reset-MeowskyTerminalColors') $true 'Every pane restores terminal theme defaults'
     Assert-Equal ($pane -match 'Apply-MeowskyConsoleColor|Apply-MeowskyProjectColor') $false 'No generated pane color override'
@@ -345,6 +347,12 @@ try {
   Assert-Equal ($workspacePrompt.Contains($cDevelopmentGuide)) $true 'Current-directory workspace can locate C guide'
   Assert-Equal ([regex]::Matches($workspacePrompt, 'Workspace root:').Count) 1 'Development context appears once'
   Remove-Item -LiteralPath $promptPath
+  foreach ($flag in @('-s', '--skip')) {
+    Invoke-Expression "meowsky ./ $flag"
+    $commandIndex = [array]::IndexOf($script:terminalArgs, '-EncodedCommand')
+    $skipPane = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String($script:terminalArgs[$commandIndex + 1]))
+    Assert-Equal ($skipPane.Contains("-Arguments @('-c', 'project_doc_max_bytes=0')")) $true "$flag passes the Codex override"
+  }
   Assert-Throws { meowsky bach unexpected } 'Usage: meowsky bach'
   Assert-Throws { meowsky launchpad unexpected } 'Usage: meowsky launchpad'
   $env:WORK_HOME = $conflictRoot

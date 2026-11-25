@@ -1,7 +1,8 @@
-meowsky .
-meowsky ./
+meowsky . [-s | --skip]
+meowsky ./ [-s | --skip]
 Open the fullscreen Windows Terminal layout in the current directory.
 Opens Codex (40%) beside Matrix and status (60%). Requires Codex and animate features.
 Linux uses the existing tmux layout.
 
-Use -h or -Help after the command to show this help (PowerShell).
+Use -s or --skip to skip automatic loading of repository instructions, including nested AGENTS.md files, for this Codex session.
+Use -h or --help after the command to show this help (PowerShell).
