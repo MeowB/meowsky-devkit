@@ -25,3 +25,11 @@ A Bach launch reported `main`, a clean working tree, and `ahead 0, behind 0 vs o
 The startup sync line is meant to help decide whether to pull. Check whether startup fetches the upstream branch before calculating ahead and behind. A cached tracking ref can be stale, and even a fresh check describes the remote only at the time it ran. The observed output alone does not establish which happened.
 
 Expected behavior: show whether the comparison was freshly verified and when. If the remote cannot be checked, label the comparison as cached and make clear that pull status is unverified. A successful fetch should inform the status without merging or rebasing.
+
+## Skip local AGENTS.md at launch
+
+Add an opt-in flag to `meowsky ./` that launches Codex without loading the project's local `AGENTS.md`.
+
+## Project directory in the Alt+Tab title
+
+When `meowsky ./` opens Windows Terminal, show the current directory's name in the window title so the project is easy to identify in Windows Alt+Tab.
