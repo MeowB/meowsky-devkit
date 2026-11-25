@@ -7,7 +7,7 @@ function Invoke-MeowskyWorkspaceFeature {
   $promptTree = Get-MeowskyPromptTree -Root $root
   $gitStatus = Get-MeowskyGitSummary -Root $root
   $codexPrompt = Get-MeowskyCodexPrompt -Today $today -Root $root -Tree $promptTree -GitStatus $gitStatus
-  Start-MeowskyWorkspaceLayout -Root $root -Prompt $codexPrompt -GitStatus $gitStatus -SkipProjectInstructions:$skipProjectInstructions
+  Start-MeowskyWorkspaceLayout -Root $root -Prompt $codexPrompt -GitStatus $gitStatus -SkipProjectInstructions:$skipProjectInstructions -ShowWorkspaceTitle
 }
 
 function Test-MeowskyDistrictRepository {
@@ -118,7 +118,7 @@ function Invoke-MeowskyDistrictWorkspace {
     Replace('$root', $root).
     Replace('$tree', $promptTree).
     Replace('$gitStatus', $gitStatus)
-  Start-MeowskyWorkspaceLayout -Root $root -Prompt $codexPrompt -GitStatus $gitStatus -Layout $Layout
+  Start-MeowskyWorkspaceLayout -Root $root -Prompt $codexPrompt -GitStatus $gitStatus -Layout $Layout -ShowWorkspaceTitle:($District -eq 'bach')
 }
 
 function Start-MeowskyWorkspaceLayout {
@@ -127,7 +127,8 @@ function Start-MeowskyWorkspaceLayout {
     [Parameter(Mandatory = $true)][string]$Prompt,
     [Parameter(Mandatory = $true)][string]$GitStatus,
     [ValidateSet('Development', 'TwoPane')][string]$Layout = 'Development',
-    [switch]$SkipProjectInstructions
+    [switch]$SkipProjectInstructions,
+    [switch]$ShowWorkspaceTitle
   )
   if ($Layout -eq 'TwoPane') {
     Assert-MeowskyFeatures -Names @('codex')
@@ -135,6 +136,13 @@ function Start-MeowskyWorkspaceLayout {
     Assert-MeowskyFeatures -Names @('codex', 'animate')
   }
     $root = $Root
+    $paneStart = @('-d', $root)
+    if ($ShowWorkspaceTitle) {
+      $title = Split-Path -Leaf $root
+      if (-not $title) { $title = $root.TrimEnd('\', '/') }
+      $paneStart += @('--title', $title, '--suppressApplicationTitle')
+    }
+    $paneStart += @('powershell.exe', '-NoLogo', '-NoExit', '-EncodedCommand')
 
     $wt = (Get-Command wt.exe -ErrorAction SilentlyContinue).Source
 
@@ -163,13 +171,17 @@ if (Resolve-MeowskyCodexCommand) {
     $wtArgs = @(
       '--fullscreen',
       '-w', '-1',
-      'new-tab', '-d', $root, 'powershell.exe', '-NoLogo', '-NoExit', '-EncodedCommand', $codexEncoded, ';'
+      'new-tab'
+      $paneStart
+      $codexEncoded, ';'
     )
 
     if ($Layout -eq 'TwoPane') {
       $shellEncoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($profilePrelude))
       $wtArgs += @(
-        'split-pane', '-V', '--size', '0.30', '-d', $root, 'powershell.exe', '-NoLogo', '-NoExit', '-EncodedCommand', $shellEncoded, ';',
+        'split-pane', '-V', '--size', '0.30'
+        $paneStart
+        $shellEncoded, ';',
         'move-focus', 'left'
       )
     } else {
@@ -187,8 +199,12 @@ if (Resolve-MeowskyCodexCommand) {
       $meowskyEncoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($meowskyScript))
 
       $wtArgs += @(
-        'split-pane', '-V', '--size', '0.60', '-d', $root, 'powershell.exe', '-NoLogo', '-NoExit', '-EncodedCommand', $idleEncoded, ';',
-        'split-pane', '-H', '--size', '0.22', '-d', $root, 'powershell.exe', '-NoLogo', '-NoExit', '-EncodedCommand', $meowskyEncoded, ';',
+        'split-pane', '-V', '--size', '0.60'
+        $paneStart
+        $idleEncoded, ';',
+        'split-pane', '-H', '--size', '0.22'
+        $paneStart
+        $meowskyEncoded, ';',
         'move-focus', 'up', ';',
         'move-focus', 'left'
       )

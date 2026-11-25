@@ -332,6 +332,7 @@ try {
   }
   Assert-Equal (@($script:terminalArgs | Where-Object { $_ -eq 'new-tab' }).Count) 1 'Development single tab'
   Assert-Equal (@($script:terminalArgs | Where-Object { $_ -eq 'split-pane' }).Count) 2 'Development two splits'
+  Assert-Equal (@($script:terminalArgs | Where-Object { $_ -eq '--suppressApplicationTitle' }).Count) 3 'Development keeps the title when pane focus changes'
   Assert-Equal (($developmentArgs -join ',') -match 'split-pane,-V,--size,0\.60') $true 'Development Codex occupies 40 percent'
   Assert-Equal (($developmentArgs -join ',') -match 'split-pane,-H,--size,0\.22') $true 'Development status split preserved'
   Assert-Equal (($developmentArgs -join ',') -match 'move-focus,up,;,move-focus,left$') $true 'Development initial focus returns to Codex'
@@ -347,6 +348,18 @@ try {
   Assert-Equal ($workspacePrompt.Contains($cDevelopmentGuide)) $true 'Current-directory workspace can locate C guide'
   Assert-Equal ([regex]::Matches($workspacePrompt, 'Workspace root:').Count) 1 'Development context appears once'
   Remove-Item -LiteralPath $promptPath
+  $spacedProject = Join-Path $fixture 'project with spaces'
+  New-Item -ItemType Directory -Path $spacedProject | Out-Null
+  Push-Location $spacedProject
+  try {
+    meowsky ./
+    $paneTitles = for ($i = 0; $i -lt $script:terminalArgs.Count; $i++) {
+      if ($script:terminalArgs[$i] -eq '--title') { $script:terminalArgs[$i + 1] }
+    }
+    Assert-Equal ($paneTitles -join '|') 'project with spaces|project with spaces|project with spaces' 'Each development pane uses the same folder name with spaces'
+  } finally {
+    Pop-Location
+  }
   foreach ($flag in @('-s', '--skip')) {
     Invoke-Expression "meowsky ./ $flag"
     $commandIndex = [array]::IndexOf($script:terminalArgs, '-EncodedCommand')
@@ -495,10 +508,17 @@ try {
       if ($districtArgs[$i] -eq '-d') { $districtArgs[$i + 1] = '<root>' }
       if ($districtArgs[$i] -eq '-EncodedCommand') { $districtArgs[$i + 1] = '<script>' }
     }
+    $expectedPaneStart = @('-d', '<root>')
+    if ($district -eq 'bach') {
+      $expectedPaneStart += @('--title', 'bach', '--suppressApplicationTitle')
+    }
+    $expectedPaneStart += @('powershell.exe', '-NoLogo', '-NoExit', '-EncodedCommand', '<script>', ';')
     $expectedArgs = @(
       '--fullscreen', '-w', '-1',
-      'new-tab', '-d', '<root>', 'powershell.exe', '-NoLogo', '-NoExit', '-EncodedCommand', '<script>', ';',
-      'split-pane', '-V', '--size', '0.30', '-d', '<root>', 'powershell.exe', '-NoLogo', '-NoExit', '-EncodedCommand', '<script>', ';',
+      'new-tab'
+      $expectedPaneStart
+      'split-pane', '-V', '--size', '0.30'
+      $expectedPaneStart
       'move-focus', 'left'
     )
     Assert-Equal ($districtArgs -join ',') ($expectedArgs -join ',') "$district one tab, two panes, 70/30 split and Codex focus"

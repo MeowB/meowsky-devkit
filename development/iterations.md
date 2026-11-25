@@ -18,3 +18,9 @@
 - Added Windows workspace flags `-s` and `--skip`. Removed the `-ShowHelp` parameter that captured `-s` and documented `-h` and `--help`. Kept `-Help` for compatibility.
 - All 382 checks in `tests/verify-refactor.ps1` passed. An installed Codex 0.171.0 prompt inspection found both repository instruction fixtures on a default launch and omitted both with the override.
 - A runtime check with a global instruction file remains open. Next, commit the batch, verify that case, and review the Alt+Tab batch.
+
+## Workspace folder name in Alt+Tab
+
+- Set the same folder-name title on every Windows Terminal pane opened by `meowsky ./` and `meowsky bach`. Suppressed pane application title changes.
+- All 384 checks in `tests/verify-refactor.ps1` passed. The launcher checks cover the three-pane layout, Bach's two-pane layout, and a folder name containing spaces.
+- Fullscreen Alt+Tab inspection remains open. Verify the visible label for both commands before and after changing pane focus.
