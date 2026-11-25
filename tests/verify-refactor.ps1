@@ -383,11 +383,12 @@ try {
       if ($script:gitScenario -eq 'wrong-origin') { return 'https://github.com/MeowB/launchpad.git' }
       return 'git@github.com:MeowB/bach.git'
     }
-    if ($commandLine -match 'fetch --quiet origin$') {
+    if ($commandLine -match 'symbolic-ref --quiet HEAD$') { return 'refs/heads/main' }
+    if ($commandLine -match 'for-each-ref ') { return 'origin refs/heads/main refs/remotes/origin/main' }
+    if ($commandLine -match 'fetch --quiet origin \+refs/heads/main:refs/remotes/origin/main$') {
       if ($script:gitScenario -eq 'offline') { $global:LASTEXITCODE = 1 }
       return
     }
-    if ($commandLine -match 'rev-parse --abbrev-ref --symbolic-full-name') { return 'origin/main' }
     if ($commandLine -match 'rev-list --left-right --count') {
       if ($script:gitScenario -eq 'behind') { return '0 2' }
       if ($script:gitScenario -eq 'diverged') { return '1 2' }
@@ -433,7 +434,33 @@ try {
   Assert-Equal $LASTEXITCODE 0 'District Git fixture fetches origin'
   & git -C $nativeGitRoot branch --set-upstream-to=origin/main main | Out-Null
   Assert-Equal $LASTEXITCODE 0 'District Git fixture tracks origin'
-  Assert-Equal (Test-MeowskyDistrictRepository -Root $nativeGitRoot -RepositoryUrl $nativeGitRoot) $true 'Native Git origin is accepted'
+  $verifiedUpstream = $null
+  $originalHead = & git -C $nativeGitRoot rev-parse HEAD
+  $originalStatus = & git -C $nativeGitRoot status --porcelain | Out-String
+  $tree = & git -C $nativeGitRoot rev-parse 'HEAD^{tree}'
+  $remoteCommit = & git -C $nativeGitRoot -c user.name=MeowskyTest -c user.email=meowsky@example.invalid commit-tree $tree -p $originalHead -m 'Remote update'
+  Assert-Equal $LASTEXITCODE 0 'District fixture creates a remote commit'
+  & git -C $nativeGitRoot update-ref refs/heads/remote-main $remoteCommit
+  Assert-Equal $LASTEXITCODE 0 'District fixture publishes a separate remote branch'
+  & git -C $nativeGitRoot config branch.main.merge refs/heads/remote-main
+  Assert-Equal (Test-MeowskyDistrictRepository -Root $nativeGitRoot -RepositoryUrl $nativeGitRoot -VerifiedUpstream ([ref]$verifiedUpstream)) $true 'Native Git origin is accepted'
+  $gitSummaryStub = ${function:Get-MeowskyGitSummary}
+  . (Join-Path (Split-Path -Parent $PSScriptRoot) 'core/git.ps1')
+  $fresh = Get-MeowskyGitSummary -Root $nativeGitRoot -VerifiedUpstream $verifiedUpstream
+  Assert-Equal ($fresh -match 'ahead 0, behind 1 vs origin/remote-main \(verified \d{4}-') $true 'Fresh configured upstream reports behind count and verification time'
+  $cached = Get-MeowskyGitSummary -Root $nativeGitRoot
+  Assert-Equal ($cached -match 'behind 1 vs origin/remote-main \(cached; pull status unverified\)') $true 'Summary without a fetch labels cached counts'
+  $offlineOrigin = Join-Path $fixture 'unavailable-origin'
+  & git -C $nativeGitRoot remote set-url origin $offlineOrigin
+  Assert-Equal (Test-MeowskyDistrictRepository -Root $nativeGitRoot -RepositoryUrl $offlineOrigin -VerifiedUpstream ([ref]$verifiedUpstream) 3>$null) $true 'Unavailable origin still allows launch'
+  Assert-Equal ($null -eq $verifiedUpstream) $true 'Failed fetch clears prior verification'
+  Assert-Equal (Get-MeowskyGitSummary -Root $nativeGitRoot -VerifiedUpstream $verifiedUpstream) ($cached.Replace("Origin: $nativeGitRoot", "Origin: $offlineOrigin")) 'Failed fetch retains cached counts'
+  & git -C $nativeGitRoot branch --unset-upstream
+  Assert-Equal ((Get-MeowskyGitSummary -Root $nativeGitRoot) -match 'Sync: unknown \(no upstream to compare\)') $true 'Missing upstream reports unknown'
+  Assert-Equal (& git -C $nativeGitRoot rev-parse HEAD) $originalHead 'Startup keeps HEAD unchanged'
+  Assert-Equal (& git -C $nativeGitRoot branch --show-current) 'main' 'Startup keeps the branch unchanged'
+  Assert-Equal (& git -C $nativeGitRoot status --porcelain | Out-String) $originalStatus 'Startup keeps the working tree unchanged'
+  Set-Item Function:Get-MeowskyGitSummary $gitSummaryStub
   Set-Item Function:Test-MeowskyDistrictRepository { param($Root, $RepositoryUrl) return $true }
   foreach ($district in @('bach', 'launchpad')) {
     Set-Location $project

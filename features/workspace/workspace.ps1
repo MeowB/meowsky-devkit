@@ -12,8 +12,13 @@ function Invoke-MeowskyWorkspaceFeature {
 function Test-MeowskyDistrictRepository {
   param(
     [Parameter(Mandatory = $true)][string]$Root,
-    [Parameter(Mandatory = $true)][string]$RepositoryUrl
+    [Parameter(Mandatory = $true)][string]$RepositoryUrl,
+    [ref]$VerifiedUpstream
   )
+  # Git exit codes determine whether a district can open with cached status.
+  $ErrorActionPreference = 'Continue'
+  $PSNativeCommandUseErrorActionPreference = $false
+  if ($VerifiedUpstream) { $VerifiedUpstream.Value = $null }
   if (-not (Test-Path -LiteralPath $Root)) {
     Write-Host "Repository is missing: $Root"
     Write-Host "Clone it with: git clone $RepositoryUrl `"$Root`""
@@ -51,27 +56,43 @@ function Test-MeowskyDistrictRepository {
     Write-Host "Expected: $RepositoryUrl"
     return $false
   }
-  & git -C $Root fetch --quiet origin 2>$null | Out-Null
+  $branch = & git -C $Root symbolic-ref --quiet HEAD 2>$null
+  $upstream = $null
+  if ($LASTEXITCODE -eq 0 -and $branch) {
+    $tracking = & git -C $Root for-each-ref '--format=%(upstream:remotename) %(upstream:remoteref) %(upstream)' $branch 2>$null
+    if ($LASTEXITCODE -eq 0 -and $tracking -cmatch '^origin (refs/heads/\S+) (refs/remotes/origin/\S+)$') {
+      $remoteRef = $Matches[1]
+      $upstream = $Matches[2]
+    }
+  }
+  if ($upstream) {
+    & git -C $Root fetch --quiet origin "+${remoteRef}:$upstream" 2>$null | Out-Null
+  } else {
+    & git -C $Root fetch --quiet origin 2>$null | Out-Null
+  }
   if ($LASTEXITCODE -ne 0) {
     Write-Warning "Could not check remote updates for $Root. Opened with local checkout state."
     return $true
   }
-  $upstream = & git -C $Root rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>$null
-  if ($LASTEXITCODE -ne 0 -or -not $upstream -or -not $upstream.StartsWith('origin/')) {
+  if (-not $upstream) {
     Write-Warning "The current branch in $Root does not track origin; update status is unknown."
     return $true
   }
-  $counts = & git -C $Root rev-list --left-right --count 'HEAD...@{u}' 2>$null
+  if ($VerifiedUpstream) {
+    $VerifiedUpstream.Value = @{ Ref = $upstream; At = [DateTimeOffset]::Now }
+  }
+  $counts = & git -C $Root rev-list --left-right --count "HEAD...$upstream" 2>$null
   if ($LASTEXITCODE -ne 0 -or -not $counts -or $counts.Trim() -notmatch '^(\d+)\s+(\d+)$') {
     Write-Warning "Could not compare the current branch with $upstream in $Root."
     return $true
   }
   $ahead = [int]$Matches[1]
   $behind = [int]$Matches[2]
+  $upstreamName = $upstream.Substring('refs/remotes/'.Length)
   if ($behind -gt 0 -and $ahead -eq 0) {
-    Write-Host "$Root is $behind commit(s) behind $upstream. Update it with: git -C `"$Root`" pull --ff-only"
+    Write-Host "$Root is $behind commit(s) behind $upstreamName. Update it with: git -C `"$Root`" pull --ff-only"
   } elseif ($behind -gt 0) {
-    Write-Warning "$Root has diverged from $upstream ($ahead ahead, $behind behind). Inspect the branches before pulling."
+    Write-Warning "$Root has diverged from $upstreamName ($ahead ahead, $behind behind). Inspect the branches before pulling."
   }
   return $true
 }
@@ -85,11 +106,12 @@ function Invoke-MeowskyDistrictWorkspace {
   )
   $workRoot = Get-WorkRoot
   $root = Join-Path $workRoot $District
-  if (-not (Test-MeowskyDistrictRepository -Root $root -RepositoryUrl $RepositoryUrl)) { return }
+  $verifiedUpstream = $null
+  if (-not (Test-MeowskyDistrictRepository -Root $root -RepositoryUrl $RepositoryUrl -VerifiedUpstream ([ref]$verifiedUpstream))) { return }
   $null = Ensure-MeowskyProjectWorkspace -Path $root
   $today = Get-Date -Format 'yyyy-MM-dd'
   $promptTree = Get-MeowskyPromptTree -Root $root
-  $gitStatus = Get-MeowskyGitSummary -Root $root
+  $gitStatus = Get-MeowskyGitSummary -Root $root -VerifiedUpstream $verifiedUpstream
   $codexPrompt = (Get-Content -Raw -LiteralPath $TemplatePath).
     Replace('$today', $today).
     Replace('$root', $root).
