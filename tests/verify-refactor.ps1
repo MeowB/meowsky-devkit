@@ -218,7 +218,6 @@ try {
   Assert-Equal ($fallbackPrompt -match 'Before modifying any files|Never run `git commit`') $false 'Fallback excludes global rules'
   $env:MEOWSKY_DEVKIT_HOME = $repo
   $primaryPrompt = Get-MeowskyCodexPrompt '2026-09-26' $project 'tree fixture' 'git fixture'
-  Assert-Equal ($primaryPrompt -match 'Give a concise orientation') $true 'Primary project orientation'
   Assert-Equal ($primaryPrompt.Contains($cDevelopmentGuide)) $true 'Primary C guide path'
   Assert-Equal ($primaryPrompt.Contains('$cDevelopmentGuide')) $false 'Primary C guide placeholder resolved'
   Assert-Equal ($primaryPrompt -match 'Before modifying any files|Never run `git commit`') $false 'Primary excludes global rules'
@@ -344,7 +343,11 @@ try {
   $promptPathEncoded = [regex]::Match($encoded[0], "FromBase64String\('([^']+)'\)").Groups[1].Value
   $promptPath = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String($promptPathEncoded))
   $workspacePrompt = Get-Content -Raw -LiteralPath $promptPath
-  Assert-Equal ($workspacePrompt -match 'inspect README.md if present') $true 'Current-directory development orientation preserved'
+  foreach ($prompt in @($workspacePrompt, $primaryPrompt, $fallbackPrompt)) {
+    Assert-Equal ($prompt -match 'dev/current\.md, dev/spec\.md, and dev/goal\.md') $true 'Startup checks development files in order'
+    Assert-Equal ($prompt -match 'If none exists in dev/, check .* in development/\. .* read the files that exist') $true 'Startup supports alternate folder and partial files'
+    Assert-Equal ($prompt -match 'If neither directory contains any of these files, inspect README\.md') $true 'Startup uses docs only when development files are absent'
+  }
   Assert-Equal ($workspacePrompt.Contains($cDevelopmentGuide)) $true 'Current-directory workspace can locate C guide'
   Assert-Equal ([regex]::Matches($workspacePrompt, 'Workspace root:').Count) 1 'Development context appears once'
   Remove-Item -LiteralPath $promptPath
