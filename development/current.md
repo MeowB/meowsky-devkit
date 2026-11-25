@@ -1,6 +1,6 @@
 # Current state
 
-Startup Git status freshness (`0f71fb7`), the workspace skip flag (`db1af56`), and the workspace title (`cc79891`) are committed. Development-first Codex orientation is committed as `da697d4`. Wildcard preview changes are verified and ready for a manual commit. The font-size change was dropped in favor of the manual shortcut.
+Startup Git status freshness (`0f71fb7`), the workspace skip flag (`db1af56`), and the workspace title (`cc79891`) are committed. Development-first Codex orientation is committed as `da697d4`. Wildcard previews are committed in `fa89856`, with their handoff recorded in `09b574e`. The font-size change was dropped in favor of the manual shortcut.
 
 ## Latest verified findings
 
@@ -16,4 +16,4 @@ Startup Git status freshness (`0f71fb7`), the workspace skip flag (`db1af56`), a
 
 ## Next action
 
-After committing the wildcard preview batch, inventory the DevKit documentation and propose a migration plan. The fullscreen Alt+Tab check remains open. See [spec.md](spec.md) for acceptance checks.
+The documentation inventory and approved migration plan are recorded in [spec.md](spec.md#devkit-documentation-cleanup). Actual guide migration requires its own edit batches. The fullscreen Alt+Tab check remains open for `meowsky ./` and `meowsky bach`.

@@ -37,3 +37,9 @@
 - `tests/verify-refactor.ps1` passed 399 checks. `tests/verify-linux.sh` passed under Git Bash, with mocked rendering and viewer launch. Both suites exercised the public preview commands, including unquoted wildcards, filenames with spaces, mixed types, no matches, directories, and colliding Markdown names.
 - On Codex 0.172.0, prompt inspection with the installed Codex home found global instructions with and without the skip option. Repository instructions appeared only without the option. Fullscreen Alt+Tab verification remains open.
 - Next, commit this batch and prepare the documentation inventory and migration proposal.
+
+## Documentation inventory and migration plan
+
+- Confirmed the preview implementation commit (`fa89856`) and its separate handoff commit (`09b574e`).
+- Inventoried the tracked guides, conventions, samples, and feature resources. Recorded proposed owners and link updates in [the spec](spec.md#devkit-documentation-cleanup), including the stale root checklist and the duplicated launcher guidance in README and setup.
+- Verified the stable C guide and sample paths against code or test references. Actual guide migration is outside this plan batch. Fullscreen Alt+Tab inspection is still pending.
