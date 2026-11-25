@@ -4,6 +4,7 @@ function Invoke-MeowskyPdfFeature {
         throw "Usage: meowsky pdf <file.pdf>"
       }
 
-      $targetPath = Resolve-MeowskyPath -Target $Target -Root $workRoot
-      Start-Process $targetPath
+      foreach ($path in (Resolve-MeowskyPreviewFiles -Target $Target -Root $WorkRoot -Extension '.pdf')) {
+        Start-Process $path
+      }
 }

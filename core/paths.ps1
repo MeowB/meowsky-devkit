@@ -58,6 +58,26 @@ function Resolve-MeowskyPath {
     throw "Path was not found: $Target"
   }
 
+function Resolve-MeowskyPreviewFiles {
+  param([string]$Target, [string]$Root, [string]$Extension)
+
+  if ($Target -in @('*', "*$Extension")) {
+    $files = @(Get-ChildItem -LiteralPath . -File |
+      Where-Object Extension -EQ $Extension |
+      Sort-Object Name)
+  } else {
+    $path = Resolve-MeowskyPath -Target $Target -Root $Root
+    $file = Get-Item -LiteralPath $path
+    $files = @($file | Where-Object { -not $_.PSIsContainer -and $_.Extension -eq $Extension })
+  }
+
+  if ($files.Count -eq 0) {
+    throw "No $Extension files matched: $Target"
+  }
+
+  $files.FullName
+}
+
 function Get-MeowskyProjectRoot {
     param([Parameter(Mandatory = $true)][string]$Path)
 

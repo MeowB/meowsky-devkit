@@ -260,8 +260,16 @@ try {
     if ($Name -eq 'wt.exe') { return [pscustomobject]@{ Source = 'Invoke-TestWt' } }
     Microsoft.PowerShell.Core\Get-Command @PSBoundParameters
   }
-  function Invoke-TestPandoc { $script:pandocArgs = $args; $global:LASTEXITCODE = 0 }
-  function Start-Process { param($FilePath) $script:opened = $FilePath }
+  function Invoke-TestPandoc {
+    $script:pandocArgs = $args
+    $script:previewInputs += $args[-1]
+    $global:LASTEXITCODE = 0
+  }
+  function Start-Process {
+    param($FilePath)
+    $script:opened = $FilePath
+    $script:previewOutputs += $FilePath
+  }
   function Invoke-TestWt { $script:terminalArgs = $args }
   function Clear-Host {}
   function Start-Sleep { param($Milliseconds) }
@@ -276,6 +284,37 @@ try {
   meowsky markdown a.md
   meowsky pdf sample.pdf
   Assert-Equal $script:opened (Join-Path $project 'sample.pdf') 'PDF viewer'
+  Set-Content -LiteralPath (Join-Path $project 'same name.md') '# Preview'
+  Set-Content -LiteralPath (Join-Path $project 'same_name.md') '# Preview'
+  Set-Content -LiteralPath (Join-Path $project 'second file.pdf') 'fixture'
+  New-Item -ItemType Directory -Path (Join-Path $project 'folder.md'), (Join-Path $project 'folder.pdf') | Out-Null
+  Push-Location $project
+  try {
+    foreach ($pattern in @('*', '*.md')) {
+      $script:previewInputs = @()
+      $script:previewOutputs = @()
+      meowsky md $pattern
+      $names = $script:previewInputs | ForEach-Object { [IO.Path]::GetFileName($_) }
+      Assert-Equal (($names | Sort-Object) -join '|') 'a.md|same name.md|same_name.md' "Markdown files for $pattern"
+      Assert-Equal @($script:previewOutputs | Sort-Object -Unique).Count 3 "Distinct Markdown output paths for $pattern"
+    }
+    foreach ($pattern in @('*', '*.pdf')) {
+      $script:previewOutputs = @()
+      meowsky pdf $pattern
+      $names = $script:previewOutputs | ForEach-Object { [IO.Path]::GetFileName($_) }
+      Assert-Equal (($names | Sort-Object) -join '|') 'sample.pdf|second file.pdf' "PDF files for $pattern"
+    }
+    Push-Location 'folder.md'
+    try {
+      Set-Content -LiteralPath 'only.txt' 'fixture'
+      Assert-Throws { meowsky md * } 'No .md files matched: *'
+      Assert-Throws { meowsky pdf *.pdf } 'No .pdf files matched: *.pdf'
+    } finally {
+      Pop-Location
+    }
+  } finally {
+    Pop-Location
+  }
   meowsky animate matrix
   Assert-Equal $script:matrixStarted $true 'Matrix dispatch'
   meowsky animate cat

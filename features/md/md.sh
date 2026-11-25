@@ -14,8 +14,9 @@ meowsky_md() {
     return 1
   }
 
-  local preview_dir="${TMPDIR:-/tmp}/meowsky-preview"
-  mkdir -p "$preview_dir"
+  local preview_root="${TMPDIR:-/tmp}/meowsky-preview" preview_dir
+  mkdir -p "$preview_root" || return
+  preview_dir="$(mktemp -d "$preview_root/preview.XXXXXXXX")" || return
 
   local name
   name="$(basename "${target_path%.*}" | tr -cd '[:alnum:]_.-')"
@@ -24,7 +25,7 @@ meowsky_md() {
   fi
 
   local html_path="$preview_dir/$name.html"
-  pandoc --standalone --from gfm --metadata title=Preview --output "$html_path" "$target_path"
+  pandoc --standalone --from gfm --metadata title=Preview --output "$html_path" "$target_path" || return
 
   if command -v xdg-open >/dev/null 2>&1; then
     xdg-open "$html_path" >/dev/null 2>&1 &

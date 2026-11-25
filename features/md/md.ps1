@@ -16,7 +16,8 @@ function Open-MeowskyMarkdownPreview {
       throw 'pandoc was not found. Install it with: winget install --id JohnMacFarlane.Pandoc --exact'
     }
 
-    $previewDir = Join-Path ([System.IO.Path]::GetTempPath()) 'meowsky-preview'
+    $previewRoot = Join-Path ([System.IO.Path]::GetTempPath()) 'meowsky-preview'
+    $previewDir = Join-Path $previewRoot ([guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Force -Path $previewDir | Out-Null
 
     $baseName = [System.IO.Path]::GetFileNameWithoutExtension($Target) -replace '[^a-zA-Z0-9._-]', '_'
@@ -39,6 +40,7 @@ function Invoke-MeowskyMdFeature {
         throw "Usage: meowsky md <file.md>"
       }
 
-      $targetPath = Resolve-MeowskyPath -Target $Target -Root $workRoot
-      Open-MeowskyMarkdownPreview -Target $targetPath
+      foreach ($path in (Resolve-MeowskyPreviewFiles -Target $Target -Root $WorkRoot -Extension '.md')) {
+        Open-MeowskyMarkdownPreview -Target $path
+      }
 }

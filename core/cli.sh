@@ -1,3 +1,46 @@
+meowsky_preview_files() {
+  local preview="$1" extension="$2"
+  shift 2
+
+  local current_directory_only=false
+  if [ "$#" -gt 1 ]; then
+    current_directory_only=true
+  elif [ "$1" = '*' ] || [ "${1,,}" = "*$extension" ]; then
+    local -a entries
+    mapfile -d '' -t entries < <(
+      shopt -u failglob
+      shopt -s nullglob
+      printf '%s\0' ./*
+    )
+    set -- "${entries[@]}"
+    current_directory_only=true
+  fi
+
+  local target path
+  local matched=false
+  for target in "$@"; do
+    if [ "$current_directory_only" = true ]; then
+      path="$target"
+    else
+      path="$(meowsky_resolve_path "$target")" || {
+        printf 'Path was not found: %s\n' "$target" >&2
+        return 1
+      }
+    fi
+    if [[ -f "$path" && "${path,,}" == *"$extension" ]]; then
+      matched=true
+      # Prefix local paths so filenames starting with a dash are operands.
+      [[ "$path" != -* ]] || path="./$path"
+      "$preview" "$path" || return
+    fi
+  done
+
+  if [ "$matched" = false ]; then
+    printf 'No %s files matched.\n' "$extension" >&2
+    return 1
+  fi
+}
+
 meowsky() {
   local action="${1:-}"
   local target="${2:-}"
@@ -11,7 +54,7 @@ meowsky() {
       echo "Usage: meowsky md <file.md>" >&2
       return 1
     fi
-    meowsky_md "$target"
+    meowsky_preview_files meowsky_md .md "${@:2}"
     return
   fi
 
@@ -20,7 +63,7 @@ meowsky() {
       echo "Usage: meowsky pdf <file.pdf>" >&2
       return 1
     fi
-    meowsky_pdf "$target"
+    meowsky_preview_files meowsky_pdf .pdf "${@:2}"
     return
   fi
 

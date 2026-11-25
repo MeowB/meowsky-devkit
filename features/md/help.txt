@@ -1,5 +1,9 @@
 meowsky md <file.md>
 meowsky markdown <file.md>
+meowsky md *
+meowsky md *.md
+
+Wildcards preview Markdown files in the current directory.
 Render GitHub-flavored Markdown to temporary HTML and open the default browser.
 
 Use -h or -Help after the command to show this help (PowerShell).
