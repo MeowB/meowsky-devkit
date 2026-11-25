@@ -1,6 +1,6 @@
 # Current state
 
-Startup Git status freshness is committed as `0f71fb7`; the workspace skip flag is committed as `db1af56`. The workspace title change awaits the manual commit. The remaining features are pending.
+Startup Git status freshness (`0f71fb7`), the workspace skip flag (`db1af56`), and the workspace title (`cc79891`) are committed. The goal is paused before preview implementation. The font-size change was dropped in favor of the manual shortcut.
 
 ## Latest verified findings
 
@@ -14,4 +14,4 @@ Startup Git status freshness is committed as `0f71fb7`; the workspace skip flag 
 
 ## Next action
 
-After the title batch is committed, verify the fullscreen Alt+Tab behavior for both launch commands and review the font-size batch in [spec.md](spec.md). The skip flag still needs a runtime check on a Codex installation with global instructions.
+When work resumes, confirm the proposed Markdown and PDF wildcard implementation batch for PowerShell and Bash before editing code. The fullscreen Alt+Tab check and the skip-flag runtime check with a global instruction file remain open. See [spec.md](spec.md) for acceptance checks.

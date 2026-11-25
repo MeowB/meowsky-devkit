@@ -24,3 +24,9 @@
 - Set the same folder-name title on every Windows Terminal pane opened by `meowsky ./` and `meowsky bach`. Suppressed pane application title changes.
 - All 384 checks in `tests/verify-refactor.ps1` passed. The launcher checks cover the three-pane layout, Bach's two-pane layout, and a folder name containing spaces.
 - Fullscreen Alt+Tab inspection remains open. Verify the visible label for both commands before and after changing pane focus.
+
+## Stopping point before wildcard previews
+
+- Verified that the title change is committed as `cc79891`. Dropped the font-size change at the user's request.
+- Agreed to cover both Markdown and PDF on PowerShell and Bash. Inspected the single-file handlers and paused at the implementation edit gate.
+- Resume by confirming the preview batch. Fullscreen Alt+Tab and global instruction loading still need runtime checks. Opt-in auto-pull remains a separate decision.

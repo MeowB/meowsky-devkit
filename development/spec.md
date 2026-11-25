@@ -4,8 +4,9 @@
 
 1. Clarify startup Git status.
 2. Add the opt-in Codex launch flag.
-3. Set the Alt+Tab title, then adjust the Windows Terminal font size.
-4. Inventory the docs and propose a migration plan.
+3. Set the Alt+Tab title.
+4. Add wildcard previews for Markdown and PDF.
+5. Inventory the docs and propose a migration plan.
 
 ## Startup Git status
 
@@ -29,15 +30,13 @@ For `meowsky ./` and `meowsky bach`, show only the final folder name of the dire
 
 ## Windows Terminal font size
 
-Reduce the initial font size in Meowsky-launched Windows Terminal windows by one step, equivalent to pressing `Ctrl+-` once.
+Dropped. Use `Ctrl+-` manually when needed.
 
-**Acceptance.** Compare a fresh launch with the previous size after one manual decrement. Check all panes in the launcher layout.
+## Preview Markdown and PDF files in the current directory
 
-## Preview all Markdown files in the current directory
+Running `meowsky md *` did not open the Markdown files as expected. On PowerShell and Bash, support `meowsky md *` and `meowsky md *.md`, plus `meowsky pdf *` and `meowsky pdf *.pdf`. Keep single-file usage working.
 
-Running `meowsky md *` did not open the Markdown files as expected. The command should open a preview for each `*.md` file in the current directory.
-
-**Acceptance.** Run `meowsky md *` in a directory with multiple Markdown files and a non-Markdown file. Verify that each Markdown file opens a preview and the non-Markdown file is skipped.
+**Acceptance.** On both shells, open only matching files from a directory with mixed file types, filenames with spaces, and subdirectories. Check single-file usage, both wildcard forms, the no-match message, and distinct output paths for Markdown files whose names normalize to the same HTML name.
 
 ## DevKit documentation cleanup
 
