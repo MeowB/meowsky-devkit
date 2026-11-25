@@ -34,7 +34,7 @@ Dropped. Use `Ctrl+-` manually when needed.
 
 ## Preview Markdown and PDF files in the current directory
 
-Running `meowsky md *` did not open the Markdown files as expected. On PowerShell and Bash, support `meowsky md *` and `meowsky md *.md`, plus `meowsky pdf *` and `meowsky pdf *.pdf`. Keep single-file usage working.
+Running `meowsky md *` did not open the Markdown files as expected. On PowerShell and Bash, support `meowsky md *` and `meowsky md *.md`, plus `meowsky pdf *` and `meowsky pdf *.pdf`. Keep single-file usage working for the command's file type. Bash must accept unquoted wildcards by processing the arguments Bash expands, as well as literal patterns passed to the command. Wildcards cover the current directory without recursing.
 
 **Acceptance.** On both shells, open only matching files from a directory with mixed file types, filenames with spaces, and subdirectories. Check single-file usage, both wildcard forms, the no-match message, and distinct output paths for Markdown files whose names normalize to the same HTML name.
 

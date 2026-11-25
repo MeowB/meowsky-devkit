@@ -30,3 +30,10 @@
 - Verified that the title change is committed as `cc79891`. Dropped the font-size change at the user's request.
 - Agreed to cover both Markdown and PDF on PowerShell and Bash. Inspected the single-file handlers and paused at the implementation edit gate.
 - Resume by confirming the preview batch. Fullscreen Alt+Tab and global instruction loading still need runtime checks. Opt-in auto-pull remains a separate decision.
+
+## Wildcard Markdown and PDF previews
+
+- Added current-directory wildcard selection to PowerShell and handled both literal patterns and Bash-expanded arguments. Each Markdown render uses a distinct temporary output directory.
+- `tests/verify-refactor.ps1` passed 399 checks. `tests/verify-linux.sh` passed under Git Bash, with mocked rendering and viewer launch. Both suites exercised the public preview commands, including unquoted wildcards, filenames with spaces, mixed types, no matches, directories, and colliding Markdown names.
+- On Codex 0.172.0, prompt inspection with the installed Codex home found global instructions with and without the skip option. Repository instructions appeared only without the option. Fullscreen Alt+Tab verification remains open.
+- Next, commit this batch and prepare the documentation inventory and migration proposal.
