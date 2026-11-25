@@ -20,6 +20,9 @@ In a review, recommend the next concrete action, its evidence, and how to verify
 
 ## Questions and decisions
 
+- Treat development notes and specs as revisable. Before proposing an edit batch, check the idea against the intended outcome and the evidence in the code or observed behavior. Challenge assumptions, surface missed cases and tradeoffs, and recommend a direction with your reasons.
+- Bring forward open decisions that could change the batch, including relevant decisions recorded in the handoff. Ask the user to resolve them before requesting approval for the affected work. Use judgment for routine implementation choices.
+
 Ask only for information that could change the work. Ask early, group related questions, and keep each question short. Continue useful read-only work while an answer is pending. Give the user a reasonable opportunity to reply before using a stated assumption for an optional question. Silence, a queued question, or a Goal continuation never counts as approval.
 
 ## Edit gate
