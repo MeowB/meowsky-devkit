@@ -362,6 +362,8 @@ try {
   Assert-Equal ($encoded[1] -match 'meowsky animate matrix') $true 'Matrix pane preserved'
   Assert-Equal ($encoded[2] -match 'Start-MeowskyStatusPanel') $true 'Status pane preserved'
   Assert-Equal (($encoded -join "`n") -match 'Start-MeowskyTreePanel') $false 'No tree pane in development layout'
+  $titleOverride = " -Arguments @('-c', 'tui.terminal_title=[]')"
+  Assert-Equal ($encoded[0].Contains($titleOverride)) $true 'Development disables Codex title updates'
   $developmentPanes = $encoded
   $developmentArgs = @($script:terminalArgs)
   for ($i = 0; $i -lt $developmentArgs.Count; $i++) {
@@ -406,7 +408,7 @@ try {
     Invoke-Expression "meowsky ./ $flag"
     $commandIndex = [array]::IndexOf($script:terminalArgs, '-EncodedCommand')
     $skipPane = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String($script:terminalArgs[$commandIndex + 1]))
-    Assert-Equal ($skipPane.Contains("-Arguments @('-c', 'project_doc_max_bytes=0')")) $true "$flag passes the Codex override"
+    Assert-Equal ($skipPane.Contains("-Arguments @('-c', 'tui.terminal_title=[]', '-c', 'project_doc_max_bytes=0')")) $true "$flag passes both Codex overrides"
   }
   Assert-Throws { meowsky bach unexpected } 'Usage: meowsky bach'
   Assert-Throws { meowsky launchpad unexpected } 'Usage: meowsky launchpad'
@@ -568,6 +570,10 @@ try {
     Assert-Equal $districtPanes[1] $expectedShell "$district shell only loads profile and restores terminal defaults"
     $normalizedCodex = $districtPanes[0] -replace "FromBase64String\('[^']+'\)", "FromBase64String('<prompt>')"
     $normalizedDevelopmentCodex = $developmentPanes[0] -replace "FromBase64String\('[^']+'\)", "FromBase64String('<prompt>')"
+    Assert-Equal ($districtPanes[0].Contains($titleOverride)) ($district -eq 'bach') "$district title override scope"
+    if ($district -eq 'launchpad') {
+      $normalizedDevelopmentCodex = $normalizedDevelopmentCodex.Replace($titleOverride, '')
+    }
     Assert-Equal $normalizedCodex $normalizedDevelopmentCodex "$district shares Codex startup without additional editor, server, or panel commands"
     $commandIndex = [Array]::IndexOf($script:terminalArgs, '-EncodedCommand')
     $decoded = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String($script:terminalArgs[$commandIndex + 1]))

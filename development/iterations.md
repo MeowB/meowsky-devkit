@@ -43,3 +43,9 @@
 - Confirmed the preview implementation commit (`fa89856`) and its separate handoff commit (`09b574e`).
 - Inventoried the tracked guides, conventions, samples, and feature resources. Recorded proposed owners and link updates in [the spec](spec.md#devkit-documentation-cleanup), including the stale root checklist and the duplicated launcher guidance in README and setup.
 - Verified the stable C guide and sample paths against code or test references. Actual guide migration is outside this plan batch. Fullscreen Alt+Tab inspection is still pending.
+
+## Codex title updates in fullscreen workspaces
+
+- A fresh launch still showed the Codex thread name and folder in Alt+Tab. The expected title is the original launch folder for `meowsky ./` or `bach` for `meowsky bach`, including after switching panes or changing directory.
+- Passed `tui.terminal_title=[]` to Codex for these two launch commands. The PowerShell suite passed 402 checks, including both affected commands, the combined `--skip` arguments, and the Launchpad launch.
+- You confirmed that the title works after updating your PowerShell profile. The desktop report did not specify a separate Bach run or pane-by-pane results. The regression suite covers the arguments for both launches.

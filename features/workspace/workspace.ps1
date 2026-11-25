@@ -155,7 +155,16 @@ function Start-MeowskyWorkspaceLayout {
 
     $promptPathEncoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($promptPath))
     $profilePrelude = "`$WarningPreference = 'SilentlyContinue'`r`n. `$PROFILE`r`nReset-MeowskyTerminalColors`r`n`$WarningPreference = 'Continue'"
-    $codexOptions = if ($SkipProjectInstructions) { " -Arguments @('-c', 'project_doc_max_bytes=0')" }
+    $codexArguments = @()
+    if ($ShowWorkspaceTitle) {
+      $codexArguments += @('-c', 'tui.terminal_title=[]')
+    }
+    if ($SkipProjectInstructions) {
+      $codexArguments += @('-c', 'project_doc_max_bytes=0')
+    }
+    $codexOptions = if ($codexArguments.Count) {
+      " -Arguments @('$($codexArguments -join "', '")')"
+    }
 $codexScript = @"
 $profilePrelude
 Clear-Host
