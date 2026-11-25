@@ -33,3 +33,7 @@ Add an opt-in flag to `meowsky ./` that launches Codex without loading the proje
 ## Project directory in the Alt+Tab title
 
 When `meowsky ./` opens Windows Terminal, show the current directory's name in the window title so the project is easy to identify in Windows Alt+Tab.
+
+## Windows Terminal font size
+
+Reduce the font size in Meowsky-launched Windows Terminal windows by one step, equivalent to pressing `Ctrl+-` once.
