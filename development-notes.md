@@ -7,3 +7,4 @@
 - Start Meowsky Windows Terminal windows one font-size step smaller, equivalent to `Ctrl+-` once.
 - Make `meowsky md *` preview all Markdown files in the current directory.
 - Review the DevKit docs for overlap, stale guidance, and misplaced material.
+- Test and challenge the global Codex instructions on both desktop and laptop using the same representative tasks. Compare the behavior and reconcile the global instructions with the DevKit and Bach instructions where applicable, so shared rules stay in sync and Codex behaves consistently on both machines.
